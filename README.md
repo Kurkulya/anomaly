@@ -1201,7 +1201,7 @@ python plugins/anomaly/scripts/anomaly.py ci log   <commit|ref> [--pipeline] [--
 
 ## Risk areas, lens tally and work units
 
-Three small commands serve the review and build skills. None of them needs a profile; `lens tally
+Three small commands serve the review and build skills (`log add`, below, writes a work unit's `log.md`). None of them needs a profile; `lens tally
 add` reads the profile's `reviewers` only to learn the org lens names.
 
 ### risk
@@ -1349,6 +1349,21 @@ Every pipeline skill run (`build`, `review`, the later stages) leaves one line, 
   with a hint to run `measure`. A unit with no lines stops the command with an `anomaly:` line that
   names the units that exist.
 
+### log
+
+```
+python plugins/anomaly/scripts/anomaly.py log add <folder> --stage <stage> '<text>'
+```
+
+`log add` is the one writer of a work unit's `log.md` (the line shape is in
+[docs/formats.md](plugins/anomaly/docs/formats.md)). It appends one line `<YYYY-MM-DD HH:MM> <stage>:
+<text>` to `<folder>/log.md` and writes nothing else. The time is the CLI clock, in the same format
+as `worklog start`; the model passes none. The file is made when it is missing, its earlier bytes
+stay as they are, and the new line takes the file's line ending. The folder must exist (the command
+never creates it) but may be anywhere, inside `.anomaly/` or `.scratch/` or not. A folder that does
+not exist, a stage that is not one word, and text that is empty or has a line break stop the command
+with an `anomaly:` line and no write. Cost numbers do not belong in `log.md`; the skills say so.
+
 ## Command line
 
 The skills run these; they are also usable by hand. Every command takes `--home <dir>`, and
@@ -1371,6 +1386,7 @@ python plugins/anomaly/scripts/anomaly.py ci        watch|log <target> [--projec
 python plugins/anomaly/scripts/anomaly.py risk      <range> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py lens      tally add|sum ...
 python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
+python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1395,6 +1411,7 @@ python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 - `lens` takes `tally add` or `tally sum`; its options are in the same section.
 - `worklog` takes `start`, `add` or `report`; `add` appends one work-unit line to home and `report`
   prints what one work unit cost; the options are in the same section.
+- `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.

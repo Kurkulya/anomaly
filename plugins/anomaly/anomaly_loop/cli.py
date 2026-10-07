@@ -40,6 +40,7 @@ COMMANDS = (
     'risk',
     'lens',
     'worklog',
+    'log',
 )
 
 
