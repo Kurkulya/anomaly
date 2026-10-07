@@ -39,7 +39,7 @@ A docs-only diff (no source, config, script or test file) uses combined mode. [I
 
 ## Steps
 
-1. `worklog start`. Run `risk` on the range (error: unresolved range) and `git diff --name-only <range>` in the checkout (no files: empty diff). Rules mode or a rule trace: check the brief and the SKILL.md exist; rules mode skips both. On any failure, stop before dispatch and tell the caller.
+1. `worklog start`. Run `risk` on the range (error: unresolved range) and `git diff --name-only <range>` in the checkout (no files: empty diff). Rules mode skips both. Rules mode or a rule trace: check the brief and the SKILL.md exist. On any failure, stop before dispatch and tell the caller.
 2. `ports`: `reviewers` lists the agents (the core three and each org reviewer). From `conventions`, load only the org sections for the touched areas, for `anomaly:code` only. [R5, I23] `model review` is every dispatch's model. [R1, N2]
 3. Security joins when the first line of `risk` starts with `risk areas:`; its brief gets the `<area>: <path>` lines as printed. [N4]
 4. Fill [BRIEFS.md](BRIEFS.md) per agent; send the first round in one message, in the background. [R1] Each agent file owns read-only git and the finding shape. [R2, I25, R3]
