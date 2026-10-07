@@ -535,19 +535,21 @@ class PlanningDocsTest(unittest.TestCase):
         """AC-3: stories.md, the D-n and T-n lines, the ticket, the log.md line, the triage words, the
         next-step offer, the ADR front block."""
         text = self.doc_text(self.FORMATS)
-        for token in ('stories.md', 'decisions.md', 'D-n', 'T-n', 'Why:', 'Source:', 'Avoid:', 'Amended',
-                      'Jira:', 'no-ticket', 'Repro:', 'log.md', 'anomaly log add', 'ACs:',
-                      'ready-for-agent', 'ready-for-human', 'needs-info', 'wontfix', 'in-progress', 'done',
-                      '/anomaly:', 'Decision', 'Revisit', 'Out of scope', 'owner:'):
+        for token in ('## stories.md', '## decisions.md', '- D-n:', '- T-n:', 'Source:', 'Avoid:', 'Amended <date>:',
+                      'Jira:', 'no-ticket', 'Repro:', '## log.md', 'anomaly log add', 'ACs: AC-1',
+                      'ready-for-agent', 'ready-for-human (', 'needs-info', 'wontfix', '`in-progress` and `done`',
+                      '/anomaly:<name>', '- Decision:', '- Revisit:', '## Out of scope', '(verbatim', '— owner:'):
             with self.subTest(token=token):
                 self.assertIn(token, text)
 
     def test_the_boundaries_doc_names_clear_the_three_stages_and_the_context_zone(self):
         """AC-4: /clear is never offered between interview, specify and slice; the ~150k zone."""
         text = self.doc_text(self.BOUNDARIES)
-        for token in ('/clear', 'interview', 'specify', 'slice', '150k'):
-            with self.subTest(token=token):
-                self.assertIn(token, text)
+        plain = text.replace('`', '')
+        for rule in (r'Never offer /clear between interview, specify and slice', r'Offer /clear once, after slice',
+                     r'model never runs it', r'about 150k tokens'):
+            with self.subTest(rule=rule):
+                self.assertRegex(plain, rule)
 
     def test_the_readme_has_a_planning_formats_section_naming_both_docs(self):
         if not self.README.is_file():

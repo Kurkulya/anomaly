@@ -1419,7 +1419,7 @@ when a link names a host other than a reserved example host, and it runs every s
 against a home with no profile. Without a profile the identifier check is skipped.
 
 `tests/test_pipeline_files.py` and `tests/test_cli.py` hold the static checks over the text of the
-pipeline (every skill except the four loop skills, its extra docs, and the agent files). They pass
+pipeline (every skill except the four loop skills, its extra docs, the agent files and the files under `docs/`). They pass
 while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's

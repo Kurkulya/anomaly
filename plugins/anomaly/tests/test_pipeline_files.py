@@ -1,5 +1,5 @@
 """Static checks over the text the pipeline ships (ADR-0010): skills other than the four loop
-skills, their extra docs and the agent files. They pass while those files do not exist and bite as
+skills, their extra docs, the agent files and the files under docs/. They pass while those files do not exist and bite as
 soon as a file is added.
 
 A check reports `<file>:<line>: <what>`, never the text itself, so a finding cannot print a secret.
@@ -48,7 +48,7 @@ FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|--open|--changed|--name|--owne
 
 
 def pipeline_files(root):
-    """The pipeline's own files: every file of a skill folder that is not a loop skill, and the agents."""
+    """The pipeline's own files: every file of a skill folder that is not a loop skill, the agents and docs/."""
     skills = root / 'skills'
     return ([f for f in plugin_files(skills) if f.relative_to(skills).parts[0] not in constants.LOOP_SKILLS]
             + plugin_files(root / 'agents') + plugin_files(root / 'docs'))
@@ -225,13 +225,12 @@ def placeholder_hits(root):
     folder Claude Code fills `${CLAUDE_PLUGIN_ROOT}`-style placeholders only in SKILL.md (not even
     `${user_config.*}` there, ADR-0001), so in another doc one stays as written."""
     hits = []
-    for skill in PLACEHOLDER_FREE_SKILLS:
-        for path in plugin_files(root / 'skills' / skill):
-            if path.name == 'SKILL.md':
-                continue
-            for number, line in enumerate(path.read_text(encoding='utf-8', errors='ignore').splitlines(), 1):
-                if '${' in line:
-                    hits.append(f'{relative(root, path)}:{number}: unfilled placeholder')
+    skill_docs = [path for skill in PLACEHOLDER_FREE_SKILLS for path in plugin_files(root / 'skills' / skill)
+                  if path.name != 'SKILL.md']
+    for path in skill_docs + plugin_files(root / 'docs'):   # a docs/ file is no SKILL.md, so it is never filled
+        for number, line in enumerate(path.read_text(encoding='utf-8', errors='ignore').splitlines(), 1):
+            if '${' in line:
+                hits.append(f'{relative(root, path)}:{number}: unfilled placeholder')
     return sorted(hits)
 
 
@@ -615,6 +614,11 @@ class DocsFolderTest(TempPluginTest):
         plant(self.root, {'docs/formats.md': 'Run `echo "<text>"`.\n'})
         self.assertEqual(free_text_hits(self.root), ['docs/formats.md:1: placeholder in double quotes'])
 
+    def test_an_unfilled_placeholder_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/x.md': 'a\nPath ${CLAUDE_PLUGIN_ROOT}/x\n'})
+        self.assertEqual(placeholder_hits(self.root), ['docs/x.md:2: unfilled placeholder'])
+
     def test_the_pipeline_files_of_this_plugin_include_the_planning_docs(self):
+        """The single check against the real plugin; the cases above plant files in a temporary one."""
         listed = {relative(PLUGIN, f) for f in pipeline_files(PLUGIN)}
         self.assertLessEqual({'docs/formats.md', 'docs/boundaries.md'}, listed)

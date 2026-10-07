@@ -23,18 +23,21 @@ Amended <date>: <what changed> — <why>
 ```
 
 - A source criterion is kept word for word and tagged `(verbatim <source>)`.
-- A scenario is added under an AC only when that AC is unclear.
-- Each AC id is unique and is never renumbered.
+- A scenario is added only when an AC is unclear.
+- Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
+  `Amended <date>:` line.
 
 ## decisions.md
 
 One line per entry, written after each round, settled items only. Numbers are never reused.
 
-- `D-n: <decision>. Why: <one line>. Source: <file:line, commit, ADR or user, with the date>`
-- Prefixes after the number: `Test seam:`, `Open:`, `Risk:`.
+- `- D-n: <decision>. Why: <one line>. Source: <where>`, where `<where>` is a file:line, a commit, an ADR
+  or the text "user, <date>".
+- Add the tag ` ADR?` when the decision may need an ADR.
+- Prefixes: `Test seam:`, `Open:`, `Risk:`.
 - A changed line gets a second line `Amended <date>: <what changed>`.
-- `T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into the
-  glossary.
+- `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
+  the glossary.
 
 ## Ticket
 
@@ -61,11 +64,11 @@ Decisions:
 
 - `Jira:` holds a tracker key or `no-ticket`, until the tracker port names the key line.
 - `Gate:` only when the ticket was gated. `Restates:` only on a ticket that changes a rule.
-- `Amended`, `Result:`, `Metrics:`, `Reviewed:`, `Verified:` and `Red:` are written later by the CLI.
-  `slice` never writes them.
-- A light-path ticket from `diagnose` has `Covers: AC-1`, `Status: ready-for-agent`, the `Tests:` line,
-  then `Repro: <command> (red now)`. AC-1 is the exact symptom gone with the repro green. The body
-  holds Symptom, Root cause, Fix, Risk and the seam.
+- `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
+  CLI; `Amended` by a later stage or a person. `slice` writes none of them.
+- A light-path ticket from `diagnose` has `Blocked by: none`, `Covers: AC-1`, `Status: ready-for-agent`,
+  the `Tests:` line, then `Repro: <command> (red now)`. AC-1 is the exact symptom gone with the repro
+  green. The body holds Symptom, Root cause, Fix, Risk, and the seam or a no-correct-seam finding.
 
 ## log.md
 
