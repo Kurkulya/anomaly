@@ -1,0 +1,12 @@
+{
+  "name": "anomaly",
+  "description": "Feedback loop for Claude Code: measure, observe and calibrate how you work, and assess new ideas",
+  "userConfig": {
+    "home": {
+      "type": "string",
+      "title": "Home folder",
+      "description": "Folder for all durable loop data: metrics, anomalies and the profile. A leading ~ is expanded by the plugin.",
+      "default": "~/.claude/anomaly"
+    }
+  }
+}

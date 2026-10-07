@@ -1,0 +1,33 @@
+{
+  "fixture": "feature",
+  "defects": [
+    {"id": "F-D1", "what": "AC-3 has no code and no test", "min_severity": "High",
+     "places": [{"file": "specs/tally/issues/01-count-command.md", "lines": [15, 15]},
+                {"file": "specs/tally/spec.md", "lines": [7, 7]}]},
+    {"id": "F-D2", "what": "AC-2 is covered by a check that asserts nothing about the word count", "min_severity": "Medium",
+     "places": [{"file": "checks/check_words.py", "lines": [11, 17]}]},
+    {"id": "F-D3", "what": "a new visible --verbose flag nobody asked for", "min_severity": "Medium",
+     "places": [{"file": "tally/cli.py", "lines": [13, 13]}, {"file": "tally/cli.py", "lines": [19, 19]}]},
+    {"id": "F-D4", "what": "standard input reading, an item the ticket lists under Not in this ticket", "min_severity": "High",
+     "places": [{"file": "tally/source.py", "lines": [19, 20]}]},
+    {"id": "F-D5", "what": "the README still describes the old option and the old output", "min_severity": "High",
+     "places": [{"file": "README.md", "lines": [9, 13]}]},
+    {"id": "F-D6", "what": "a comment defers the CSV header row to the export spec, which does not mention it", "min_severity": "High",
+     "places": [{"file": "tally/counter.py", "lines": [14, 14]}]},
+    {"id": "F-D7", "what": "the report says the encoding item is fixed; the file is still read strictly", "min_severity": "Medium",
+     "places": [{"file": "specs/tally/issues/01-count-command.md", "lines": [31, 31]},
+                {"file": "tally/source.py", "lines": [11, 11]}]},
+    {"id": "F-D8", "what": "an existing check still uses the renamed option; not run", "min_severity": "Medium",
+     "unverified": true,
+     "places": [{"file": "checks/check_legacy.py", "lines": [17, 19]}]}
+  ],
+  "decoys": [
+    {"id": "Y1", "what": "AC-1 covered only by an integration check",
+     "places": [{"file": "checks/check_count.py", "lines": [11, 18]}]},
+    {"id": "Y2", "what": "output with its unit, backed by the Amended line",
+     "places": [{"file": "tally/cli.py", "lines": [26, 30]},
+                {"file": "specs/tally/issues/01-count-command.md", "lines": [22, 22]}]},
+    {"id": "Y3", "what": "a deferral to a spec that owns the item (export AC-2)",
+     "places": [{"file": "tally/counter.py", "lines": [6, 6]}]}
+  ]
+}

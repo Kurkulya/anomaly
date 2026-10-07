@@ -1,0 +1,11 @@
+{
+  "fixture": "feature cumulative mode",
+  "defects": [
+    {"id": "F-D9", "what": "characterization check that pins a visible total but mocks internals: verdict rewrite",
+     "min_severity": "Medium", "places": [{"file": "checks/check_pin_total.py", "lines": [1, 12]}]}
+  ],
+  "decoys": [
+    {"id": "Y4", "what": "characterization check that pins the printed output through the command: verdict keep",
+     "places": [{"file": "checks/check_pin_output.py", "lines": [13, 20]}]}
+  ]
+}

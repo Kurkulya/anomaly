@@ -1,0 +1,14 @@
+{
+  "name": "anomaly-local",
+  "description": "Local marketplace for the anomaly plugin",
+  "owner": {
+    "name": "Plugin owner"
+  },
+  "plugins": [
+    {
+      "name": "anomaly",
+      "source": "./plugins/anomaly",
+      "description": "Feedback loop for Claude Code: measure, observe and calibrate how you work, and assess new ideas"
+    }
+  ]
+}

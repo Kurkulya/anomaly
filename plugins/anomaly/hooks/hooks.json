@@ -1,0 +1,18 @@
+{
+  "description": "Once a week, in the first session, tell the user when the anomaly backlog needs them",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py", "nudge"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

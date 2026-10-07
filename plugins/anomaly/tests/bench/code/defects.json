@@ -1,0 +1,33 @@
+{
+  "fixture": "code",
+  "defects": [
+    {"id": "D1", "what": "off-by-one in a range bound", "min_severity": "High",
+     "places": [{"file": "shelf/paging.py", "lines": [13, 13]}]},
+    {"id": "D2", "what": "except Exception: pass makes a check fail open", "min_severity": "High",
+     "places": [{"file": "shelf/loans.py", "lines": [27, 28]}]},
+    {"id": "D3", "what": "second copy of the ledger-owned title key helper", "min_severity": "High",
+     "places": [{"file": "shelf/dedupe.py", "lines": [4, 5]}]},
+    {"id": "D4", "what": "super-linear regex on an input path", "min_severity": "High",
+     "places": [{"file": "shelf/search.py", "lines": [6, 11]}]},
+    {"id": "D5", "what": "file handle left open on the error path", "min_severity": "Medium",
+     "places": [{"file": "shelf/counts.py", "lines": [6, 14]}]},
+    {"id": "D6", "what": "breaks the documented rule that money is whole cents", "min_severity": "High",
+     "places": [{"file": "shelf/pricing.py", "lines": [17, 19]}]},
+    {"id": "D7", "what": "page not reset when the filter changes", "min_severity": "High",
+     "places": [{"file": "shelf/browser.py", "lines": [16, 17]}]},
+    {"id": "D8", "what": "new public function with no check", "min_severity": "Medium",
+     "places": [{"file": "shelf/fines.py", "lines": [6, 8]}]},
+    {"id": "D9", "what": "new check repeats an existing check of the same behaviour", "min_severity": "Medium",
+     "places": [{"file": "checks/check_pricing.py", "lines": [10, 11]}]},
+    {"id": "D10", "what": "check deleted with no cover: nothing proves a long text is cut any more", "min_severity": "Blocker",
+     "places": [{"file": "checks/check_text.py", "lines": [11, 13]}]}
+  ],
+  "decoys": [
+    {"id": "X1", "what": "broad except with a reason and a check",
+     "places": [{"file": "shelf/hooks.py", "lines": [12, 13]}]},
+    {"id": "X2", "what": "long but flat function",
+     "places": [{"file": "shelf/cards.py", "lines": [7, 23]}]},
+    {"id": "X3", "what": "local helper with the same name as the owned one and a different job",
+     "places": [{"file": "shelf/stats.py", "lines": [4, 9]}]}
+  ]
+}

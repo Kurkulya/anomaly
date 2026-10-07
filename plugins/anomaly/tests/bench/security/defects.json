@@ -1,0 +1,33 @@
+{
+  "fixture": "security",
+  "defects": [
+    {"id": "S-D1", "what": "SQL built with an f-string from a request field", "category": "A03", "min_severity": "Blocker",
+     "places": [{"file": "app/search.py", "lines": [9, 11]}]},
+    {"id": "S-D2", "what": "shell call with a request parameter", "category": "A03", "min_severity": "Blocker",
+     "places": [{"file": "app/ping.py", "lines": [11, 12]}]},
+    {"id": "S-D3", "what": "file path joined from user input with no check", "category": "A01", "min_severity": "High",
+     "places": [{"file": "app/exports.py", "lines": [12, 12]}]},
+    {"id": "S-D4", "what": "the request body is deserialized with pickle", "category": "A08", "min_severity": "Blocker",
+     "places": [{"file": "app/importer.py", "lines": [12, 12]}]},
+    {"id": "S-D5", "what": "the server fetches a user-given URL", "category": "A10", "min_severity": "High",
+     "places": [{"file": "app/preview.py", "lines": [11, 12]}]},
+    {"id": "S-D6", "what": "the new handler lacks the session check its siblings have", "category": ["A01", "A07"], "min_severity": "High",
+     "places": [{"file": "app/stats.py", "lines": [6, 8]}]},
+    {"id": "S-D7", "what": "an email address is written to a log line", "category": "A09", "min_severity": "Medium",
+     "places": [{"file": "app/subscribe.py", "lines": [13, 14]}]},
+    {"id": "S-D8", "what": "certificate checks are turned off", "category": ["A02", "A07"], "min_severity": "High",
+     "places": [{"file": "app/webhook.py", "lines": [12, 13]}]},
+    {"id": "S-D9", "what": "the debug flag is on in the shipped config", "category": "A05", "min_severity": "Medium",
+     "places": [{"file": "config/app.ini", "lines": [4, 4]}]},
+    {"id": "S-D10", "what": "user text is written into HTML output without escaping", "category": "A03", "min_severity": "High",
+     "places": [{"file": "app/hello.py", "lines": [8, 9]}]}
+  ],
+  "decoys": [
+    {"id": "Q1", "what": "a parameterized query whose placeholders are built from a constant",
+     "places": [{"file": "app/notes.py", "lines": [10, 11]}]},
+    {"id": "Q2", "what": "a subprocess call with a constant argument list",
+     "places": [{"file": "app/version.py", "lines": [11, 11]}]},
+    {"id": "Q3", "what": "HTML output passed through html.escape",
+     "places": [{"file": "app/welcome.py", "lines": [10, 11]}]}
+  ]
+}

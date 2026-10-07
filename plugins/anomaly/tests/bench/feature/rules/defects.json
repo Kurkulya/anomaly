@@ -1,0 +1,16 @@
+{
+  "fixture": "feature rules mode",
+  "defects": [
+    {"id": "F-R1", "what": "keep rule K02 is missing from the skill text", "min_severity": "High", "rule": "K02"},
+    {"id": "F-R2", "what": "keep rule K07 is missing from the skill text", "min_severity": "High", "rule": "K07"},
+    {"id": "F-R3", "what": "drop rule X2 is still in the skill text", "min_severity": "High", "rule": "X2",
+     "places": [{"file": "SKILL.md", "lines": [19, 19]}]},
+    {"id": "F-R4", "what": "the closing table rule is in no row of the ledger", "min_severity": "Medium",
+     "places": [{"file": "SKILL.md", "lines": [30, 30]}]},
+    {"id": "F-R5", "what": "the skill text is over its size budget", "min_severity": "High", "rule": "SIZE"}
+  ],
+  "decoys": [
+    {"id": "Z1", "what": "keep rule K05 is present in other words", "rule": "K05"},
+    {"id": "Z2", "what": "drop rule X3 is rightly absent", "rule": "X3"}
+  ]
+}
