@@ -1419,8 +1419,8 @@ when a link names a host other than a reserved example host, and it runs every s
 against a home with no profile. Without a profile the identifier check is skipped.
 
 `tests/test_pipeline_files.py` and `tests/test_cli.py` hold the static checks over the text of the
-pipeline (every skill except the four loop skills, its extra docs, the agent files and the files under `docs/`). They pass
-while those files do not exist. Once they do:
+pipeline (every skill except the four loop skills, its extra docs, the agent files and the files
+under `docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
   `SKILL.md` is 8 KB or less and an agent file is 6 KB or less.
@@ -1441,7 +1441,8 @@ while those files do not exist. Once they do:
   permissions.
 - This `README.md` names every command group of `--help` and every `<group> <action>` pair of
   `<group> --help`.
-- No doc of `build` or `review` other than `SKILL.md` holds a `${…}` placeholder: in a skill
+- No doc of `build` or `review` other than `SKILL.md`, nor any file under `docs/`, holds a `${…}`
+  placeholder: in a skill
   folder Claude Code fills `${CLAUDE_PLUGIN_ROOT}`-style placeholders only in `SKILL.md`
   (`${user_config.*}` not even there, ADR-0001).
 

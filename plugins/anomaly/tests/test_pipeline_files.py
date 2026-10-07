@@ -1,6 +1,6 @@
 """Static checks over the text the pipeline ships (ADR-0010): skills other than the four loop
-skills, their extra docs, the agent files and the files under docs/. They pass while those files do not exist and bite as
-soon as a file is added.
+skills, their extra docs, the agent files and the files under docs/. They pass while those files do
+not exist and bite as soon as a file is added.
 
 A check reports `<file>:<line>: <what>`, never the text itself, so a finding cannot print a secret.
 A command shape is looked for in every line, every `inline span` and every part of those split at
@@ -200,7 +200,7 @@ def cli_call_hits(root, skill):
     """Lines of the skill's text that name the CLI script without the exact command form, or chain it. In
     the frontmatter of a Markdown file only the line `allowed-tools: <the CLI pattern>` may name it
     (AllowedToolsTest pins that line); any other frontmatter line that does is a hit."""
-    allowed_line = f'allowed-tools: {constants.CLI_PATTERN}'
+    allowed_line = f'allowed-tools: {constants.CLI_PATTERN}'   # docs/ is not scanned: its files are read, never run
     hits = set()
     for path in plugin_files(root / 'skills' / skill):
         text = path.read_text(encoding='utf-8', errors='ignore')
@@ -221,7 +221,8 @@ def cli_call_hits(root, skill):
 
 
 def placeholder_hits(root):
-    """Lines of a build or review doc other than SKILL.md that hold a `${…}` placeholder: in a skill
+    """Lines of a build or review doc other than SKILL.md, or of a file under docs/, that hold a `${…}`
+    placeholder: in a skill
     folder Claude Code fills `${CLAUDE_PLUGIN_ROOT}`-style placeholders only in SKILL.md (not even
     `${user_config.*}` there, ADR-0001), so in another doc one stays as written."""
     hits = []

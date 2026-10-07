@@ -66,7 +66,7 @@ Decisions:
 - `Gate:` only when the ticket was gated. `Restates:` only on a ticket that changes a rule.
 - `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
   CLI; `Amended` by a later stage or a person. `slice` writes none of them.
-- A light-path ticket from `diagnose` has `Blocked by: none`, `Covers: AC-1`, `Status: ready-for-agent`,
+- A light-path ticket from `diagnose` has `Blocked by: none` (`ticket show` warns without a `Blocked by:` line), `Covers: AC-1`, `Status: ready-for-agent`,
   the `Tests:` line, then `Repro: <command> (red now)`. AC-1 is the exact symptom gone with the repro
   green. The body holds Symptom, Root cause, Fix, Risk, and the seam or a no-correct-seam finding.
 
