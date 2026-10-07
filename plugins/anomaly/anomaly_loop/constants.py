@@ -56,7 +56,7 @@ WORK_UNITS_FILE = 'work-units.jsonl'   # one line per pipeline stage run: {featu
 WORKLOG_BUILD_STAGE = 'build'   # the stage whose line, written after the merge, marks a ticket as merged
 WORKLOG_REVIEW_STAGE = 'review'   # the one stage whose line may carry a review mode
 WORKLOG_TICKET_STAGES = (WORKLOG_BUILD_STAGE, WORKLOG_REVIEW_STAGE)   # the stages whose line, and start, may name one ticket (--ticket)
-REVIEW_MODES = ('ticket', 'delta', 'cumulative', 'combined', 'rules')   # the review modes of AC-45
+REVIEW_MODES = ('ticket', 'delta', 'cumulative', 'combined', 'rules', 'spec', 'tickets')   # the review modes of AC-45, and the plan-gate modes
 
 # ---------- file names: data folder (throwaway) ----------
 

@@ -408,6 +408,14 @@ class ReviewFieldsTest(WorklogCase):
         self.assertEqual([row['mode'] for row in self.lines()],
                          ['ticket', 'delta', 'cumulative', 'combined', 'rules'])
 
+    def test_the_plan_gate_modes_spec_and_tickets_are_accepted_on_a_review_line(self):
+        """Workflow-plan ticket 07, AC-14: the review skill's plan-gate modes go on the work-unit line."""
+        for mode in ('spec', 'tickets'):
+            with self.subTest(mode=mode):
+                code, out, err = self.review('--mode', mode)
+                self.assertEqual((code, err), (0, ''), out)
+        self.assertEqual([row['mode'] for row in self.lines()], ['spec', 'tickets'])
+
     def test_a_mode_outside_the_list_is_refused_and_nothing_is_written(self):
         for mode in ('full', 'Delta', '', 'delta\ncumulative'):
             with self.subTest(mode=mode):

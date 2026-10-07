@@ -25,6 +25,8 @@ You check one planning artifact before anyone builds from it. The `review` skill
 
 Run the checks in the order the mode doc gives. A long check goes to the background with the wait stated. [specify N7]
 
+Delta round: asked again after a fix, with the work-unit folder instead of a range, re-check only the lines of `stories.md`, `decisions.md` or the tickets that changed since your report; give each earlier finding as fixed or still open, and the new findings in the same shape.
+
 ## Severity
 
 - Blocker: stops the gate. An AC nobody can test, a claim the code contradicts, a code or tool claim with no cite, an open question left, a path that does not exist and no ticket creates, an order that needs a ticket built before its blocker, an AC covered by no ticket.

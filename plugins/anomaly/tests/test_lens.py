@@ -142,9 +142,16 @@ class AddTest(LensCase):
         assert_cli_error(self, self.add(session='local:7'), 'session', ':')
         self.assertFalse(self.data.exists())
 
+    def test_the_plan_lens_is_accepted_without_a_profile_and_summed_like_a_core_lens(self):
+        """Workflow-plan ticket 07, AC-14: the plan agent's counts go through `lens tally` under `plan`."""
+        self.add_ok('plan', 3, 1)
+        self.assertEqual([row['lens'] for row in self.tally_lines()], ['plan'])
+        _, batch = self.summed()
+        self.assertEqual(batch, {'lenses': [dict(session=SID, lens='plan', accepted=3, rejected=1)]})
+
     def test_a_lens_name_outside_the_allowed_set_is_refused_with_the_allowed_names_and_nothing_is_written(self):
-        """AC-97: on an empty profile the allowed lens names are the three core lenses."""
-        assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security')
+        """AC-97: on an empty profile the allowed lens names are the three core lenses and `plan`."""
+        assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security', 'plan')
         self.assertFalse(self.data.exists())
 
     def test_an_org_reviewer_from_the_reviewers_port_is_a_lens_under_its_adapter_name(self):

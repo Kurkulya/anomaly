@@ -116,9 +116,10 @@ class SkillFileTest(unittest.TestCase):
         self.assertLessEqual(self.REVIEW_BRIEF.stat().st_size, self.REVIEW_BRIEF_MAX_BYTES)
         self.assertIn(self.REVIEW_BRIEF.name, self.REVIEW_SKILL.read_text(encoding='utf-8'))
 
-    def test_the_review_skill_has_a_dispatch_row_or_heading_for_each_of_the_five_modes(self):
-        """AC-45: ticket, delta, cumulative, combined and rules."""
+    def test_the_review_skill_has_a_dispatch_row_or_heading_for_each_of_the_seven_modes(self):
+        """AC-45: ticket, delta, cumulative, combined and rules; plan-gate ticket 07 (AC-14): spec and tickets."""
         text = self.review_text()
+        self.assertLessEqual({'spec', 'tickets'}, set(constants.REVIEW_MODES))
         for mode in constants.REVIEW_MODES:
             with self.subTest(mode=mode):
                 self.assertRegex(text, re.compile(rf'^(?:\|\s*|#+\s*)`?{mode}`?\b', re.M))
@@ -636,6 +637,110 @@ class PlanReviewerTest(unittest.TestCase):
             for name in ('plan-audit', 'plan-sanity'):
                 with self.subTest(doc=path.name, name=name):
                     self.assertNotIn(name, text)
+
+
+class PlanGateReviewTest(unittest.TestCase):
+    """Workflow-plan ticket 07 (AC-14, AC-15): the review skill's `spec` and `tickets` modes, the plan lens,
+    the README and glossary lines, and ADR-0015."""
+    ROOT = PLUGIN.parent.parent
+    REVIEW = PLUGIN / 'skills' / 'review'
+    SKILL = REVIEW / 'SKILL.md'
+    PLAN_AGENT = PLUGIN / 'agents' / 'plan.md'
+    BRIEFS = REVIEW / 'BRIEFS.md'
+
+    def skill(self):
+        self.assertTrue(self.SKILL.is_file())
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def section(self, heading):
+        return self.skill().split(heading, 1)[1].split('\n## ', 1)[0]
+
+    def mode_rows(self):
+        return {mode: line for mode in ('spec', 'tickets')
+                for line in self.skill().splitlines() if re.match(rf'\|\s*`?{mode}`?\s*\|', line)}
+
+    def test_the_mode_table_has_a_row_for_spec_and_tickets_that_dispatch_the_plan_agent(self):
+        rows = self.mode_rows()
+        self.assertEqual(sorted(rows), ['spec', 'tickets'])
+        for mode, row in rows.items():
+            with self.subTest(mode=mode):
+                self.assertIn('anomaly:plan', row)
+
+    def test_step_1_skips_risk_and_the_diff_for_spec_and_tickets_as_for_rules(self):
+        step = next(line for line in self.skill().splitlines() if line.startswith('1. '))
+        self.assertRegex(step, r'(?s)(?:\bspec\b.*\btickets\b|\btickets\b.*\bspec\b).*skip|skip.*(?:\bspec\b.*\btickets\b|\btickets\b.*\bspec\b)')
+
+    def test_the_ports_step_names_the_plan_agent_among_the_reviewers(self):
+        step = next(line for line in self.skill().splitlines() if line.startswith('2. '))
+        self.assertIn('anomaly:plan', step)
+
+    def test_the_lens_step_names_the_plan_lens(self):
+        step = next(line for line in self.skill().splitlines() if line.startswith('9. '))
+        self.assertRegex(step, r'`plan`')
+
+    def test_a_failed_read_of_the_plan_agents_mode_doc_is_answered_with_that_file_by_sendmessage(self):
+        section = self.section('## When an agent\'s read fails')
+        self.assertIn('anomaly:plan', section)
+        for doc in ('plan-spec.md', 'plan-tickets.md'):
+            with self.subTest(doc=doc):
+                self.assertIn(doc, section)
+
+    def test_a_blocker_stops_the_calling_skill_and_warnings_and_nits_go_in_its_handoff(self):
+        """AC-15."""
+        text = self.skill()
+        lowered = text.lower()
+        self.assertRegex(lowered, r'blocker[^.\n]*(stops?|halts?)[^.\n]*(calling skill|caller)'
+                                  r'|(stops?|halts?)[^.\n]*(calling skill|caller)[^.\n]*blocker')
+        self.assertRegex(lowered, r'warnings?[^.\n]*nits?[^.\n]*handoff|handoff[^.\n]*warnings?[^.\n]*nits?')
+
+    def test_a_plan_mode_delta_round_rechecks_the_changed_lines_and_the_caller_passes_the_work_unit_folder(self):
+        """AC-15: a fix gets a delta round from the same agent."""
+        section = self.section('## Delta rounds').lower()
+        self.assertIn('anomaly:plan', section)
+        self.assertRegex(section, r'stories\.md')
+        self.assertRegex(section, r'decisions\.md')
+        self.assertRegex(section, r'changed')
+        self.assertRegex(section, r'work-unit folder')
+
+    def test_the_plan_agent_or_the_review_brief_carries_a_delta_line_for_the_changed_lines(self):
+        """Amended 2026-10-08: `agents/plan.md` had none."""
+        carriers = [path for path in (self.PLAN_AGENT, self.BRIEFS)
+                    if re.search(r'(?i)(delta|re-?check)[^\n]*(changed|since)|(changed|since)[^\n]*(delta|re-?check)',
+                                 path.read_text(encoding='utf-8'))]
+        self.assertTrue(carriers, 'neither agents/plan.md nor review/BRIEFS.md has a plan delta line')
+
+    def test_the_readme_review_section_names_the_spec_and_tickets_modes(self):
+        if not (self.ROOT / 'README.md').is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        section = (self.ROOT / 'README.md').read_text(encoding='utf-8').split('## The review skill', 1)[1].split('\n## ', 1)[0]
+        for mode in ('spec', 'tickets'):
+            with self.subTest(mode=mode):
+                self.assertRegex(section, rf'`{mode}`')
+        self.assertIn('anomaly:plan', section)
+
+    def test_the_glossary_has_one_plan_gate_row_avoiding_plan_sanity_and_claim_check(self):
+        context = self.ROOT / 'CONTEXT.md'
+        if not context.is_file():
+            self.skipTest('no CONTEXT.md two folders above the plugin: an installed copy, not the repository')
+        rows = [line for line in context.read_text(encoding='utf-8').splitlines() if line.startswith('| **plan gate**')]
+        self.assertEqual(len(rows), 1)
+        for token in ('spec', 'tickets', 'Blocker', 'plan-sanity', 'claim check'):
+            with self.subTest(token=token):
+                self.assertIn(token, rows[0])
+
+    def test_adr_0015_is_accepted_and_adr_0011_names_it_as_partly_superseding(self):
+        adrs = self.ROOT / 'docs' / 'adr'
+        if not adrs.is_dir():
+            self.skipTest('no docs/adr two folders above the plugin: an installed copy, not the repository')
+        found = sorted(adrs.glob('0015-plan-gate-in-review-and-term-lines.md'))
+        self.assertEqual(len(found), 1, 'docs/adr/0015-plan-gate-in-review-and-term-lines.md is missing')
+        text = found[0].read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^# ADR-0015\b')
+        self.assertRegex(text, r'(?m)^Status: Accepted\b')
+        status = next(line for line in (next(adrs.glob('0011-*.md'))).read_text(encoding='utf-8').splitlines()
+                      if line.startswith('Status:'))
+        self.assertIn('ADR-0015', status)
+        self.assertIn('partly superseded', status)
 
 
 if __name__ == '__main__':

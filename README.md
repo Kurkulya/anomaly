@@ -1029,6 +1029,10 @@ The modes, in one line each (the full dispatch table is in
 - **cumulative**: the whole branch before the MR, all three reviewers.
 - **combined**: a docs-only diff or the light path, one code reviewer with the feature checklist.
 - **rules**: a rewritten skill checked against its rule ledger by the feature reviewer.
+- **`spec`** and **`tickets`** (the plan gate): the end of `specify` and `slice`. No range, no
+  diff, no `risk`; the caller passes the work-unit folder and `anomaly:plan` checks it, counted
+  under lens `plan`. A Blocker stops the calling skill; Warnings and Nits go in its handoff. A
+  fix gets a delta round from the same agent, on the lines changed since its report.
 
 - It stops before any dispatch when the range does not resolve or the diff is empty. A docs-only
   diff (no source, config, script or test file) uses combined mode.
@@ -1264,9 +1268,9 @@ and, after the session's last review, sums them with
   the file `a`); both commands refuse it before anything is written. The counts are whole
   numbers of 0 or more, and `accepted` and `rejected` are both required.
 - The lens names are fixed: `code`, `feature`, `security` (the core reviewers `anomaly:code`,
-  `anomaly:feature`, `anomaly:security`) and each org reviewer's adapter name from the
-  `reviewers` port (see Ports and the repo layer). Any other name is one `anomaly:` line that
-  lists the allowed names, exit 2, and nothing is written.
+  `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`) and each
+  org reviewer's adapter name from the `reviewers` port (see Ports and the repo layer). Any other
+  name is one `anomaly:` line that lists the allowed names, exit 2, and nothing is written.
 - `--revised <n>` counts the accepted findings whose fix differed from the one the reviewer
   proposed, so it is at most `--accepted` (more is one `anomaly:` line naming both counts, exit
   2). The tally line, the batch line and the home line gain `revised` only when it is passed;
