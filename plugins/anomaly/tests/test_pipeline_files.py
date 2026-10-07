@@ -1,6 +1,6 @@
 """Static checks over the text the pipeline ships (ADR-0010): skills other than the four loop
-skills, their extra docs and the agent files. They pass while those files do not exist and bite as
-soon as a file is added.
+skills, their extra docs, the agent files and the files under docs/. They pass while those files do
+not exist and bite as soon as a file is added.
 
 A check reports `<file>:<line>: <what>`, never the text itself, so a finding cannot print a secret.
 A command shape is looked for in every line, every `inline span` and every part of those split at
@@ -48,10 +48,10 @@ FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|--open|--changed|--name|--owne
 
 
 def pipeline_files(root):
-    """The pipeline's own files: every file of a skill folder that is not a loop skill, and the agents."""
+    """The pipeline's own files: every file of a skill folder that is not a loop skill, the agents and docs/."""
     skills = root / 'skills'
     return ([f for f in plugin_files(skills) if f.relative_to(skills).parts[0] not in constants.LOOP_SKILLS]
-            + plugin_files(root / 'agents'))
+            + plugin_files(root / 'agents') + plugin_files(root / 'docs'))
 
 
 def logical_lines(text):
@@ -200,7 +200,7 @@ def cli_call_hits(root, skill):
     """Lines of the skill's text that name the CLI script without the exact command form, or chain it. In
     the frontmatter of a Markdown file only the line `allowed-tools: <the CLI pattern>` may name it
     (AllowedToolsTest pins that line); any other frontmatter line that does is a hit."""
-    allowed_line = f'allowed-tools: {constants.CLI_PATTERN}'
+    allowed_line = f'allowed-tools: {constants.CLI_PATTERN}'   # docs/ is not scanned: its files are read, never run
     hits = set()
     for path in plugin_files(root / 'skills' / skill):
         text = path.read_text(encoding='utf-8', errors='ignore')
@@ -221,17 +221,17 @@ def cli_call_hits(root, skill):
 
 
 def placeholder_hits(root):
-    """Lines of a build or review doc other than SKILL.md that hold a `${…}` placeholder: in a skill
+    """Lines of a build or review doc other than SKILL.md, or of a file under docs/, that hold a `${…}`
+    placeholder: in a skill
     folder Claude Code fills `${CLAUDE_PLUGIN_ROOT}`-style placeholders only in SKILL.md (not even
     `${user_config.*}` there, ADR-0001), so in another doc one stays as written."""
     hits = []
-    for skill in PLACEHOLDER_FREE_SKILLS:
-        for path in plugin_files(root / 'skills' / skill):
-            if path.name == 'SKILL.md':
-                continue
-            for number, line in enumerate(path.read_text(encoding='utf-8', errors='ignore').splitlines(), 1):
-                if '${' in line:
-                    hits.append(f'{relative(root, path)}:{number}: unfilled placeholder')
+    skill_docs = [path for skill in PLACEHOLDER_FREE_SKILLS for path in plugin_files(root / 'skills' / skill)
+                  if path.name != 'SKILL.md']
+    for path in skill_docs + plugin_files(root / 'docs'):   # a docs/ file is no SKILL.md, so it is never filled
+        for number, line in enumerate(path.read_text(encoding='utf-8', errors='ignore').splitlines(), 1):
+            if '${' in line:
+                hits.append(f'{relative(root, path)}:{number}: unfilled placeholder')
     return sorted(hits)
 
 
@@ -592,3 +592,34 @@ class NoSettingsEditTest(TempPluginTest):
 
     def test_the_plugin_edits_no_settings_file_and_prints_no_allow_rule(self):
         self.assertEqual(settings_edit_hits(PLUGIN), [])
+
+
+class DocsFolderTest(TempPluginTest):
+    """AC-5 (workflow-plan ticket 02): the guard-rail scans cover `docs/`, like the skill files."""
+
+    def test_the_pipeline_files_list_the_docs_folder(self):
+        plant(self.root, {'docs/formats.md': 'x\n', 'docs/sub/more.md': 'y\n', 'skills/build/SKILL.md': 'z\n',
+                          'skills/measure/SKILL.md': 'loop\n', 'agents/code.md': 'a\n'})
+        self.assertEqual([relative(self.root, f) for f in pipeline_files(self.root)],
+                         ['skills/build/SKILL.md', 'agents/code.md', 'docs/formats.md', 'docs/sub/more.md'])
+
+    def test_a_denied_shape_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/formats.md': 'one\n```\nsudo ls\n```\n'})
+        self.assertEqual(deny_hits(self.root, ['Bash(sudo:*)']), ['docs/formats.md:3: Bash(sudo:*)'])
+
+    def test_inline_code_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/boundaries.md': 'Run `node -e "x"` now.\n'})
+        self.assertEqual(shell_hits(self.root), ['docs/boundaries.md:1: inline code'])
+
+    def test_a_placeholder_in_double_quotes_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/formats.md': 'Run `echo "<text>"`.\n'})
+        self.assertEqual(free_text_hits(self.root), ['docs/formats.md:1: placeholder in double quotes'])
+
+    def test_an_unfilled_placeholder_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/x.md': 'a\nPath ${CLAUDE_PLUGIN_ROOT}/x\n'})
+        self.assertEqual(placeholder_hits(self.root), ['docs/x.md:2: unfilled placeholder'])
+
+    def test_the_pipeline_files_of_this_plugin_include_the_planning_docs(self):
+        """The single check against the real plugin; the cases above plant files in a temporary one."""
+        listed = {relative(PLUGIN, f) for f in pipeline_files(PLUGIN)}
+        self.assertLessEqual({'docs/formats.md', 'docs/boundaries.md'}, listed)
