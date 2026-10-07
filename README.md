@@ -1430,6 +1430,21 @@ The planning skills share their file shapes (`stories.md`, `decisions.md`, ticke
 words, the next-step offer, the ADR front block) in `docs/formats.md`. Where each planning stage ends,
 and when `/clear` may be offered, is in `docs/boundaries.md`.
 
+## The interview skill
+
+`/anomaly:interview` is slash-only (`disable-model-invocation: true`): the model never starts it. It
+turns an idea into settled decisions and terms by asking the user in rounds.
+
+- It runs the `gather` port, then lists what is already settled (ADRs and `D-n` lines) before round 1.
+- Each round asks at most 8 questions, hard-to-reverse first. Every question has `Assumes:` and
+  `Recommend:`; low-risk items with an obvious answer go in one defaults block.
+- After each round it writes `D-n` lines (with a `Source:`) and `T-n` lines (settled terms) to
+  `.anomaly/<work unit>/decisions.md`. It edits no other file and makes no commit.
+- It closes with a table of the decisions and one confirm question, writes an `interview` work-unit
+  line (`worklog add --stage interview`) and offers `/anomaly:specify`.
+- Its recommendations are counted as accepted, overridden or revised for `observe`; the lens name for
+  that count is not yet allowed in `lens tally add`.
+
 ## Development
 
 Run the tests from the plugin folder:

@@ -15,7 +15,7 @@
 | **unproven** | The result of an experiment on a rare-event metric: the anomaly did not come back after the fix, which chance alone would also explain. Kept, not proven; the anomaly is not reopened. | keep (that is a proven result) |
 | **rare-event metric** | `sightings since the fix` used as the primary metric. It is judged by whether the anomaly came back, not by a count test. | |
 | **idea** | An assessed proposal from outside (a link, a text, an opinion) with a verdict: adopt, trial, park or reject. Not an anomaly. | suggestion |
-| **lens** | One reviewer, or one review axis, whose findings are counted as accepted or rejected, and optionally **revised**: the accepted findings whose fix differed from the one the reviewer proposed (at most the accepted count). | |
+| **lens** | One reviewer, one review axis, or the interview's recommendations, whose findings or answers are counted as accepted, rejected or revised: the accepted ones whose fix or answer differed from the one proposed (at most the accepted count). | |
 | **needs-rework** | Computed flag on a target that changes or fails too often: redesign it, don't patch it. | |
 | **profile** | The environment mapping (tracker, glossary file, agents, MR tool) kept outside the plugin. | config |
 | **home** | The folder that holds all durable loop data. | data dir |
