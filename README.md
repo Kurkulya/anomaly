@@ -1029,6 +1029,10 @@ The modes, in one line each (the full dispatch table is in
 - **cumulative**: the whole branch before the MR, all three reviewers.
 - **combined**: a docs-only diff or the light path, one code reviewer with the feature checklist.
 - **rules**: a rewritten skill checked against its rule ledger by the feature reviewer.
+- **`spec`** and **`tickets`** (the plan gate): the end of `specify` and `slice`. No range, no
+  diff, no `risk`; the caller passes the work-unit folder and `anomaly:plan` checks it, counted
+  under lens `plan`. A Blocker stops the calling skill; Warnings and Nits go in its handoff. A
+  fix gets a delta round from the same agent, on the lines changed since its report.
 
 - It stops before any dispatch when the range does not resolve or the diff is empty. A docs-only
   diff (no source, config, script or test file) uses combined mode.
