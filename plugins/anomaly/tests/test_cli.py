@@ -511,5 +511,62 @@ class CliTest(unittest.TestCase):
         self.assertIn('transcript folder', err)
 
 
+class PlanningDocsTest(unittest.TestCase):
+    """The planning docs under `docs/` (workflow-plan ticket 02, AC-3 to AC-5): each within its budget."""
+    DOCS_DIR = PLUGIN / 'docs'
+    FORMATS = DOCS_DIR / 'formats.md'
+    BOUNDARIES = DOCS_DIR / 'boundaries.md'
+    DOC_BUDGETS = {FORMATS.name: 6 * 1024, BOUNDARIES.name: 2 * 1024}   # shared shapes; where each planning stage ends
+    README = PLUGIN.parent.parent / 'README.md'
+    CONTEXT = PLUGIN.parent.parent / 'CONTEXT.md'
+
+    def doc_text(self, path):
+        self.assertTrue(path.is_file(), f'docs/{path.name} is missing')
+        return path.read_text(encoding='utf-8')
+
+    def test_each_planning_doc_exists_within_its_budget(self):
+        for name, max_bytes in self.DOC_BUDGETS.items():
+            with self.subTest(doc=name):
+                path = self.DOCS_DIR / name
+                self.assertTrue(path.is_file(), f'docs/{name} is missing')
+                self.assertLessEqual(path.stat().st_size, max_bytes)
+
+    def test_the_formats_doc_defines_each_shared_shape(self):
+        """AC-3: stories.md, the D-n and T-n lines, the ticket, the log.md line, the triage words, the
+        next-step offer, the ADR front block."""
+        text = self.doc_text(self.FORMATS)
+        for token in ('stories.md', 'decisions.md', 'D-n', 'T-n', 'Why:', 'Source:', 'Avoid:', 'Amended',
+                      'Jira:', 'no-ticket', 'Repro:', 'log.md', 'anomaly log add', 'ACs:',
+                      'ready-for-agent', 'ready-for-human', 'needs-info', 'wontfix', 'in-progress', 'done',
+                      '/anomaly:', 'Decision', 'Revisit', 'Out of scope', 'owner:'):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_the_boundaries_doc_names_clear_the_three_stages_and_the_context_zone(self):
+        """AC-4: /clear is never offered between interview, specify and slice; the ~150k zone."""
+        text = self.doc_text(self.BOUNDARIES)
+        for token in ('/clear', 'interview', 'specify', 'slice', '150k'):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_the_readme_has_a_planning_formats_section_naming_both_docs(self):
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        parts = self.README.read_text(encoding='utf-8').split('## Planning formats', 1)
+        self.assertEqual(len(parts), 2, 'README.md has no "## Planning formats" section')
+        section = parts[1].split('\n## ', 1)[0]
+        for name in self.DOC_BUDGETS:
+            with self.subTest(doc=name):
+                self.assertIn(f'docs/{name}', section)
+
+    def test_the_glossary_has_a_term_line_row(self):
+        if not self.CONTEXT.is_file():
+            self.skipTest('no CONTEXT.md two folders above the plugin: an installed copy, not the repository')
+        rows = [line for line in self.CONTEXT.read_text(encoding='utf-8').splitlines()
+                if line.startswith('| **term line**')]
+        self.assertEqual(len(rows), 1)
+        self.assertIn('T-n', rows[0])
+
+
 if __name__ == '__main__':
     unittest.main()

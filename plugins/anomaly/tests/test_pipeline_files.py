@@ -592,3 +592,29 @@ class NoSettingsEditTest(TempPluginTest):
 
     def test_the_plugin_edits_no_settings_file_and_prints_no_allow_rule(self):
         self.assertEqual(settings_edit_hits(PLUGIN), [])
+
+
+class DocsFolderTest(TempPluginTest):
+    """AC-5 (workflow-plan ticket 02): the guard-rail scans cover `docs/`, like the skill files."""
+
+    def test_the_pipeline_files_list_the_docs_folder(self):
+        plant(self.root, {'docs/formats.md': 'x\n', 'docs/sub/more.md': 'y\n', 'skills/build/SKILL.md': 'z\n',
+                          'skills/measure/SKILL.md': 'loop\n', 'agents/code.md': 'a\n'})
+        self.assertEqual([relative(self.root, f) for f in pipeline_files(self.root)],
+                         ['skills/build/SKILL.md', 'agents/code.md', 'docs/formats.md', 'docs/sub/more.md'])
+
+    def test_a_denied_shape_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/formats.md': 'one\n```\nsudo ls\n```\n'})
+        self.assertEqual(deny_hits(self.root, ['Bash(sudo:*)']), ['docs/formats.md:3: Bash(sudo:*)'])
+
+    def test_inline_code_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/boundaries.md': 'Run `node -e "x"` now.\n'})
+        self.assertEqual(shell_hits(self.root), ['docs/boundaries.md:1: inline code'])
+
+    def test_a_placeholder_in_double_quotes_in_a_docs_file_is_reported(self):
+        plant(self.root, {'docs/formats.md': 'Run `echo "<text>"`.\n'})
+        self.assertEqual(free_text_hits(self.root), ['docs/formats.md:1: placeholder in double quotes'])
+
+    def test_the_pipeline_files_of_this_plugin_include_the_planning_docs(self):
+        listed = {relative(PLUGIN, f) for f in pipeline_files(PLUGIN)}
+        self.assertLessEqual({'docs/formats.md', 'docs/boundaries.md'}, listed)
