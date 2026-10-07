@@ -1053,16 +1053,16 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships three read-only reviewer agents in `plugins/anomaly/agents/`. Only the
-`review` skill dispatches them, and it passes the model: no agent file pins one. Each has the
-tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or fewer
-and a file of 6 KB or less.
+The plugin ships four read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones and `anomaly:plan`, the planning gate's. The caller dispatches them and passes the model:
+no agent file pins one.
+Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or fewer and a file of 6 KB or less.
 
 | Agent | Checks | Modes |
 |---|---|---|
 | `anomaly:code` | defects against the repo's written rules and sound design: correctness, resources, performance, contracts, tests, second copies of ledger-owned seams, design smells, new dependencies, suppressed linter or type errors | ticket, delta, cumulative, combined (adds the feature checklist, read at run time from `agents/feature.md`) |
 | `anomaly:feature` | the diff does what its ticket or spec asks and no more: the AC coverage table, scope, visible changes, docs drift, deferral targets, claims against their sources, known items; in cumulative mode a keep, rewrite or delete verdict per characterization test file | ticket, delta, cumulative, rules (loads `skills/review/rules-mode.md`, 2 KB or less, in that mode only) |
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
+| `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
 
 Each agent prints one finding per line in the shape above, with the fix always after ` — fix: `
 and nothing after the closing `observed` or `unverified`; then a `fine: <class> — ...` line for
@@ -1077,7 +1077,7 @@ A disputed cover is settled by a mutation probe that the agent proposes and `rev
 scratchpad copy after you say yes. Security problem text starts with the two-digit label (`A03 Injection: ...`),
 and a found secret value is never printed. Most rules in an agent file carry their ledger id in
 brackets (`[C1]`, `[T2]`) for the rule trace; a rule whose verdict is still open says "pending
-verdict". The rules-mode doc sits beside the `review` skill, not under `agents/`,
+verdict". The rules-mode and plan-mode docs sit beside the `review` skill, not under `agents/`,
 because Claude Code loads every Markdown file under `agents/` as an agent.
 
 Pass bars, set by the workflow-build spec in the local work folder: the median of three hand
