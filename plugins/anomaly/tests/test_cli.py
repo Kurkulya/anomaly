@@ -81,7 +81,7 @@ class SkillFileTest(unittest.TestCase):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
     def test_the_agents_are_exactly_the_three_core_reviewers_read_only_and_with_no_pinned_model(self):
-        self.assertEqual(sorted(path.stem for path in self.agents()), sorted(lens.core_lenses()))
+        self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), 'plan')))   # plan: the plan-gate reviewer, outside the core lenses
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
             with self.subTest(agent=path.stem):
@@ -568,6 +568,82 @@ class PlanningDocsTest(unittest.TestCase):
                 if line.startswith('| **term line**')]
         self.assertEqual(len(rows), 1)
         self.assertIn('T-n', rows[0])
+
+
+class PlanReviewerTest(unittest.TestCase):
+    """Ticket 06 (AC-12, AC-13): the read-only plan reviewer agent and its two mode docs."""
+    AGENT = PLUGIN / 'agents' / 'plan.md'
+    MODE_DOC_MAX_BYTES = 3 * 1024   # each mode doc, loaded only in its mode
+    SPEC = PLUGIN / 'skills' / 'review' / 'plan-spec.md'
+    TICKETS = PLUGIN / 'skills' / 'review' / 'plan-tickets.md'
+    README = PLUGIN.parent.parent / 'README.md'
+
+    def text(self, path):
+        self.assertTrue(path.is_file(), path.relative_to(PLUGIN).as_posix())
+        return path.read_text(encoding='utf-8')
+
+    def covers(self, path, groups):
+        """Each group is a list of alternative lowercase tokens; one of them must appear in the doc."""
+        text = self.text(path).lower()
+        for group in groups:
+            with self.subTest(doc=path.name, check=group[0]):
+                self.assertTrue(any(token in text for token in group), group)
+
+    def test_the_plan_agent_is_read_only_pins_no_model_and_fits_in_6_KB(self):
+        """AC-12: tools Read, Grep, Glob, Bash like the other reviewers; the name makes it dispatch as anomaly:plan."""
+        text = self.text(self.AGENT)
+        self.assertLessEqual(self.AGENT.stat().st_size, SkillFileTest.AGENT_MAX_BYTES)
+        fields = frontmatter.split(text)[0]
+        self.assertEqual(fields.get('name'), 'plan')
+        self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')], ['Read', 'Grep', 'Glob', 'Bash'])
+        self.assertNotIn('Write', fields.get('tools', ''))
+        self.assertNotIn('model', fields)
+
+    def test_the_plan_agent_names_both_modes_returns_its_report_and_loads_the_two_mode_docs(self):
+        text = self.text(self.AGENT)
+        lowered = text.lower()
+        for mode in ('spec', 'tickets'):
+            self.assertRegex(lowered, rf'`{mode}`|\b{mode} mode\b')
+        self.assertRegex(lowered, r'writes? no file|no file')
+        self.assertRegex(lowered, r'final message')
+        for doc in ('skills/review/plan-spec.md', 'skills/review/plan-tickets.md'):
+            self.assertIn(doc, text)
+
+    def test_each_plan_mode_doc_fits_in_3_KB(self):
+        for path in (self.SPEC, self.TICKETS):
+            with self.subTest(doc=path.name):
+                self.text(path)
+                self.assertLessEqual(path.stat().st_size, self.MODE_DOC_MAX_BYTES)
+
+    def test_spec_mode_checks_claims_testable_acs_owned_out_of_scope_lines_and_open_questions(self):
+        """AC-12."""
+        self.covers(self.SPEC, [
+            ['file:line'], ['commit'], ['probe'],
+            ['testable'], ['out of scope', 'out-of-scope'], ['owned', 'owner'], ['open question'],
+        ])
+
+    def test_tickets_mode_checks_the_seven_slice_checks(self):
+        """AC-13: ordering, invented paths, hidden dependencies, sizing, Restates overlap, AC coverage, Tests level."""
+        self.covers(self.TICKETS, [
+            ['order'], ['invented'], ['hidden dependenc', 'hidden dependency'], ['parallel'], ['siz'],
+            ['restates:'], ['coverage'], ['tests:'], ['level'],
+        ])
+
+    def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        section = self.README.read_text(encoding='utf-8').split('## Reviewer agents', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('anomaly:plan', section)
+        for mode in ('spec', 'tickets'):
+            self.assertRegex(section, rf'`{mode}`|\b{mode}\b')
+
+    def test_the_new_files_do_not_name_the_org_plan_reviewers(self):
+        """ADR-0006: plan-audit and plan-sanity are not copied and not named."""
+        for path in (self.AGENT, self.SPEC, self.TICKETS):
+            text = self.text(path).lower()
+            for name in ('plan-audit', 'plan-sanity'):
+                with self.subTest(doc=path.name, name=name):
+                    self.assertNotIn(name, text)
 
 
 if __name__ == '__main__':
