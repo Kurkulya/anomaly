@@ -30,9 +30,9 @@ def run_add(args, environ):
     folder = paths.expand(args.folder)
     if not folder.is_dir():
         raise RecordError(f'{LABEL}: not a folder: {args.folder}')
-    privacy.check_identifier(LABEL, 'stage', args.stage)
-    if ':' in args.stage:
-        raise RecordError(f'{LABEL}: stage must not hold ":" because it separates the stage from the text')
+    if not privacy.is_identifier(args.stage) or ':' in args.stage:   # a ":" would end the stage in the line
+        raise RecordError(f'{LABEL}: stage must be one word of letters, digits and . _ - '
+                          f'(at most {privacy.IDENTIFIER_MAX_CHARS} characters), with no spaces or line breaks')
     text = records.require_one_line(f'{LABEL}: the text', args.text)
     path = folder / FILE_NAME
     lines = ticket.split_lines(files.read_input(path, keep_bom=True)) if path.is_file() else []
