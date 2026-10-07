@@ -179,11 +179,14 @@ class SkillFileTest(unittest.TestCase):
         # The trigger: a ticket's `Tests:` line naming `rule trace <brief path> <SKILL.md path>`.
         trigger = re.search(r'Tests:[^\n]{0,200}rule trace|rule trace[^\n]{0,200}Tests:', text, re.I)
         self.assertIsNotNone(trigger, 'no ticket-mode trigger on a `Tests:` line naming a rule trace')
-        around = text[max(0, trigger.start() - 400):trigger.end() + 600].lower()
+        around = text[text.rfind('\n', 0, trigger.start()) + 1:].split('\n', 1)[0].lower()  # the trigger's own line
         self.assertIn('ticket', around)
-        self.assertIn('rules', around)       # the extra pass is a rules-mode pass
+        self.assertIn('rules mode', around)      # the extra pass is a rules-mode pass ...
+        self.assertIn('anomaly:feature', around)  # ... by the feature agent
         self.assertIn('brief', around)       # on the brief ...
         self.assertIn('skill.md', around)    # ... and SKILL.md pair
+        step7 = next(line for line in text.split('\n') if line.startswith('7. '))
+        self.assertIn('rules pass', step7)   # `ticket reviewed` waits for the rules pass too
         self.assertNotIn('rule trace', self.build_text().lower())
 
     def test_a_delta_round_on_a_rule_trace_ticket_reruns_the_rules_pass_on_the_fixed_skill(self):

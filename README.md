@@ -1046,10 +1046,10 @@ The modes, in one line each (the full dispatch table is in
   last delta round, or after its first round when it had no Blocker or High), stores its counts over all its rounds with `lens tally add`, `--revised`
   always passed; after the session's last review, `lens tally sum` and one `observe apply` put
   each lens into home once.
-- A rule trace: in ticket mode, when the ticket's `Tests:` line names
+- A rule trace: in ticket or combined mode, when the ticket's `Tests:` line names
   `rule trace <brief path> <SKILL.md path>`, the skill also runs a rules-mode pass on that pair. Its
   High findings go back to the caller, and every delta round on that ticket runs the rules pass
-  again on the fixed SKILL.md (rules mode has no diff range), until no High is open.
+  again on the fixed SKILL.md (rules mode has no diff range) while it has an open High.
 
 ## Reviewer agents
 
