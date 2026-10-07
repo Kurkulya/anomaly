@@ -743,5 +743,100 @@ class PlanGateReviewTest(unittest.TestCase):
         self.assertIn('partly superseded', status)
 
 
+class InterviewSkillTest(unittest.TestCase):
+    """Workflow-plan ticket 08 (AC-16 to AC-18): the interview skill's text, by key tokens. The rule trace
+    against the brief is run by review, not here."""
+    SKILL = PLUGIN / 'skills' / 'interview' / 'SKILL.md'
+    SKILL_MAX_BYTES = 6 * 1024   # the brief's size; the all-skills cap is 8 KB
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/interview/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_interview_skill_fits_in_6_KB_and_its_tools_are_the_cli_only(self):
+        self.text()
+        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'interview')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+
+    def test_the_interview_skill_is_slash_only_with_a_third_person_description_that_says_so(self):
+        """AC-16: `disable-model-invocation: true`; the 250-character limit is the all-skills check above."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('disable-model-invocation'), 'true')
+        description = fields.get('description', '')
+        self.assertRegex(description.lower(), r'slash[- ]only|only as a slash|slash command')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertNotIn('model-invocable', description.lower())
+
+    def test_it_gathers_then_lists_settled_adrs_and_decisions_before_asking_rounds_of_at_most_8_questions(self):
+        """AC-16."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('gather', text)
+        self.assertIn('ADR', text)
+        self.assertRegex(text, r'D-n|D-\d')
+        self.assertIn('settled', lowered)
+        self.assertLess(lowered.index('settled'), lowered.index('round'))
+        self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*8\b')
+        self.assertIn('Assumes:', text)
+        self.assertIn('Recommend:', text)
+        self.assertIn('defaults', lowered)
+        self.assertRegex(lowered, r'low[- ]risk')
+
+    def test_it_writes_d_and_t_lines_with_a_source_after_each_round_and_edits_nothing_else(self):
+        """AC-17."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('decisions.md', text)
+        self.assertRegex(text, r'\.anomaly/<work unit>/decisions\.md')
+        self.assertIn('T-n', text)
+        self.assertIn('Source:', text)
+        self.assertRegex(lowered, r'after each round|after every round|each round')
+        self.assertRegex(lowered, r'no other file|nothing else|no other')
+        self.assertRegex(lowered, r'no commit|not commit|never commit|makes no commit|do not commit')
+
+    def test_it_closes_with_a_decisions_table_and_one_confirm_question_a_worklog_line_and_the_specify_offer(self):
+        """AC-18."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('table', lowered)
+        self.assertRegex(lowered, r'one confirm|single confirm|confirm question')
+        self.assertIn('worklog add', text)
+        self.assertIn('--stage interview', text)
+        self.assertIn('--feature', text)
+        self.assertIn('/anomaly:specify', text)
+
+    def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
+        text = self.text()
+        for name in ('formats.md', 'boundaries.md'):
+            with self.subTest(doc=name):
+                self.assertRegex(text, rf'\]\((?:\.\./)+docs/{re.escape(name)}\)|docs/{re.escape(name)}')
+                self.assertTrue((PLUGIN / 'docs' / name).is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+
+    def test_the_glossary_lens_row_names_the_interviews_recommendations_and_the_three_counts(self):
+        context = self.ROOT / 'CONTEXT.md'
+        if not context.is_file():
+            self.skipTest('no CONTEXT.md two folders above the plugin: an installed copy, not the repository')
+        rows = [line for line in context.read_text(encoding='utf-8').splitlines() if line.startswith('| **lens**')]
+        self.assertEqual(len(rows), 1)
+        self.assertIn('interview', rows[0])
+        self.assertIn('recommendations', rows[0])
+        for word in ('accepted', 'rejected', 'revised'):
+            with self.subTest(word=word):
+                self.assertIn(word, rows[0])
+
+    def test_the_readme_has_an_interview_skill_section_naming_the_slash_command(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The interview skill$')
+        section = text.split('## The interview skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:interview', section)
+
+
 if __name__ == '__main__':
     unittest.main()
