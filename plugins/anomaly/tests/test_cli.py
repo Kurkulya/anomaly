@@ -617,8 +617,9 @@ class PlanReviewerTest(unittest.TestCase):
     def test_tickets_mode_checks_the_seven_slice_checks(self):
         """AC-13: ordering, invented paths, hidden dependencies, sizing, Restates overlap, AC coverage, Tests level."""
         self.items(self.TICKETS, ['Ordering', 'Invented paths', 'Hidden dependencies between parallel tickets', 'Sizing',
-                                  '`Restates:` overlap', 'AC coverage', '`Tests:` level per AC'])
+                                  '`Restates:` complete', 'AC coverage', '`Tests:` level per AC'])
         self.assertIn('`Covers:` is complete', self.text(self.TICKETS))
+        self.assertIn('`Restates:` lists must not share a file', self.text(self.TICKETS))
 
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
