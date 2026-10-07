@@ -9,14 +9,11 @@ one found, else LF); a last line without an ending gets one first. A folder that
 that is not one word, and text that is empty or breaks the line are refused with no write; the folder is
 never created. Any existing folder is allowed, inside `.anomaly/` or `.scratch/` or not.
 """
-import re
-
-from . import paths, records, ticket, worklog
+from . import files, paths, privacy, records, ticket, worklog
 from .files import RecordError
 
 LABEL = 'log'
 FILE_NAME = 'log.md'
-STAGE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
 
 
 def register(commands, common):
@@ -33,15 +30,15 @@ def run_add(args, environ):
     folder = paths.expand(args.folder)
     if not folder.is_dir():
         raise RecordError(f'{LABEL}: not a folder: {args.folder}')
-    if STAGE.fullmatch(args.stage) is None:
-        raise RecordError(f'{LABEL}: stage must be one word of letters, digits and . _ - (no spaces, no ":")')
+    privacy.check_identifier(LABEL, 'stage', args.stage)
+    if ':' in args.stage:
+        raise RecordError(f'{LABEL}: stage must not hold ":" because it separates the stage from the text')
     text = records.require_one_line(f'{LABEL}: the text', args.text)
     path = folder / FILE_NAME
-    lines = ticket.split_lines(path.read_bytes().decode('utf-8')) if path.is_file() else []
+    lines = ticket.split_lines(files.read_input(path, keep_bom=True)) if path.is_file() else []
     ending = ticket.line_ending(lines)
     separator = ending if lines and not lines[-1][1] else ''
     line = f'{separator}{worklog.now_text(args)} {args.stage}: {text}{ending}'
-    with open(path, 'ab') as f:
-        f.write(line.encode('utf-8'))
+    files.append_text(path, line)
     print(f'log: {path}')
     return 0

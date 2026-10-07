@@ -70,6 +70,13 @@ class AddTest(LogCase):
         self.add_ok('new')
         self.assertEqual(self.log.read_bytes(), b'2026-10-03 09:00 build: old\n' + f'{STAMP} build: new\n'.encode())
 
+    def test_a_crlf_or_bom_file_without_a_final_newline_keeps_its_ending_and_bom(self):
+        for name, before, ending in (('crlf', b'a\r\nb', b'\r\n'), ('bom', b'\xef\xbb\xbfold', b'\n')):
+            with self.subTest(name):
+                self.log.write_bytes(before)
+                self.add_ok('new')
+                self.assertEqual(self.log.read_bytes(), before + ending + f'{STAMP} build: new'.encode() + ending)
+
 
 class RefusalTest(LogCase):
     def control(self):
