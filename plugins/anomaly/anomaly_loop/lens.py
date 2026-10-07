@@ -20,7 +20,8 @@ same batch, and a lens already put into home is skipped by observe.
 Session and lens names are single tokens (privacy.check_identifier, ADR-0003). The session also names
 the batch file, so it holds no ":" either (privacy.check_file_token), in `add` as in `sum`. A lens is
 one of the review lenses (allowed_names): each core reviewer under its short name (`anomaly:code` is
-`code`) and each org reviewer under its adapter name, read from the `reviewers` port (ports.resolve).
+`code`) and each org reviewer under its adapter name, read from the `reviewers` port (ports.resolve),
+and `plan`, the plan-gate reviewer.
 """
 from . import files, paths, ports, privacy, records
 from .constants import LENS_BATCH_FILE, LENS_TALLY_FILE
@@ -28,6 +29,7 @@ from .files import RecordError
 
 LABEL = 'lens tally'
 REVIEWERS_PORT = 'reviewers'
+PLAN_LENS = 'plan'   # the plan-gate reviewer (`anomaly:plan`) is no port reviewer, so its lens is always allowed
 
 
 def is_run(row):
@@ -67,7 +69,7 @@ def core_lenses():
 def allowed_names(home):
     """The lens names the `reviewers` port gives for the profile in `home`."""
     reviewers = ports.port(ports.resolve(home), REVIEWERS_PORT).values
-    return tuple(dict.fromkeys(lens_name(reviewer) for reviewer in reviewers))
+    return tuple(dict.fromkeys((*(lens_name(reviewer) for reviewer in reviewers), PLAN_LENS)))
 
 
 def check_names(session, lens=None):

@@ -30,6 +30,10 @@ Loaded at dispatch; the last section is for the main window after each round. Fi
 - Matched risk areas and files: the `<area>: <path>` lines as `risk` printed them. [N4]
 - Cumulative mode: all ten categories.
 
+## anomaly:plan
+
+- Mode: spec or tickets. Work-unit folder: <path>, in place of Range and Tip. Main checkout: <path>. Ports line, word limit.
+
 ## An org reviewer
 
 - The same range and tip as the core agents; its findings go under its own heading and its own lens.
