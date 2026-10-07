@@ -1201,8 +1201,9 @@ python plugins/anomaly/scripts/anomaly.py ci log   <commit|ref> [--pipeline] [--
 
 ## Risk areas, lens tally and work units
 
-Three small commands serve the review and build skills (`log add`, below, writes a work unit's `log.md`). None of them needs a profile; `lens tally
-add` reads the profile's `reviewers` only to learn the org lens names.
+Four small commands serve the review and build skills: `risk`, `lens tally`, `worklog` and `log add`
+(which writes a work unit's `log.md`). None of them needs a profile; `lens tally add` reads the
+profile's `reviewers` only to learn the org lens names.
 
 ### risk
 
@@ -1352,17 +1353,20 @@ Every pipeline skill run (`build`, `review`, the later stages) leaves one line, 
 ### log
 
 ```
-python plugins/anomaly/scripts/anomaly.py log add <folder> --stage <stage> '<text>'
+python plugins/anomaly/scripts/anomaly.py log add <folder> --stage <stage> [--] '<text>'
 ```
 
 `log add` is the one writer of a work unit's `log.md` (the line shape is in
 [docs/formats.md](plugins/anomaly/docs/formats.md)). It appends one line `<YYYY-MM-DD HH:MM> <stage>:
 <text>` to `<folder>/log.md` and writes nothing else. The time is the CLI clock, in the same format
-as `worklog start`; the model passes none. The file is made when it is missing, its earlier bytes
-stay as they are, and the new line takes the file's line ending. The folder must exist (the command
-never creates it) but may be anywhere, inside `.anomaly/` or `.scratch/` or not. A folder that does
-not exist, a stage that is not one word, and text that is empty or has a line break stop the command
-with an `anomaly:` line and no write. Cost numbers do not belong in `log.md`; the skills say so.
+as `worklog start`; the model passes none. The file is made when it is missing and is only appended
+to, so its earlier bytes stay as they are; the new line takes the file's line ending, and a last line
+without one gets it first. The folder must exist (the command never creates it) but may be anywhere,
+inside `.anomaly/` or `.scratch/` or not. A folder that does not exist, a stage that is not one word
+(letters, digits and `.` `_` `-`; a `:` is refused because it would end the stage in the line), and
+text that is empty or has a line break stop the command with an `anomaly:` line and no write. Put `--`
+before a text that starts with `-`. Cost numbers do not belong in `log.md`; the command does not
+check this.
 
 ## Command line
 

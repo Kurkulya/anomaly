@@ -65,6 +65,11 @@ class AddTest(LogCase):
         self.add_ok('ok', 'build', folder=other)
         self.assertEqual((other / 'log.md').read_bytes(), f'{STAMP} build: ok\n'.encode())
 
+    def test_a_file_without_a_final_newline_gets_one_before_the_new_line(self):
+        self.log.write_bytes(b'2026-10-03 09:00 build: old')
+        self.add_ok('new')
+        self.assertEqual(self.log.read_bytes(), b'2026-10-03 09:00 build: old\n' + f'{STAMP} build: new\n'.encode())
+
 
 class RefusalTest(LogCase):
     def control(self):
@@ -94,6 +99,14 @@ class RefusalTest(LogCase):
         assert_cli_error(self, self.add(folder=missing))
         self.assertFalse(missing.exists())
         self.assertEqual(self.listing(), before)
+
+    def test_a_stage_with_a_space_or_a_colon_or_empty_text_is_refused_and_nothing_is_written(self):
+        self.control()
+        before = self.listing()
+        for stage, text in (('two words', 'ok'), ('a:b', 'ok'), ('build', ''), ('build', '   ')):
+            with self.subTest(stage=stage, text=text):
+                assert_cli_error(self, self.add(text, stage))
+                self.assertEqual(self.listing(), before)
 
 
 if __name__ == '__main__':
