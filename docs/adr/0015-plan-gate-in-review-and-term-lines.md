@@ -16,6 +16,7 @@ Phase 3 (`workflow-plan`) adds `interview`, `specify`, `slice` and `diagnose`. I
 - Ticket mode reads `Tests:` (`ticket show`). A `rule trace <brief> <SKILL.md>` item adds a rules-mode pass on that pair; after a High fix the pass runs again, since rules mode has no range.
 - `T-n:` lines (term, meaning, words to avoid) live in `decisions.md` until a ticket writes the `CONTEXT.md` row. ADR drafts live in `.anomaly/<work unit>/adr/` until a ticket moves them.
 - `anomaly log add <work-unit folder> --stage <stage> '<text>'` is the one writer of `log.md`.
+- Partly supersedes ADR-0011 (the unbuilt `log.md` writer).
 
 ## Why
 

@@ -40,7 +40,7 @@ Loaded at dispatch; the last section is for the main window after each round. Fi
 
 ## Delta round (SendMessage to the same agent)
 
-- Range <last reviewed sha>..HEAD, tip merges ignored. (a) Is each earlier finding fixed? (b) The new code: <names>. (c) New problems. [R8]
+- Range <last reviewed sha>..HEAD, tip merges ignored (plan: the work-unit folder, no range). (a) Is each earlier finding fixed? (b) The new code: <names>. (c) New problems. [R8]
 
 ## Commands a reviewer proposes (main window, after a round) [X2, N15]
 

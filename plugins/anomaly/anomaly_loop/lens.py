@@ -67,7 +67,7 @@ def core_lenses():
 
 
 def allowed_names(home):
-    """The lens names the `reviewers` port gives for the profile in `home`."""
+    """The lens names the `reviewers` port gives for the profile in `home`, plus `plan`."""
     reviewers = ports.port(ports.resolve(home), REVIEWERS_PORT).values
     return tuple(dict.fromkeys((*(lens_name(reviewer) for reviewer in reviewers), PLAN_LENS)))
 
@@ -97,7 +97,7 @@ def register(commands, common):
     add = steps.add_parser('add', parents=[common], help="store one reviewer's accepted and rejected counts over its rounds")
     add.add_argument('--session', required=True, help='the session id (one word)')
     add.add_argument('--lens', required=True,
-                     help=f"the lens name: {', '.join(core_lenses())} or an org reviewer's adapter name")
+                     help=f"the lens name: {', '.join(core_lenses())}, {PLAN_LENS} or an org reviewer's adapter name")
     add.add_argument('--accepted', required=True, type=records.count_option,
                      help='findings accepted (fixed or kept as open)')
     add.add_argument('--rejected', required=True, type=records.count_option, help='findings rejected (judged wrong)')
