@@ -1053,9 +1053,9 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships four read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones and `anomaly:plan`, the planning gate's. The caller dispatches them and passes the model:
-no agent file pins one.
-Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or fewer and a file of 6 KB or less.
+The plugin ships four read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones and `anomaly:plan`, the planning gate's. Only the `review` skill dispatches them, and it passes
+the model: no agent file pins one. Each has the tools Read, Grep, Glob and Bash (no Edit, no
+Write), a description of 250 characters or fewer and a file of 6 KB or less.
 
 | Agent | Checks | Modes |
 |---|---|---|

@@ -80,7 +80,7 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_exactly_the_three_core_reviewers_read_only_and_with_no_pinned_model(self):
+    def test_the_agents_are_the_core_reviewers_and_the_plan_reviewer_read_only_and_with_no_pinned_model(self):
         self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), 'plan')))   # plan: the plan-gate reviewer, outside the core lenses
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
@@ -582,22 +582,12 @@ class PlanReviewerTest(unittest.TestCase):
         self.assertTrue(path.is_file(), path.relative_to(PLUGIN).as_posix())
         return path.read_text(encoding='utf-8')
 
-    def covers(self, path, groups):
-        """Each group is a list of alternative lowercase tokens; one of them must appear in the doc."""
-        text = self.text(path).lower()
-        for group in groups:
-            with self.subTest(doc=path.name, check=group[0]):
-                self.assertTrue(any(token in text for token in group), group)
-
-    def test_the_plan_agent_is_read_only_pins_no_model_and_fits_in_6_KB(self):
-        """AC-12: tools Read, Grep, Glob, Bash like the other reviewers; the name makes it dispatch as anomaly:plan."""
-        text = self.text(self.AGENT)
-        self.assertLessEqual(self.AGENT.stat().st_size, SkillFileTest.AGENT_MAX_BYTES)
-        fields = frontmatter.split(text)[0]
-        self.assertEqual(fields.get('name'), 'plan')
-        self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')], ['Read', 'Grep', 'Glob', 'Bash'])
-        self.assertNotIn('Write', fields.get('tools', ''))
-        self.assertNotIn('model', fields)
+    def items(self, path, headings):
+        """Each heading is the start of one numbered check item in the doc (`3. Sizing.`); the item must exist as its own line."""
+        text = self.text(path)
+        for heading in headings:
+            with self.subTest(doc=path.name, check=heading):
+                self.assertRegex(text, re.compile(rf'^\d+\. {heading}\b', re.M))
 
     def test_the_plan_agent_names_both_modes_returns_its_report_and_loads_the_two_mode_docs(self):
         text = self.text(self.AGENT)
@@ -617,17 +607,18 @@ class PlanReviewerTest(unittest.TestCase):
 
     def test_spec_mode_checks_claims_testable_acs_owned_out_of_scope_lines_and_open_questions(self):
         """AC-12."""
-        self.covers(self.SPEC, [
-            ['file:line'], ['commit'], ['probe'],
-            ['testable'], ['out of scope', 'out-of-scope'], ['owned', 'owner'], ['open question'],
-        ])
+        self.items(self.SPEC, ['Code claims', 'Tool claims', 'Testable ACs', 'Out of scope', 'Open questions'])
+        text = self.text(self.SPEC)
+        self.assertRegex(text, r'cite a `file:line` or a commit')
+        self.assertRegex(text, r'its source, an ADR or a probe')
+        self.assertRegex(text, r'names an owner')
+        self.assertRegex(text, r'left at the gate is a Blocker')
 
     def test_tickets_mode_checks_the_seven_slice_checks(self):
         """AC-13: ordering, invented paths, hidden dependencies, sizing, Restates overlap, AC coverage, Tests level."""
-        self.covers(self.TICKETS, [
-            ['order'], ['invented'], ['hidden dependenc', 'hidden dependency'], ['parallel'], ['siz'],
-            ['restates:'], ['coverage'], ['tests:'], ['level'],
-        ])
+        self.items(self.TICKETS, ['Ordering', 'Invented paths', 'Hidden dependencies between parallel tickets', 'Sizing',
+                                  '`Restates:` overlap', 'AC coverage', '`Tests:` level per AC'])
+        self.assertIn('`Covers:` is complete', self.text(self.TICKETS))
 
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
