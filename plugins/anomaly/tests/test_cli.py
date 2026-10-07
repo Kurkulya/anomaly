@@ -173,6 +173,37 @@ class SkillFileTest(unittest.TestCase):
         self.assertIn('diff.md', text)
         self.assertRegex(text, r'(?<![\w-])cp(?![\w-])')
 
+    def test_ticket_mode_runs_a_rules_pass_on_a_brief_and_skill_pair_the_tests_line_names(self):
+        """Rule-trace ticket AC-1: the trigger lives in review, so `build` SKILL.md stays unchanged (AC-2)."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        # The trigger: a ticket's `Tests:` line naming `rule trace <brief path> <SKILL.md path>`.
+        trigger = re.search(r'Tests:[^\n]{0,200}rule trace|rule trace[^\n]{0,200}Tests:', text, re.I)
+        self.assertIsNotNone(trigger, 'no ticket-mode trigger on a `Tests:` line naming a rule trace')
+        around = text[max(0, trigger.start() - 400):trigger.end() + 600].lower()
+        self.assertIn('ticket', around)
+        self.assertIn('rules', around)       # the extra pass is a rules-mode pass
+        self.assertIn('brief', around)       # on the brief ...
+        self.assertIn('skill.md', around)    # ... and SKILL.md pair
+        self.assertNotIn('rule trace', self.build_text().lower())
+
+    def test_a_delta_round_on_a_rule_trace_ticket_reruns_the_rules_pass_on_the_fixed_skill(self):
+        """Rule-trace ticket AC-1: rules mode has no diff range, so the re-run is review's answer to a delta request."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        section = text.split('## Delta rounds', 1)[1].split('\n## ', 1)[0].lower()
+        self.assertIn('rule trace', section)
+        self.assertIn('rules', section)
+        self.assertRegex(section, r'fixed|again|re-?run')
+
+    def test_the_readme_review_section_names_the_rule_trace_pass(self):
+        """Rule-trace ticket AC-1."""
+        readme = PLUGIN.parent.parent / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        section = text.split('## The review skill', 1)[1].split('\n## ', 1)[0].lower()
+        self.assertIn('rule trace', section)
+        self.assertIn('rules', section)
+
 
 class ReadmeTest(unittest.TestCase):
     README = PLUGIN.parent.parent / 'README.md'
