@@ -49,4 +49,5 @@
 | **decoy** | Correct code in a fixture that looks wrong. A High on a decoy counts as a false High. | false positive (that is the result) |
 | **false High** | A Blocker or High finding that matches no planted defect; one that matches a decoy is named. | |
 | **seam ledger** | A work unit's `seams.md` (`.anomaly/<work-unit>/seams.md`; the old `.scratch/<feature>/seams.md` is read the same way until the switch-over): one line per seam, `- <name> · <owner file> · replaces <old way> (ticket NN)`, naming the single owner of a rule, helper or constant; a second copy of an owned seam is a review High. Kept true after each merge by `seams prune` and `seams add`. | owner list, registry |
+| **term line** | A `T-n:` line in `decisions.md`: one settled term, its meaning and the words to avoid, waiting for the ticket that writes it into the glossary. | glossary entry (for the line) |
 | **red commit** | The commit that holds a ticket's acceptance test alone, before any code commit; recorded as `Red: <sha> · <test path>`. `check pre-merge` requires the test file to be unchanged since it, unless a `Red-changed:` line says why. | test commit |

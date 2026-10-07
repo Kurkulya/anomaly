@@ -1398,6 +1398,12 @@ python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
 
+## Planning formats
+
+The planning skills share their file shapes (`stories.md`, `decisions.md`, tickets, `log.md`, triage
+words, the next-step offer, the ADR front block) in `docs/formats.md`. Where each planning stage ends,
+and when `/clear` may be offered, is in `docs/boundaries.md`.
+
 ## Development
 
 Run the tests from the plugin folder:

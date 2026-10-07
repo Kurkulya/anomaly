@@ -51,7 +51,7 @@ def pipeline_files(root):
     """The pipeline's own files: every file of a skill folder that is not a loop skill, and the agents."""
     skills = root / 'skills'
     return ([f for f in plugin_files(skills) if f.relative_to(skills).parts[0] not in constants.LOOP_SKILLS]
-            + plugin_files(root / 'agents'))
+            + plugin_files(root / 'agents') + plugin_files(root / 'docs'))
 
 
 def logical_lines(text):
