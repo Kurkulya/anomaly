@@ -30,7 +30,7 @@
 | **work-unit key** | The work-unit folder name under `.anomaly/` (until the switch-over also the `<feature>` of `.scratch/<feature>`), or the ad-hoc ticket's file name without `.md` for light-path work; every pipeline stage appends one line, with its times when known, so the cost of one piece of work can be read per stage. The JSON field is `feature`. | ticket id |
 | **stories** | A work unit's `stories.md`: what the work is for, as user stories with acceptance criteria. | spec |
 | **decisions** | A work unit's `decisions.md`: the choices made while shaping it, one per entry. | spec |
-| **log** | A work unit's `log.md`: events only, for people and agents, with no cost numbers. Written only through a CLI subcommand (writer not built yet, ADR-0011). | journal, digest |
+| **log** | A work unit's `log.md`: events only, for people and agents, with no cost numbers. Written only by `anomaly log add`. | journal, digest |
 | **risk area** | A kind of change that makes the security review join a ticket's review: auth; input parsing and execution; secrets or config; dependencies; network calls (core globs in `constants.RISK_AREAS`), plus the extra `risk_patterns` of the repo layer. `risk <range>` names the matched areas and files. | security zone |
 | **port** | A named extension point of the pipeline with one fixed mode (add, extend or replace) and a core default that works with an empty profile. | hook (that is a Claude Code feature) |
 | **adapter** | The org value or tool the profile injects into a port, such as an org implementer agent or MR tool. | plugin, integration |
