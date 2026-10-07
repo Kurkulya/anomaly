@@ -181,7 +181,8 @@ class SkillFileTest(unittest.TestCase):
         self.assertIsNotNone(trigger, 'no ticket-mode trigger on a `Tests:` line naming a rule trace')
         around = text[text.rfind('\n', 0, trigger.start()) + 1:].split('\n', 1)[0].lower()  # the trigger's own line
         self.assertIn('ticket', around)
-        self.assertIn('rules mode', around)      # the extra pass is a rules-mode pass ...
+        self.assertIn('combined', around)
+        self.assertIn('rules mode', around)     # the extra pass is a rules-mode pass ...
         self.assertIn('anomaly:feature', around)  # ... by the feature agent
         self.assertIn('brief', around)       # on the brief ...
         self.assertIn('skill.md', around)    # ... and SKILL.md pair

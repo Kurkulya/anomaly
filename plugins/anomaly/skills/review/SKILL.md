@@ -35,7 +35,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" observe apply --home '${user_c
 | combined | ticket range, or light path `<start branch>...<ticket tip>` | one `anomaly:code` in combined mode | when `risk` matches |
 | rules | brief + new SKILL.md | `anomaly:feature` in rules mode; it loads [rules-mode.md](rules-mode.md) itself [N7] | never |
 
-A docs-only diff (no source, config, script or test file) uses combined mode. [I22] Ticket or combined mode, when the ticket's `Tests:` line (`ticket show`) names `rule trace <brief path> <SKILL.md path>` (SKILL.md in the checkout; brief absolute or relative to the main checkout), also dispatches `anomaly:feature` in rules mode on that pair; its High findings go back to the caller, its counts join the `feature` lens. No rule trace: reviewed as before. [AC-1]
+A docs-only diff (no source, config, script or test file) uses combined mode. [I22] Ticket or combined mode, when the ticket's `Tests:` line (`ticket show`) names `rule trace <brief path> <SKILL.md path>` (SKILL.md in the checkout; brief absolute or relative to the main checkout), also dispatches `anomaly:feature` in rules mode on that pair, budgets from the brief; its High findings go back to the caller, its counts join the `feature` lens. No rule trace: reviewed as before. [AC-1]
 
 ## Steps
 
