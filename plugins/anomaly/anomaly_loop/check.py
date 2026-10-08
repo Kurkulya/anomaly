@@ -190,9 +190,18 @@ STATUS_WORDS = (TICKET_STATUS_READY, TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_IN
                 TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_DONE)
 HUMAN_STATUS = re.compile(rf'{re.escape(TICKET_STATUS_HUMAN)} \(.+\)')
 TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
-# host:port is not path:NN; known gap: notes.org:12 is skipped
-HOST_SUFFIXES = ('com', 'org', 'net', 'io', 'dev', 'app', 'local', 'test')
-LINE_ANCHOR = re.compile(rf'(?:[\w.-]+/)*[\w-][\w.-]*\.(?!(?:{"|".join(HOST_SUFFIXES)})\b)[A-Za-z]\w*:\d+\b')
+# A host:port right after `://` or `@` is not path:NN; a bare example.com:8080 is reported. The whole
+# match is dropped (finditer does not restart inside it), so no tail of the host is reported.
+LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
+HOST_PREFIXES = ('://', '@')
+
+
+def line_anchor(body):
+    """The first path:NN in a line that does not follow `://` or `@`, or None."""
+    for match in LINE_ANCHOR.finditer(body):
+        if not body[:match.start()].endswith(HOST_PREFIXES):
+            return match
+    return None
 # The shapes below are the exact text of the Ticket block in docs/formats.md.
 STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
@@ -280,7 +289,7 @@ def ticket_errors(name, text, parsed, folder, graph):
                                                          ('Jira', JIRA_SHAPE)))]
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
-        match = None if number - 1 in skip or D_LINE.match(body) else LINE_ANCHOR.search(body)
+        match = None if number - 1 in skip or D_LINE.match(body) else line_anchor(body)
         if match:
             errors.append(f'{name}:{number}: {match.group(0)} is a path with a line number '
                           f'({TOUCHES_SHAPE})')
@@ -380,7 +389,8 @@ def register(commands, common):
         description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
                      'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
-                     'line anchor (not in a fenced block or a copied - D-n: line). Warning: a ticket over 5 KB.\n'
+                     'line anchor (not in a fenced block or a copied - D-n: line; a host:port after :// or @\n'
+                     'is not one, a bare example.com:8080 is). Warning: a ticket over 5 KB.\n'
                      'Each is one line on stdout; exit 1 on any error, 0 otherwise; an error (a folder that is\n'
                      'not there) is one anomaly: line and exit 2.'))
     check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
