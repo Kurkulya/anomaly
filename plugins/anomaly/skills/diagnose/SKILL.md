@@ -15,7 +15,6 @@ One plain command each, exactly in this form: no chains, inline code, pipe into 
 ```
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog start <key> diagnose --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ports --home '${user_config.home}' --repo <checkout>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket adhoc --from <draft file> --slug <slug> --repo <checkout> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket show <ticket> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <key> --stage diagnose --session ${CLAUDE_SESSION_ID} --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 ```
@@ -31,7 +30,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <key> --
 7. Root cause and gate. Cite it as `file:line` or as probe output; with neither, mark it "unverified". [N4] Name the fix, its scope (S, M or L) and the risk. L (over 5 files, across subsystems, or schema work) is the feature path: stop and suggest `interview`. [J7, J8, J10] Name the seam where a test can catch the bug; if no seam is correct, that is a finding. [D17]
 8. Handoff. Remove every probe edit and tagged log line. [D15] `git status` must show a clean tree: no branch, commit or push. [N5]
    - Write the draft with the Write tool to the session scratchpad, in the light-path shape of [formats.md](../../docs/formats.md). Its `Repro:` line is the loop command; `build` runs it at close. [N1, D18] Its `Root cause:` feeds the commit body. [D19]
-   - Run `ticket adhoc --from <draft file>`. Fix each refusal line and run it again. [N1] It prints the ticket path under `.anomaly/adhoc/`. Run `ticket show` on it.
+   - Run the same command form with `ticket adhoc --from <draft file> --slug <slug> --repo <checkout>` after the script path. Fix each refusal line and run it again. [N1] It prints the ticket path under `.anomaly/adhoc/`. Run `ticket show` on it.
    - `worklog add`, stage `diagnose`, on every outcome, also when you stopped. [N3]
    - Reply with 5 lines: symptom, repro, root cause `file:line`, fix and scope, next step. [N10]
    - Offer `/anomaly:build <adhoc ticket path>`; never start it. [N10]
