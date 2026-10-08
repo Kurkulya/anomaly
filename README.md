@@ -1099,7 +1099,8 @@ runs through `bench score`, with at most 1 false High per run.
 ## The pre-merge check and the seam ledger
 
 `check pre-merge` makes three rules of the pipeline checks instead of requests, from the ticket
-file and git. `seams prune` and `seams add` keep the seam ledger true after a merge. Neither
+file and git. `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`.
+`seams prune` and `seams add` keep the seam ledger true after a merge. None of them
 needs a home or a profile.
 
 ```
@@ -1133,11 +1134,12 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
 - `check stories` reads `stories.md`, `decisions.md` and `log.md` of a work-unit folder against the
   shapes in `plugins/anomaly/docs/formats.md`. Errors, each a line `<file>:<line>: ...` with the
   allowed shape: a duplicate `AC-<n>` id; an AC id that an earlier `specify:` line of `log.md` named
-  (its text starts `ACs: AC-1, AC-2, …;`) and `stories.md` no longer holds (that line is named
-  `log.md:`); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need none); a line
+  (its text starts `ACs: AC-1, AC-2, …;`) and `stories.md` no longer holds (the error is
+  `log.md:<line>` of the first `specify:` line that named it; a `specify:` line without that
+  shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need none); a line
   under `## Out of scope` with no `owner:`. Warnings, never a failure: `stories.md` over 6 KB,
   `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a clean
-  run prints `stories check passed`); a folder that is not there is one `anomaly:` line and exit 2.
+  run prints `stories check passed for <folder>`); a folder that is not there is one `anomaly:` line and exit 2.
   A missing `stories.md` is an error line; a missing `decisions.md` or `log.md` is read as empty.
   Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first

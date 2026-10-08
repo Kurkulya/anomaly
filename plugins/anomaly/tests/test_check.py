@@ -386,7 +386,7 @@ class CheckStoriesTest(unittest.TestCase):
     def test_an_ac_named_by_an_earlier_specify_line_but_gone_is_an_error(self):
         self.put(stories=GOOD_STORIES.replace('- AC-3: third', '- AC-4: third'))
         errors, _ = self.stories()
-        self.assertTrue(any('AC-3' in e and 'log.md' in e for e in errors), errors)
+        self.assertTrue(any('AC-3' in e and e.startswith('log.md:1:') for e in errors), errors)
 
     def test_a_decision_without_source_is_an_error_with_the_allowed_shape(self):
         self.put(decisions=GOOD_DECISIONS.replace(' Source: user, 2026-10-01', ''))
@@ -416,3 +416,30 @@ class CheckStoriesTest(unittest.TestCase):
         self.assertEqual((code, err), (0, ''), out)
         self.assertIn('decisions.md', out)
         assert_cli_error(self, run_cli('check', 'stories', str(self.folder / 'missing')), 'missing')
+
+    def test_a_specify_line_without_the_ids_shape_is_an_error_naming_the_shape(self):
+        self.put(log=GOOD_LOG + '2026-10-02 10:00 specify: ACs: AC-1, AC-2 claim check passed\n')
+        self.assert_error(2, 'ACs: AC-1, AC-2, …;', file_name='log.md')
+
+    def test_a_missing_stories_file_is_an_error_and_missing_decisions_and_log_are_empty(self):
+        (self.folder / 'stories.md').unlink()
+        errors, _ = self.stories()
+        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(errors[0].startswith('stories.md: '), errors)
+        self.put(stories=GOOD_STORIES)
+        (self.folder / 'decisions.md').unlink()
+        (self.folder / 'log.md').unlink()
+        self.assertEqual(self.stories(), ([], []))
+
+    def test_the_shapes_in_the_errors_are_the_text_of_formats_md(self):
+        from anomaly_loop import check
+        from tests.fixtures import PLUGIN
+        formats = (PLUGIN / 'docs' / 'formats.md').read_text(encoding='utf-8')
+        for shape in (check.AC_SHAPE, check.D_SHAPE, check.OWNER_SHAPE, check.SPECIFY_SHAPE):
+            self.assertIn(shape, formats)
+
+    def test_a_stories_file_of_exactly_6_kb_does_not_warn(self):
+        size = len(GOOD_STORIES.encode('utf-8'))
+        self.put(stories=GOOD_STORIES + 'x' * (6 * 1024 - size))
+        self.assertEqual((self.folder / 'stories.md').stat().st_size, 6 * 1024)
+        self.assertEqual(self.stories(), ([], []))

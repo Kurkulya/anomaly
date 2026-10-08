@@ -5,7 +5,11 @@
   stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
 
-Each failed invariant is one line on stdout, named by its ticket line (`Reviewed:`, `Verified:`,
+`stories` prints each error as one line, `<file>:<line>: <problem> (<allowed shape>)`, then each
+warning as `warning: <file>: ...`; it exits 1 on any error, 0 otherwise (clean prints one
+`stories check passed` line), and 2 with one `anomaly:` line for a folder that is not there.
+
+The next two paragraphs are about pre-merge only. Each failed invariant is one line on stdout, named by its ticket line (`Reviewed:`, `Verified:`,
 `Red:`, `Test:`), and the exit code is 1, as for `ticket gate`; an error (a missing ticket, a head that
 is not a commit) is one `anomaly:` line and exit 2. Nothing is written but the index's file stats:
 `git update-index --refresh` runs first, so a file dirty by its stat only (for example a line-ending
@@ -84,9 +88,12 @@ STORIES_WARN_BYTES = 6 * 1024
 DECISIONS_WARN_BYTES = 8 * 1024
 AC_LINE = re.compile(r'^- (AC-\d+):')
 D_LINE = re.compile(r'^- D-\d+:')
+SPECIFY_LINE = re.compile(r'^\S+ \S+ specify:')
 SPECIFY_IDS = re.compile(r'^\S+ \S+ specify: ACs: ([^;]*);')
-AC_SHAPE = '- AC-<n>: <criterion>'
-D_SHAPE = '- D-<n>: <decision>. Why: <one line>. Source: <where>'
+# The shapes below are the exact text of docs/formats.md; a test holds them to it.
+AC_SHAPE = '- AC-1: <criterion>'
+D_SHAPE = '- D-n: <decision>. Why: <one line>. Source: <where>'
+SPECIFY_SHAPE = 'ACs: AC-1, AC-2, …;'
 OWNER_SHAPE = '- <item> — owner: <unit, ticket or ADR>'
 
 
@@ -122,14 +129,20 @@ def decisions_errors(text):
 
 
 def logged_ac_ids(text):
-    """The AC ids named by every `specify:` line of log.md, in order, each once."""
-    ids = []
-    for line in text.splitlines():
+    """(ids, errors) for the `specify:` lines of log.md: ids maps each AC id to the number of the
+    first line that names it, in order; a `specify:` line without the `ACs: ...;` shape is an error."""
+    ids, errors = {}, []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not SPECIFY_LINE.match(line):
+            continue
         match = SPECIFY_IDS.match(line)
-        for ac in re.findall(r'AC-\d+', match.group(1)) if match else ():
-            if ac not in ids:
-                ids.append(ac)
-    return ids
+        if not match:
+            errors.append(f'log.md:{number}: a specify: line must start its text with the ids '
+                          f'({SPECIFY_SHAPE})')
+            continue
+        for ac in re.findall(r'AC-\d+', match.group(1)):
+            ids.setdefault(ac, number)
+    return ids, errors
 
 
 def stories(folder):
@@ -144,14 +157,16 @@ def stories(folder):
     decisions_text = read_optional(folder / 'decisions.md')
     log_text = read_optional(folder / 'log.md')
     if stories_text is None:
-        errors.append('stories.md:1: the file is missing (a work unit keeps its stories in stories.md)')
+        errors.append('stories.md: the file is missing (a work unit keeps its stories in stories.md)')
     else:
         found_errors, found = stories_errors(stories_text)
         errors.extend(found_errors)
-        errors.extend(f'log.md: {ac} was named by a specify: line and is gone from stories.md; '
+        logged, log_errors = logged_ac_ids(log_text or '')
+        errors.extend(log_errors)
+        errors.extend(f'log.md:{number}: {ac} was named by a specify: line and is gone from stories.md; '
                       f'an AC id is never renumbered (a withdrawn AC stays in place with an '
                       f'"Amended <date>:" line)'
-                      for ac in logged_ac_ids(log_text or '') if ac not in found)
+                      for ac, number in logged.items() if ac not in found)
         if len(stories_text.encode('utf-8')) > STORIES_WARN_BYTES:
             warnings.append('stories.md: over 6 KB; consider splitting the work unit')
     if decisions_text is not None:
