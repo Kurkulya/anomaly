@@ -364,7 +364,8 @@ HYPOTHESES_SHAPE = '1. <hypothesis>: confirmed | refuted, probe <output>'
 HYPOTHESES_HEADING = re.compile(r'##\s+Hypotheses\s*$')
 ANY_HEADING = re.compile(r'#{1,6}\s')
 NUMBERED_ITEM = re.compile(r'\d+\.\s+\S')
-PROBE_RESULT = re.compile(r'\b(?:confirmed|refuted)\b')
+RESULT_WORD = re.compile(r'\b(?:confirmed|refuted)\b', re.IGNORECASE)
+PROBE_WORD = re.compile(r'\bprobe\b', re.IGNORECASE)
 HYPOTHESES_MIN, HYPOTHESES_MAX = 3, 5
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
 
@@ -454,8 +455,8 @@ def ticket_errors(name, text, parsed, folder, graph):
 
 def hypotheses_errors(lines):
     """The problems of the `## Hypotheses` section of a draft: it is missing, it holds fewer than 3 or more
-    than 5 numbered lines (`1. ...`; fenced code is not read), or a numbered line names neither `confirmed`
-    nor `refuted`. The section ends at the next heading."""
+    than 5 numbered lines (`1. ...`; fenced code is not read), or a numbered line lacks `confirmed` or
+    `refuted` (any case) or the word `probe`. The section ends at the next heading."""
     skip = ticket.fenced(lines)
     start = next((index for index, (body, _) in enumerate(lines)
                   if index not in skip and HYPOTHESES_HEADING.match(body)), None)
@@ -471,8 +472,8 @@ def hypotheses_errors(lines):
     if not HYPOTHESES_MIN <= len(items) <= HYPOTHESES_MAX:
         return [f'Hypotheses: {len(items)} numbered lines, need {HYPOTHESES_MIN} to {HYPOTHESES_MAX} '
                 f'({HYPOTHESES_SHAPE})']
-    return [f'Hypotheses: line {number} names neither confirmed nor refuted ({HYPOTHESES_SHAPE})'
-            for number, body in items if not PROBE_RESULT.search(body)]
+    return [f'Hypotheses: line {number} needs confirmed or refuted and the word probe ({HYPOTHESES_SHAPE})'
+            for number, body in items if not (RESULT_WORD.search(body) and PROBE_WORD.search(body))]
 
 
 def draft_errors(text):

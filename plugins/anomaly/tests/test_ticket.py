@@ -929,6 +929,36 @@ class DraftCheckTest(unittest.TestCase):
             with self.subTest(valid=count):
                 self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((item,) * count))), [])
 
+    def test_the_hypotheses_section_ends_at_the_next_heading_and_skips_fenced_lines(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1 (review): numbered lines of a later section or
+        of a fenced block are not hypotheses."""
+        item = DRAFT_HYPOTHESES[0]
+        later = '\n## Root cause\n\n' + ''.join(f'{number}. {item}\n' for number in range(1, 4))
+        fenced_lines = '\n```\n' + ''.join(f'{number}. {item}\n' for number in range(1, 4)) + '```\n'
+        cases = {
+            'numbered lines under the next heading': (hypotheses_section() + later, []),
+            'a fenced numbered block inside a 3-item section': (hypotheses_section() + fenced_lines, []),
+            'a fenced block is the only numbered text': (
+                hypotheses_section(()) + fenced_lines, 'Hypotheses'),
+        }
+        for name, (section, expected) in cases.items():
+            with self.subTest(case=name):
+                problems = self.check(draft_text(hypotheses=section))
+                if expected:
+                    self.assertIn(expected, ' '.join(problems))
+                else:
+                    self.assertEqual(problems, [])
+
+    def test_a_hypothesis_line_needs_the_word_probe_and_a_result_word_in_any_case(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1 (review): formats.md says
+        `<hypothesis>: confirmed | refuted, probe <output>`."""
+        item = DRAFT_HYPOTHESES[0]
+        no_probe = 'the clock drifts: refuted (a fixed clock still fails)'
+        section = hypotheses_section((item, item, no_probe))
+        self.assertIn('Hypotheses', ' '.join(self.check(draft_text(hypotheses=section))))
+        capital = 'the parser reads a shared buffer: Confirmed, Probe: two runs interleave'
+        self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((capital,) * 3))), [])
+
     def test_a_line_the_cli_writes_later_is_refused(self):
         for line in ('Result: a', 'Metrics: b', 'Reviewed: c', 'Verified: d', 'Red: e', 'Red-changed: f'):
             with self.subTest(line=line):
