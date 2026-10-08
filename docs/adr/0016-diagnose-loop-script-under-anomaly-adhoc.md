@@ -1,6 +1,6 @@
 # ADR-0016: diagnose keeps its loop script under `.anomaly/adhoc/` with Write, the one file there the CLI does not write
 
-Status: Proposed; partly supersedes ADR-0011 (`.anomaly/adhoc/` holds only the tickets `ticket adhoc` writes) · Date: 2026-10-08 · Owner: · Revisit-by: 2026-11-05
+Status: Proposed; partly supersedes ADR-0011 (a worktree session records adhoc state only through the CLI) · Date: 2026-10-08 · Owner: · Revisit-by: 2026-11-05
 
 Decision: `diagnose` writes `<main checkout>/.anomaly/adhoc/<key>-repro.<ext>` with the Write tool; the ticket's `Repro:` line runs it by absolute path. It is the only file under `.anomaly/adhoc/` that the CLI does not write, and the one exception to the `build` rule that every `.scratch` or `.anomaly` edit goes through the CLI. In a linked worktree, diagnose stops and asks for the main checkout.
 Why: a later `build` session must run the script, and the diagnose session scratchpad does not outlive the session.
@@ -19,6 +19,7 @@ The diagnose eval found two gaps in the `Repro:` hand-over: the line pointed at 
 - `ticket adhoc --from` warns on stderr, and still writes the ticket, when `Repro:` holds `;`, `&&`, `||`, `|`, `>` or `<` (`check.draft_warnings`), because the test writer runs it as written.
 - The diagnose redact rule also covers the loop script; credentials come from env vars and are never written into the script.
 - The ticket stem can differ from the `<key>` in the script name; the absolute path in `Repro:` still finds the script.
+- **Partly supersedes ADR-0011**, the Why sentence that puts the light path under the main checkout, "where a worktree session that cannot write there can still record state through the CLI": `.anomaly/adhoc/` now also holds a file written with Write, so diagnose must run in the main checkout. The rest of ADR-0011 stands.
 
 ## Why
 
@@ -40,4 +41,4 @@ The script must outlive the diagnose session, stay out of git (`git status` is c
 
 ## Sources
 
-Commits of the durable-repro ticket: merge 61b9a58 (red 817f3f4, f792ce3, 5bc6e36, 4fccb1b). Commits of the eval-fixes cumulative-review fix: merge 00c3f9c (7900f05, d471ee2, 31ed7cb). Also ADR-0011; `plugins/anomaly/skills/build/SKILL.md` (N12); `plugins/anomaly/skills/diagnose/SKILL.md` (steps 1, 3 and 8); `plugins/anomaly/anomaly_loop/check.py` (`draft_warnings`).
+Commits of the durable-repro ticket: merge 61b9a58 (red commit 817f3f4; f792ce3, 5bc6e36, 4fccb1b). Commits of the eval-fixes cumulative-review fix: merge 00c3f9c (red commit 6921f61; 7900f05, d471ee2, 31ed7cb, 6710680). Also ADR-0011; `plugins/anomaly/skills/build/SKILL.md` (N12); `plugins/anomaly/skills/diagnose/SKILL.md` (steps 1, 3 and 8); `plugins/anomaly/anomaly_loop/check.py` (`draft_warnings`).
