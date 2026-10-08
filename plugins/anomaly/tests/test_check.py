@@ -443,3 +443,96 @@ class CheckStoriesTest(unittest.TestCase):
         self.put(stories=GOOD_STORIES + 'x' * (6 * 1024 - size))
         self.assertEqual((self.folder / 'stories.md').stat().st_size, 6 * 1024)
         self.assertEqual(self.stories(), ([], []))
+
+
+def slice_ticket(number, covers='AC-1', blocked='none', status='ready-for-agent', jira='no-ticket',
+                 tests='unit tests', body=''):
+    """A ticket whose lines sit at fixed numbers: Covers 3, Blocked by 4, Status 5, Jira 6, Tests 7."""
+    return (f'# {number}: A ticket\n\nCovers: {covers}\nBlocked by: {blocked}\nStatus: {status}\n'
+            f'Jira: {jira}\nTests: {tests}\n{body}')
+
+
+class CheckSliceTest(unittest.TestCase):
+    """AC-10, AC-11: `check slice <work-unit folder>`. Unit API assumed: `check.slice(folder)` takes a Path
+    and returns `(errors, warnings)` as `check.stories` does. Each error starts `<file>:<line>:` and names
+    the allowed shape or values in brackets. Story ACs are the `- AC-<n>:` lines of stories.md."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.folder = Path(tmp.name).resolve() / 'unit'
+        write_text(self.folder / 'stories.md', GOOD_STORIES)
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2'))
+        self.put('02-second', slice_ticket('02', covers='AC-3', blocked='01', status='done'))
+        self.put('03-third', slice_ticket('03', covers='none', status='ready-for-human (needs a key)'))
+
+    def put(self, slug, text):
+        write_text(self.folder / 'tickets' / f'{slug}.md', text)
+
+    def slice(self):
+        from anomaly_loop import check
+        self.assertTrue(hasattr(check, 'slice'), 'check.slice(folder) -> (errors, warnings) is missing')
+        return check.slice(self.folder)
+
+    def assert_error(self, prefix, *fragments):
+        errors, _ = self.slice()
+        hits = [e for e in errors if re.match(rf'(tickets/)?{re.escape(prefix)}', e)]
+        self.assertTrue(hits, (prefix, errors))
+        for fragment in fragments:
+            self.assertTrue(any(fragment in e for e in hits), (fragment, hits))
+
+    def test_a_clean_set_with_a_covers_none_ticket_has_no_errors_and_no_warnings(self):
+        self.assertEqual(self.slice(), ([], []))
+
+    def test_a_story_ac_in_no_covers_line_is_an_error_naming_the_story_line(self):
+        self.put('02-second', slice_ticket('02', covers='none', blocked='01'))
+        self.assert_error('stories.md:12:', 'AC-3', 'Covers:')
+
+    def test_each_missing_ticket_line_is_an_error_naming_the_file_and_the_allowed_values(self):
+        for key, fragment in (('Status', 'ready-for-agent'), ('Blocked by', '01, 03'), ('Covers', 'none'),
+                              ('Tests', 'Tests:'), ('Jira', 'no-ticket')):
+            with self.subTest(key=key):
+                text = slice_ticket('01', covers='AC-1, AC-2')
+                self.put('01-first', ''.join(l for l in text.splitlines(True) if not l.startswith(f'{key}:')))
+                self.assert_error('01-first.md:', f'{key}:', fragment, '(')
+                self.put('01-first', text)
+
+    def test_a_status_outside_the_triage_words_and_run_states_is_an_error_listing_them(self):
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', status='wip'))
+        self.assert_error('01-first.md:5:', 'ready-for-agent', 'ready-for-human', 'in-progress', 'done')
+
+    def test_a_blocker_with_no_ticket_file_is_an_error_on_the_blocked_by_line(self):
+        self.put('03-third', slice_ticket('03', covers='none', blocked='09'))
+        self.assert_error('03-third.md:4:', '09')
+
+    def test_a_blocker_cycle_is_an_error_naming_the_tickets(self):
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', blocked='02'))
+        errors, _ = self.slice()
+        hits = [e for e in errors if 'cycle' in e]
+        self.assertTrue(hits, errors)
+        self.assertTrue(any('01' in e and '02' in e for e in hits), hits)
+        self.assertTrue(all(re.match(r'(tickets/)?\d\d-\w+\.md:4:', e) for e in hits), hits)
+
+    def test_a_path_with_a_line_number_in_the_body_is_an_error_naming_the_line(self):
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
+                                          body='\nSee plugins/anomaly/anomaly_loop/check.py:42 for it.\n'))
+        self.assert_error('01-first.md:9:', 'check.py:42', 'path')
+
+    def test_an_oversize_ticket_only_warns(self):
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='x' * (5 * 1024)))
+        errors, warnings = self.slice()
+        self.assertEqual(errors, [])
+        self.assertTrue(any('01-first.md' in w for w in warnings), warnings)
+
+    def test_cli_exit_codes_and_output(self):
+        run = lambda: run_cli('check', 'slice', str(self.folder))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='x' * (5 * 1024)))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertIn('warning: ', out)
+        self.put('03-third', slice_ticket('03', covers='none', blocked='09'))
+        code, out, err = run()
+        self.assertEqual((code, err), (1, ''), out)
+        self.assertIn('03-third.md:4:', out)
