@@ -821,6 +821,35 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertIn('--feature', text)
         self.assertIn('/anomaly:specify', text)
 
+    def test_no_question_offers_or_reopens_a_settled_adr_or_d_n_even_when_the_idea_suggests_it(self):
+        """2026-10-08-interview-settled-trap-and-open-lines AC-1: the conflict is named, not asked."""
+        text = self.text()
+        rules = [line for line in text.splitlines()
+                 if re.search(r'(?i)\bADR\b|D-n', line) and re.search(r'(?i)settled|reopen', line)
+                 and re.search(r'(?i)\bno question\b|never ask|not ask|no round|never (?:offer|reopen|put)|'
+                               r'(?:offers?|reopens?)\b[^.\n]*\bsettled', line)
+                 and re.search(r"(?i)even (?:when|if|though)\b[^.\n]*\b(?:idea|user)", line)]
+        self.assertTrue(rules, 'no rule says a settled ADR or D-n is never asked, even when the idea suggests it')
+        self.assertTrue(any(re.search(r'(?i)\bnam(?:e|es|ed|ing)\b[^.\n]*\bconflict|\bconflict\b[^.\n]*\bnam(?:e|es|ed)',
+                                      line) for line in rules),
+                        'the rule does not say to name the conflict instead')
+
+    def test_a_gap_the_user_settles_as_out_of_scope_is_a_d_n_with_an_owner_and_open_is_only_for_the_unanswered(self):
+        """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify."""
+        text = self.text()
+        self.assertRegex(text, r'(?is)out of scope[^\n]*D-n[^\n]*owner|out of scope[^\n]*owner[^\n]*D-n|'
+                               r'D-n[^\n]*owner[^\n]*out of scope|D-n[^\n]*out of scope[^\n]*owner')
+        rule = [line for line in text.splitlines()
+                if re.search(r'(?i)out of scope', line) and 'D-n' in line and re.search(r'(?i)owner', line)]
+        self.assertTrue(rule, 'no line ties out of scope, D-n and owner')
+        self.assertTrue(any('Source:' in line for line in rule), 'the out-of-scope D-n rule drops its Source:')
+        self.assertTrue(any(re.search(r'(?i)not (?:that|the deferring|its own) `?D-n', line) for line in rule),
+                        'the rule does not say the owner is not the D-n itself')
+        self.assertTrue(any(re.search(r'(?i)`?Open:`?[^\n]*\bonly\b[^\n]*unanswered', line)
+                            for line in text.splitlines()), 'Open: is not said to be only for the unanswered')
+        self.assertRegex(text, r'(?is)`?Open:`?[^\n]*\b(?:block|blocks|stop|stops)\b[^\n]*specify|'
+                               r'specify[^\n]*\b(?:block|blocks|blocked|stop|stops|stopped)\b[^\n]*`?Open:`?')
+
     def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
         text = self.text()
         for name in ('formats.md', 'boundaries.md'):
