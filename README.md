@@ -905,8 +905,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
   `Repro: <command> (red now)`, an AC). A draft with a line missing, or one that names a blocker,
-  is refused with each problem named and nothing is written; a valid one is written unchanged, a `Jira:` line kept and none
-  added. The slug comes from the title unless `--slug` gives it.
+  is refused with each problem named and nothing is written; a valid one is written unchanged, a
+  `Jira:` line kept and none added. The slug comes from the title unless `--slug` gives it.
 
 ## Benchmark
 
@@ -1157,8 +1157,9 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   the key is not checked until the tracker port names the key line, phase 2, D-11); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
-  (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines. Warning: a ticket over 5 KB. Exit codes and the `warning:` prefix as for
-  `check stories` (a clean run prints `slice check passed for <folder>`). Nothing is written.
+  (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines. Warning: a ticket over 5 KB.
+  Exit codes and the `warning:` prefix as for `check stories` (a clean run prints
+  `slice check passed for <folder>`). Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line
   names a file when its owner file is that path or the end of it; a bare name that matches
