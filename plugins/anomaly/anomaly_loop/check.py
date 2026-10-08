@@ -4,6 +4,9 @@
               acceptance test is unchanged since its red commit (or the ticket notes why)
   stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
+  slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
+              a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN anchor);
+              a ticket over 5 KB only warns. Prints as `stories` does (`slice check passed`).
 
 `stories` prints each error as one line, `<file>:<line>: <problem> (<allowed shape>)`, then each
 warning as `warning: <file>: ...`; it exits 1 on any error, 0 otherwise (clean prints one
@@ -176,6 +179,105 @@ def stories(folder):
     return errors, warnings
 
 
+# ---------- slice ----------
+
+SLICE_WARN_BYTES = 5 * 1024
+STATUS_WORDS = ('ready-for-agent', 'ready-for-human', 'needs-info', 'wontfix', 'in-progress', 'done')
+TICKET_NUMBER = re.compile(r'^(\d{2})-')
+LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-]+\.[A-Za-z]\w*:\d+\b')
+# The shapes below are the exact text of the Ticket block in docs/formats.md.
+STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
+BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
+COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
+TESTS_SHAPE = 'Tests: <levels>'
+JIRA_SHAPE = 'Jira: <key> | no-ticket'
+TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
+
+
+def blocker_cycle(graph, start):
+    """The path [start, ..., start] of a blocker cycle through `start`, or None. `graph` maps a ticket
+    number to the numbers that block it."""
+    stack, seen = [(start, [start])], set()
+    while stack:
+        node, path = stack.pop()
+        for blocker in graph.get(node, ()):
+            if blocker == start:
+                return path + [start]
+            if blocker not in seen:
+                seen.add(blocker)
+                stack.append((blocker, path + [blocker]))
+    return None
+
+
+def ticket_errors(name, text, parsed, folder, graph):
+    """Errors for one ticket file: the missing or wrong lines, an unresolved blocker, a line anchor.
+    Fills `graph` with the resolved blockers of the ticket, keyed by its number."""
+    lines = ticket.split_lines(text)
+    where = lambda key: ticket.find_lines(lines, key)[0] + 1
+    errors = []
+    if not ticket.find_lines(lines, 'Status'):
+        errors.append(f'{name}:1: no Status: line ({STATUS_SHAPE})')
+    elif parsed.status not in STATUS_WORDS:
+        errors.append(f'{name}:{where("Status")}: Status: {parsed.status} is not a status word '
+                      f'({", ".join(STATUS_WORDS)})')
+    if not parsed.has_blocked_line:
+        errors.append(f'{name}:1: no Blocked by: line ({BLOCKED_SHAPE})')
+    elif parsed.blockers_unreadable:
+        errors.append(f'{name}:{where("Blocked by")}: Blocked by: {parsed.blocked_by} holds no ticket number '
+                      f'({BLOCKED_SHAPE})')
+    else:
+        number = TICKET_NUMBER.match(name.rsplit('/', 1)[-1]).group(1)
+        graph[number] = []
+        for blocker in parsed.blockers:
+            if ticket.find_blocker(folder, blocker) is None:
+                errors.append(f'{name}:{where("Blocked by")}: blocked by {blocker}: no ticket file '
+                              f'{blocker}-*.md in tickets/ ({BLOCKED_SHAPE})')
+            else:
+                graph[number].append(blocker)
+    for missing, shape in ((not parsed.has_covers_line, COVERS_SHAPE), (not parsed.tests, TESTS_SHAPE),
+                           (not parsed.jira, JIRA_SHAPE)):
+        if missing:
+            errors.append(f'{name}:1: no {shape.split(":")[0]}: line ({shape})')
+    for number, (body, _) in enumerate(lines, 1):
+        match = LINE_ANCHOR.search(body)
+        if match:
+            errors.append(f'{name}:{number}: {match.group(0)} is a path with a line number '
+                          f'({TOUCHES_SHAPE})')
+    return errors
+
+
+def slice(folder):
+    """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
+    stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or Jira:
+    line, a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
+    line anchor. A ticket over 5 KB only warns."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        raise files.RecordError(f'{folder}: not a folder')
+    tickets_dir = folder / 'tickets'
+    loaded = [(f'tickets/{path.name}', *ticket.load(path))
+              for path in sorted(tickets_dir.glob('*.md')) if TICKET_NUMBER.match(path.name)]
+    errors, warnings, graph, covered = [], [], {}, set()
+    stories_text = read_optional(folder / 'stories.md')
+    if stories_text is None:
+        errors.append('stories.md: the file is missing (a work unit keeps its stories in stories.md)')
+    else:
+        covered = {ac for _, _, parsed in loaded for ac in parsed.covers}
+        errors.extend(f'stories.md:{number}: {ac} is in no ticket\'s Covers: line ({COVERS_SHAPE})'
+                      for ac, number in stories_errors(stories_text)[1].items() if ac not in covered)
+    for name, text, parsed in loaded:
+        errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph))
+        if len(text.encode('utf-8')) > SLICE_WARN_BYTES:
+            warnings.append(f'{name}: over 5 KB; consider splitting the ticket')
+    for name, text, parsed in loaded:
+        number = TICKET_NUMBER.match(name.rsplit('/', 1)[-1]).group(1)
+        path = blocker_cycle(graph, number)
+        if path:
+            line = ticket.find_lines(ticket.split_lines(text), 'Blocked by')[0] + 1
+            errors.append(f'{name}:{line}: blocker cycle {" -> ".join(path)} ({BLOCKED_SHAPE})')
+    return errors, warnings
+
+
 # ---------- the command line ----------
 
 def register(commands, common):
@@ -206,6 +308,16 @@ def register(commands, common):
                      'an error (a folder that is not there) is one anomaly: line and exit 2.'))
     check_stories.add_argument('folder', help='the work-unit folder (holds stories.md)')
     check_stories.set_defaults(handler=run_stories)
+    check_slice = actions.add_parser(
+        'slice', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help='exit 1 when the tickets of a work unit cannot be run by build',
+        description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
+                     'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
+                     'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
+                     'line anchor. Warning: a ticket over 5 KB. Each is one line on stdout; exit 1 on any error,\n'
+                     '0 otherwise; an error (a folder that is not there) is one anomaly: line and exit 2.'))
+    check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
+    check_slice.set_defaults(handler=run_slice)
 
 
 def run_stories(args, environ):
@@ -217,6 +329,18 @@ def run_stories(args, environ):
     if errors:
         return 1
     print(f'stories check passed for {Path(args.folder).name}')
+    return 0
+
+
+def run_slice(args, environ):
+    errors, warnings = slice(args.folder)
+    for line in errors:
+        print(line)
+    for line in warnings:
+        print(f'warning: {line}')
+    if errors:
+        return 1
+    print(f'slice check passed for {Path(args.folder).name}')
     return 0
 
 
