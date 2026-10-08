@@ -1099,13 +1099,15 @@ runs through `bench score`, with at most 1 false High per run.
 ## The pre-merge check and the seam ledger
 
 `check pre-merge` makes three rules of the pipeline checks instead of requests, from the ticket
-file and git. `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`.
+file and git. `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
+`check slice` checks that its tickets can be run.
 `seams prune` and `seams add` keep the seam ledger true after a merge. None of them
 needs a home or a profile.
 
 ```
 python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>] [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder>
+python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder>
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
 python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name> --owner <owner file> --replaces <old way> --ticket <NN>
 ```
@@ -1142,6 +1144,14 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   run prints `stories check passed for <folder>`); a folder that is not there is one `anomaly:` line and exit 2.
   A missing `stories.md` is an error line; a missing `decisions.md` or `log.md` is read as empty.
   Nothing is written.
+- `check slice` reads `stories.md` and `tickets/NN-slug.md` of a work-unit folder, so a ticket set
+  that `build` cannot run is caught by code before the plan gate. Errors, each a line
+  `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
+  ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
+  `Covers:`, `Tests:` or `Jira:` line (a key or `no-ticket`); a `Status:` that is not a triage word
+  or run state of `formats.md`; a blocker with no `NN-*.md` file or in a cycle; a path with a line
+  number (`check.py:42`). Warning: a ticket over 5 KB. Exit codes and the `warning:` prefix as for
+  `check stories` (a clean run prints `slice check passed for <folder>`). Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line
   names a file when its owner file is that path or the end of it; a bare name that matches
