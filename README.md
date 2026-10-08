@@ -1158,9 +1158,10 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
   (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
-  or `@` is not one; a bare one such as `example.com:8080` is). Warning: a ticket over 5 KB.
-  Exit codes and the `warning:` prefix as for `check stories` (a clean run prints
-  `slice check passed for <folder>`). Nothing is written.
+  or `@` is not one; a bare one such as `example.com:8080` is; a path right after `@`, such as
+  `@check.py:42`, or in a URL, such as `https://host/x/check.py:42`, is skipped too). Warning: a
+  ticket over 5 KB. Exit codes and the `warning:` prefix as for `check stories` (a clean run
+  prints `slice check passed for <folder>`). Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line
   names a file when its owner file is that path or the end of it; a bare name that matches

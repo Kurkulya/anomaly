@@ -393,7 +393,8 @@ def register(commands, common):
                      'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
                      'line anchor (not in a fenced block or a copied - D-n: line; a host:port after :// or @\n'
-                     'is not one, a bare example.com:8080 is). Warning: a ticket over 5 KB.\n'
+                     'is not one, a bare example.com:8080 is; a path right after @ such as @check.py:42, or in a\n'
+                     'URL such as https://host/x/check.py:42, is skipped too). Warning: a ticket over 5 KB.\n'
                      'Each is one line on stdout; exit 1 on any error, 0 otherwise; an error (a folder that is\n'
                      'not there) is one anomaly: line and exit 2.'))
     check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
