@@ -903,9 +903,9 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   The task is put on one line, so its text cannot add a state line. It prints the path and never
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
-  a skill wrote (title, `Covers:`, `Blocked by:`, `Status: ready-for-agent`, `Tests:`,
-  `Repro: <command> (red now)`, an AC). A draft with a line missing is refused with each problem
-  named and nothing is written; a valid one is written unchanged, a `Jira:` line kept and none
+  a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
+  `Repro: <command> (red now)`, an AC). A draft with a line missing, or one that names a blocker,
+  is refused with each problem named and nothing is written; a valid one is written unchanged, a `Jira:` line kept and none
   added. The slug comes from the title unless `--slug` gives it.
 
 ## Benchmark
@@ -1154,10 +1154,10 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
   `Covers:`, `Tests:` or `Jira:` line, or one with an empty value (`Jira:` accepts any word for now:
-  the key is not checked until the tracker port, phase 2, names the key line, D-11); a `Status:`
+  the key is not checked until the tracker port names the key line, phase 2, D-11); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
-  `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number (`check.py:42`) outside fenced code blocks and
-  copied `- D-n:` lines. Warning: a ticket over 5 KB. Exit codes and the `warning:` prefix as for
+  `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
+  (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines. Warning: a ticket over 5 KB. Exit codes and the `warning:` prefix as for
   `check stories` (a clean run prints `slice check passed for <folder>`). Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line

@@ -153,11 +153,11 @@ class AddTest(LensCase):
         """Workflow-plan ticket 09: the interview's recommendation counts go through `lens tally` under `interview`."""
         self.assertEqual(lens.INTERVIEW_LENS, 'interview')
         self.add_ok(lens.INTERVIEW_LENS, 2, 1)
-        self.assertEqual([row['lens'] for row in self.tally_lines()], ['interview'])
+        self.assertEqual([row['lens'] for row in self.tally_lines()], [lens.INTERVIEW_LENS])
 
     def test_a_lens_name_outside_the_allowed_set_is_refused_with_the_allowed_names_and_nothing_is_written(self):
         """AC-97: on an empty profile the allowed lens names are the three core lenses, `plan` and `interview`."""
-        assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security', lens.PLAN_LENS, 'interview')
+        assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security', lens.PLAN_LENS, lens.INTERVIEW_LENS)
         self.assertFalse(self.data.exists())
 
     def test_an_org_reviewer_from_the_reviewers_port_is_a_lens_under_its_adapter_name(self):

@@ -5,21 +5,23 @@
   stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
   slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
-              a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN anchor);
-              a ticket over 5 KB only warns. Prints as `stories` does (`slice check passed`).
+              a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN
+              anchor); a ticket over 5 KB only warns.
+              Prints as `stories` does (`slice check passed`).
 
 `stories` prints each error as one line, `<file>:<line>: <problem> (<allowed shape>)`, then each
 warning as `warning: <file>: ...`; it exits 1 on any error, 0 otherwise (clean prints one
 `stories check passed` line), and 2 with one `anomaly:` line for a folder that is not there.
 
-The next two paragraphs are about pre-merge only. Each failed invariant is one line on stdout, named by
-its ticket line (`Reviewed:`, `Verified:`, `Red:`, `Test:`), and the exit code is 1, as for `ticket gate`; an error (a missing ticket, a head that
-is not a commit) is one `anomaly:` line and exit 2. Nothing is written but the index's file stats:
+The next two paragraphs are about pre-merge only. Each failed invariant is one line on stdout, named
+by its ticket line (`Reviewed:`, `Verified:`, `Red:`, `Test:`), and the exit code is 1, as for
+`ticket gate`; an error (a missing ticket, a head that is not a commit) is one `anomaly:` line and
+exit 2. Nothing is written but the index's file stats:
 `git update-index --refresh` runs first, so a file dirty by its stat only (for example a line-ending
 change) cannot make the merge that follows refuse. A passing check prints a
-`note:` line for a test file excused by `Red-changed:`, then one `passed` line. The ticket lines are read
-with ticket.load; every commit id in them is normalised with git before it is compared, so a short
-id equals the full one. The test file is read from git at the `Red:` commit and at the head.
+`note:` line for a test file excused by `Red-changed:`, then one `passed` line. The ticket lines
+are read with ticket.load; every commit id in them is normalised with git before it is compared, so
+a short id equals the full one. The test file is read from git at the `Red:` commit and at the head.
 
 A `Red-changed:` line excuses a change to the test file since the `Red:` commit, and also a missing
 `Red:` line (a docs-only ticket has no acceptance test); the check then passes and prints the reason
@@ -188,8 +190,8 @@ STATUS_WORDS = (TICKET_STATUS_READY, TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_IN
                 TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_DONE)
 HUMAN_STATUS = re.compile(rf'{re.escape(TICKET_STATUS_HUMAN)} \(.+\)')
 TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
-HOST_SUFFIXES = ('com', 'org', 'net', 'io', 'dev', 'app', 'local', 'test')   # host:port is not path:NN
-LINE_ANCHOR = re.compile(rf'(?:[\w.-]+/)*[\w-]+\.(?!(?:{"|".join(HOST_SUFFIXES)})\b)[A-Za-z]\w*:\d+\b')
+HOST_SUFFIXES = ('com', 'org', 'net', 'io', 'dev', 'app', 'local', 'test')   # host:port is not path:NN; known gap: notes.org:12 is skipped
+LINE_ANCHOR = re.compile(rf'(?:[\w.-]+/)*[\w-][\w.-]*\.(?!(?:{"|".join(HOST_SUFFIXES)})\b)[A-Za-z]\w*:\d+\b')
 # The shapes below are the exact text of the Ticket block in docs/formats.md.
 STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
