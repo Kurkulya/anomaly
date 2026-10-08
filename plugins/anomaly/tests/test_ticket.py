@@ -959,6 +959,34 @@ class DraftCheckTest(unittest.TestCase):
         capital = 'the parser reads a shared buffer: Confirmed, Probe: two runs interleave'
         self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((capital,) * 3))), [])
 
+    def test_the_result_word_must_stand_right_after_a_colon(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: a result word in the hypothesis text does not
+        count; `confirmed` or `refuted` must stand right after a colon."""
+        passing = 'the health probe reports confirmed jobs: refuted, probe exit 0'
+        no_result_after_colon = 'the health probe reports confirmed jobs'
+        self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((passing,) * 3))), [])
+        section = hypotheses_section((passing, passing, no_result_after_colon))
+        self.assertIn('Hypotheses', ' '.join(self.check(draft_text(hypotheses=section))))
+
+    def test_the_hypotheses_heading_matches_in_any_case(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: `## hypotheses` is the section."""
+        section = hypotheses_section().replace('## Hypotheses', '## hypotheses')
+        self.assertEqual(self.check(draft_text(hypotheses=section)), [])
+
+    def test_the_hypotheses_section_ends_at_the_first_non_blank_line_that_is_not_a_numbered_item(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: numbered lines after a bold label or a plain
+        label (`**Fix:**`, `Root cause:`) are not hypotheses, so a valid 3-item section stays valid."""
+        steps = ''.join(f'{number}. {step}\n' for number, step in enumerate(
+            ('lock the shared buffer', 'add a test for two runs', 'rerun the loop ten times'), 1))
+        ruled_out = ''.join(f'{number}. {item}\n' for number, item in enumerate(DRAFT_HYPOTHESES, 1))
+        cases = {
+            'a bold label then 3 numbered fix steps': hypotheses_section() + '\n**Fix:**\n\n' + steps,
+            'a plain label then numbered ruled-out lines': hypotheses_section() + '\nRoot cause:\n\n' + ruled_out,
+        }
+        for name, section in cases.items():
+            with self.subTest(case=name):
+                self.assertEqual(self.check(draft_text(hypotheses=section)), [])
+
     def test_a_line_the_cli_writes_later_is_refused(self):
         for line in ('Result: a', 'Metrics: b', 'Reviewed: c', 'Verified: d', 'Red: e', 'Red-changed: f'):
             with self.subTest(line=line):

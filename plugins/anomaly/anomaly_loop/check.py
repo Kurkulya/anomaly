@@ -361,10 +361,9 @@ JIRA_SHAPE = 'Jira: <key> | no-ticket'
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
 REPRO_SHAPE = 'Repro: <command>'
 HYPOTHESES_SHAPE = '1. <hypothesis>: confirmed | refuted, probe <output>'
-HYPOTHESES_HEADING = re.compile(r'##\s+Hypotheses\s*$')
-ANY_HEADING = re.compile(r'#{1,6}\s')
+HYPOTHESES_HEADING = re.compile(r'##\s+Hypotheses\s*$', re.IGNORECASE)
 NUMBERED_ITEM = re.compile(r'\d+\.\s+\S')
-RESULT_WORD = re.compile(r'\b(?:confirmed|refuted)\b', re.IGNORECASE)
+RESULT_WORD = re.compile(r':\s*(?:confirmed|refuted)\b', re.IGNORECASE)
 PROBE_WORD = re.compile(r'\bprobe\b', re.IGNORECASE)
 HYPOTHESES_MIN, HYPOTHESES_MAX = 3, 5
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
@@ -454,9 +453,10 @@ def ticket_errors(name, text, parsed, folder, graph):
 
 
 def hypotheses_errors(lines):
-    """The problems of the `## Hypotheses` section of a draft: it is missing, it holds fewer than 3 or more
-    than 5 numbered lines (`1. ...`; fenced code is not read), or a numbered line lacks `confirmed` or
-    `refuted` (any case) or the word `probe`. The section ends at the next heading."""
+    """The problems of the `## Hypotheses` section of a draft (heading in any case): it is missing, it holds
+    fewer than 3 or more than 5 numbered lines (`1. ...`; fenced code is not read), or a numbered line lacks
+    `confirmed` or `refuted` (any case) right after a colon, or the word `probe`. The section ends at a
+    heading or at the first non-blank line that is not a numbered item."""
     skip = ticket.fenced(lines)
     start = next((index for index, (body, _) in enumerate(lines)
                   if index not in skip and HYPOTHESES_HEADING.match(body)), None)
@@ -465,14 +465,16 @@ def hypotheses_errors(lines):
     items = []
     for index in range(start + 1, len(lines)):
         body = lines[index][0]
-        if index not in skip and ANY_HEADING.match(body):
+        if index in skip or not body.strip():
+            continue
+        if not NUMBERED_ITEM.match(body):
             break
-        if index not in skip and NUMBERED_ITEM.match(body):
-            items.append((index + 1, body))
+        items.append((index + 1, body))
     if not HYPOTHESES_MIN <= len(items) <= HYPOTHESES_MAX:
-        return [f'Hypotheses: {len(items)} numbered lines, need {HYPOTHESES_MIN} to {HYPOTHESES_MAX} '
-                f'({HYPOTHESES_SHAPE})']
-    return [f'Hypotheses: line {number} needs confirmed or refuted and the word probe ({HYPOTHESES_SHAPE})'
+        return [f'Hypotheses: {len(items)} numbered lines, need {HYPOTHESES_MIN} to {HYPOTHESES_MAX}; the '
+                f'section ends at a heading or the first non-blank line that is not a numbered item ({HYPOTHESES_SHAPE})']
+    return [f'Hypotheses: line {number} needs confirmed or refuted after a colon and the word probe '
+            f'({HYPOTHESES_SHAPE})'
             for number, body in items if not (RESULT_WORD.search(body) and PROBE_WORD.search(body))]
 
 
