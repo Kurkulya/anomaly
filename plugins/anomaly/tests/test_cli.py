@@ -1217,6 +1217,12 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertRegex(lowered, r'brief[^.\n]{0,30}facts only')
         self.assertRegex(lowered, r'(never|no) (a )?(question|ask)[^.\n]{0,40}cause|never[^.\n]{0,40}cause')
 
+    def test_the_probe_step_probes_each_listed_hypothesis_in_rank_order(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: step 6 probes each listed hypothesis, in rank
+        order, not only the first or the likely one. Loose regex on the lowered prose (5 KB limit)."""
+        lowered = self.prose().lower()
+        self.assertRegex(lowered, r'each (listed )?hypothes[^\n]{0,40}rank order|rank order[^\n]{0,40}each')
+
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
         """AC-27."""
         text = self.text()
