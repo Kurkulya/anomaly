@@ -98,6 +98,7 @@ D_LINE = re.compile(r'^- D-\d+:')
 SPECIFY_LINE = re.compile(r'^\S+ \S+ specify:')
 SPECIFY_IDS = re.compile(r'^\S+ \S+ specify: ACs: ([^;]*);')
 D_TOKEN = re.compile(r'\bD-\d+')
+BRACKETED = re.compile(r'\([^()]*\)|\[[^\[\]]*\]')
 # The shapes below are the exact text of docs/formats.md; a test holds them to it.
 AC_SHAPE = '- AC-1: <criterion>'
 D_SHAPE = '- D-n: <decision>. Why: <one line>. Source: <where>'
@@ -107,9 +108,10 @@ D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
 
 
 def owner_names_decision(line):
-    """True when the text after the last `owner:` on the line holds a D-n token."""
+    """True when the text after the last `owner:` on the line holds a D-n token outside brackets.
+    A D-n in round or square brackets is a citation, not the owner."""
     _, marker, owner = line.rpartition('owner:')
-    return bool(marker) and D_TOKEN.search(owner) is not None
+    return bool(marker) and D_TOKEN.search(BRACKETED.sub('', owner)) is not None
 
 
 def read_optional(path):
