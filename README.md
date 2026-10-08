@@ -904,7 +904,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
-  `Repro: <command>`, an AC). A draft with a line missing, or one that names a blocker,
+  `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
+  `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
   `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
@@ -1547,7 +1548,8 @@ finds the root cause and changes no source.
   The ticket stem can differ from the `<key>` in the script name: `Repro:` holds the script's
   absolute path, so build still runs it.
 - It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
-  passes it to `ticket adhoc --from`, which checks it.
+  passes it to `ticket adhoc --from`, which checks it. Its 3 to 5 ranked hypotheses are a
+  `Hypotheses` section of the draft, each with its probe result (`confirmed` or `refuted`), not a chat list.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
   `/anomaly:build <adhoc ticket path>`.
 
