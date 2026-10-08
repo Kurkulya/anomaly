@@ -186,7 +186,7 @@ def stories(folder):
 SLICE_WARN_BYTES = 5 * 1024
 STATUS_WORDS = (TICKET_STATUS_READY, TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_WONTFIX,
                 TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_DONE)
-HUMAN_STATUS = re.compile(rf'{TICKET_STATUS_HUMAN} \(.+\)')
+HUMAN_STATUS = re.compile(rf'{re.escape(TICKET_STATUS_HUMAN)} \(.+\)')
 TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
 LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-]+\.[A-Za-z]\w*:\d+\b')
 # The shapes below are the exact text of the Ticket block in docs/formats.md.
@@ -324,8 +324,9 @@ def register(commands, common):
         description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
                      'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
-                     'line anchor (not in a fenced block or a copied - D-n: line). Warning: a ticket over 5 KB. Each is one line on stdout; exit 1 on any error,\n'
-                     '0 otherwise; an error (a folder that is not there) is one anomaly: line and exit 2.'))
+                     'line anchor (not in a fenced block or a copied - D-n: line). Warning: a ticket over 5 KB.\n'
+                     'Each is one line on stdout; exit 1 on any error, 0 otherwise; an error (a folder that is\n'
+                     'not there) is one anomaly: line and exit 2.'))
     check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
     check_slice.set_defaults(handler=run_slice)
 
