@@ -835,7 +835,7 @@ python plugins/anomaly/scripts/anomaly.py ticket reviewed   <ticket> <sha> [--re
 python plugins/anomaly/scripts/anomaly.py ticket verified   <ticket> <sha> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> <sha> <test path> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> --changed <reason>
-python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> [--slug <slug>] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from <draft> [--slug <slug>] [--repo <dir>]
 ```
 
 - A state line is plain (`Status: done`) or bold (`**Status:** done`); both are read, `Blocked
@@ -847,7 +847,7 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> [--slug 
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, `Jira`,
-  `Tests`, `Base` (the integration branch, which `build` reads here), `Reviewed`, `Verified`,
+  `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`, `Verified`,
   `Red`, `Red-changed`) and a `warning:` line when the ticket
   has no `Blocked by:` line or its value is not only two-digit ticket numbers (see `ticket gate`).
 - `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
@@ -902,6 +902,11 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> [--slug 
   The AC-1 line holds the whole task text; only the title line is cut short.
   The task is put on one line, so its text cannot add a state line. It prints the path and never
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
+  `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
+  a skill wrote (title, `Covers:`, `Blocked by:`, `Status: ready-for-agent`, `Tests:`,
+  `Repro: <command> (red now)`, an AC). A draft with a line missing is refused with each problem
+  named and nothing is written; a valid one is written unchanged, a `Jira:` line kept and none
+  added. The slug comes from the title unless `--slug` gives it.
 
 ## Benchmark
 
