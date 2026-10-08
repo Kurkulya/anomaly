@@ -12,8 +12,8 @@
 warning as `warning: <file>: ...`; it exits 1 on any error, 0 otherwise (clean prints one
 `stories check passed` line), and 2 with one `anomaly:` line for a folder that is not there.
 
-The next two paragraphs are about pre-merge only. Each failed invariant is one line on stdout, named by its ticket line (`Reviewed:`, `Verified:`,
-`Red:`, `Test:`), and the exit code is 1, as for `ticket gate`; an error (a missing ticket, a head that
+The next two paragraphs are about pre-merge only. Each failed invariant is one line on stdout, named by
+its ticket line (`Reviewed:`, `Verified:`, `Red:`, `Test:`), and the exit code is 1, as for `ticket gate`; an error (a missing ticket, a head that
 is not a commit) is one `anomaly:` line and exit 2. Nothing is written but the index's file stats:
 `git update-index --refresh` runs first, so a file dirty by its stat only (for example a line-ending
 change) cannot make the merge that follows refuse. A passing check prints a
@@ -188,7 +188,8 @@ STATUS_WORDS = (TICKET_STATUS_READY, TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_IN
                 TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_DONE)
 HUMAN_STATUS = re.compile(rf'{re.escape(TICKET_STATUS_HUMAN)} \(.+\)')
 TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
-LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-]+\.[A-Za-z]\w*:\d+\b')
+HOST_SUFFIXES = ('com', 'org', 'net', 'io', 'dev', 'app', 'local', 'test')   # host:port is not path:NN
+LINE_ANCHOR = re.compile(rf'(?:[\w.-]+/)*[\w-]+\.(?!(?:{"|".join(HOST_SUFFIXES)})\b)[A-Za-z]\w*:\d+\b')
 # The shapes below are the exact text of the Ticket block in docs/formats.md.
 STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
@@ -296,6 +297,8 @@ def draft_errors(text):
     else:
         problems += [message for _, message in status_errors(lines, parsed)]
     problems += [message for _, message in blocked_errors(lines, parsed, empty_is_error=True)]
+    if parsed.blockers:
+        problems.append(f'Blocked by: "{parsed.blocked_by}" names a ticket; a light-path draft has Blocked by: none')
     problems += [message for _, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
                                                              ('Repro', REPRO_SHAPE)))]
     skip = ticket.fenced(lines)
