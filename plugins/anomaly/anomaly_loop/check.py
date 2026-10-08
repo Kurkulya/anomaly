@@ -120,7 +120,7 @@ def read_optional(path):
 
 
 def stories_errors(text):
-    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner or a D-n owner.
+    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner or an owner that names a D-n outside brackets.
     Also the ids found."""
     errors, found, in_scope_out = [], {}, False
     for number, line in enumerate(text.splitlines(), 1):
@@ -142,7 +142,7 @@ def stories_errors(text):
 
 
 def decisions_errors(text):
-    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `owner:` names a D-n.
+    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `owner:` names a D-n outside brackets.
     A `T-n` line needs no Source."""
     errors = []
     for number, line in enumerate(text.splitlines(), 1):
