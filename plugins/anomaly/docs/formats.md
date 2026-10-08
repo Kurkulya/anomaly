@@ -27,6 +27,7 @@ Amended <date>: <what changed> — <why>
 - UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
+- An Out of scope owner is a unit, ticket or ADR that holds the item, never a `D-n`.
 
 ## decisions.md
 
