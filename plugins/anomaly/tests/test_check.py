@@ -394,8 +394,10 @@ class CheckStoriesTest(unittest.TestCase):
         self.assert_error(1, 'Source:', file_name='decisions.md')
 
     def test_an_out_of_scope_line_without_owner_is_an_error_with_the_allowed_shape(self):
-        self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', ''))
-        self.assert_error(15, 'owner:', file_name='stories.md')
+        for owner in ('', ' owner: ticket 05'):
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', owner))
+                self.assert_error(15, 'owner:', file_name='stories.md')
 
     def test_an_out_of_scope_line_whose_owner_is_a_d_n_is_an_error(self):
         for owner in (' — owner: export D-3', ' — owner: D-3'):
@@ -437,6 +439,7 @@ class CheckStoriesTest(unittest.TestCase):
             '- D-4: Export is out of scope \u2014 owner: ticket 05. Why: D-2 covers export. Source: user\n',
             '- D-4: Export is out of scope \u2014 owner: ticket 05. Source: D-2 follow-up. Why: cheap\n',
             '- D-5: The owner: field stays free text. Why: D-2 set it. Source: user\n',
+            '- D-4: X out — owner: ticket 05. Why: its owner: D-2 said so. Source: user\n',
         )
         for line in lines:
             with self.subTest(line=line):
