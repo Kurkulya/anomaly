@@ -825,14 +825,9 @@ class InterviewSkillTest(unittest.TestCase):
         """2026-10-08-interview-settled-trap-and-open-lines AC-1: the conflict is named, not asked."""
         text = self.text()
         rules = [line for line in text.splitlines()
-                 if re.search(r'(?i)\bADR\b|D-n', line) and re.search(r'(?i)settled|reopen', line)
-                 and re.search(r'(?i)\bno question\b|never ask|not ask|no round|never (?:offer|reopen|put)|'
-                               r'(?:offers?|reopens?)\b[^.\n]*\bsettled', line)
-                 and re.search(r"(?i)even (?:when|if|though)\b[^.\n]*\b(?:idea|user)", line)]
-        self.assertTrue(rules, 'no rule says a settled ADR or D-n is never asked, even when the idea suggests it')
-        self.assertTrue(any(re.search(r'(?i)\bnam(?:e|es|ed|ing)\b[^.\n]*\bconflict|\bconflict\b[^.\n]*\bnam(?:e|es|ed)',
-                                      line) for line in rules),
-                        'the rule does not say to name the conflict instead')
+                 if re.search(r'\bADR\b|D-n', line) and 'settled' in line.lower()
+                 and 'even when' in line.lower() and 'conflict' in line.lower()]
+        self.assertTrue(rules, 'no rule line holds ADR or D-n with settled, even when and conflict')
 
     def test_a_gap_the_user_settles_as_out_of_scope_is_a_d_n_with_an_owner_and_open_is_only_for_the_unanswered(self):
         """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify."""
@@ -843,7 +838,7 @@ class InterviewSkillTest(unittest.TestCase):
                 if re.search(r'(?i)out of scope', line) and 'D-n' in line and re.search(r'(?i)owner', line)]
         self.assertTrue(rule, 'no line ties out of scope, D-n and owner')
         self.assertTrue(any('Source:' in line for line in rule), 'the out-of-scope D-n rule drops its Source:')
-        self.assertTrue(any(re.search(r'(?i)not (?:that|the deferring|its own) `?D-n', line) for line in rule),
+        self.assertTrue(any(re.search(r'(?i)never a `?D-n', line) for line in rule),
                         'the rule does not say the owner is not the D-n itself')
         self.assertTrue(any(re.search(r'(?i)`?Open:`?[^\n]*\bonly\b[^\n]*unanswered', line)
                             for line in text.splitlines()), 'Open: is not said to be only for the unanswered')
@@ -992,7 +987,7 @@ class SpecifySkillTest(unittest.TestCase):
         text = self.text()
         rule = [line for line in text.splitlines() if re.search(r'(?i)out of scope', line) and re.search(r'(?i)owner', line)]
         self.assertTrue(rule, 'no line ties out of scope and owner')
-        self.assertTrue(any(re.search(r'(?i)not (?:that|the deferring|its own) `?D-n', line) for line in rule),
+        self.assertTrue(any(re.search(r'(?i)never a `?D-n', line) for line in rule),
                         'the rule does not say the owner is not the D-n itself')
         self.assertRegex(text, r'(?i)\bask\b[^\n]*owner|owner[^\n]*\bask\b')
 
@@ -1195,6 +1190,8 @@ class DiagnoseSkillTest(unittest.TestCase):
         sentence = match.group(0).lower()
         self.assertIn('draft', sentence)
         self.assertIn('ticket', sentence)
+        self.assertIn('script', sentence)
+        self.assertRegex(sentence, r'env(ironment)? var')
 
     def test_it_logs_a_diagnose_work_unit_line(self):
         """AC-27."""

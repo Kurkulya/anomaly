@@ -10,6 +10,8 @@ that is not one word, text that is empty or breaks the line, and a log.md that i
 with no write; the folder is never created. Any existing folder is allowed, inside `.anomaly/` or
 `.scratch/` or not.
 """
+import errno
+
 from . import files, paths, privacy, records, ticket, worklog
 from .files import RecordError
 
@@ -42,6 +44,11 @@ def run_add(args, environ):
     ending = ticket.line_ending(lines)
     separator = ending if lines and not lines[-1][1] else ''
     line = f'{separator}{worklog.now_text(args)} {args.stage}: {text}{ending}'
-    files.append_text(path, line)
+    try:
+        files.append_text(path, line, no_follow=True)   # the file may have become a symlink since the check
+    except OSError as error:
+        if error.errno in (errno.ELOOP, errno.EMLINK):
+            raise RecordError(f'{LABEL}: {FILE_NAME} is a symlink, refused: {path}') from None
+        raise
     print(f'log: {path}')
     return 0

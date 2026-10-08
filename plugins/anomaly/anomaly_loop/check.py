@@ -108,9 +108,11 @@ D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
 
 
 def owner_names_decision(line):
-    """True when the text after the last `owner:` on the line holds a D-n token outside brackets.
+    """True when the owner value holds a D-n token outside brackets. The value is the text after the
+    last `owner:`, ended at the first `. Why:` or `. Source:` (a decisions.md line goes on with them).
     A D-n in round or square brackets is a citation, not the owner."""
     _, marker, owner = line.rpartition('owner:')
+    owner = re.split(r'\. (?:Why|Source):', owner, maxsplit=1)[0]
     return bool(marker) and D_TOKEN.search(BRACKETED.sub('', owner)) is not None
 
 
@@ -215,7 +217,7 @@ TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
 # match is dropped (finditer does not restart inside it), so no tail of the host is reported.
 # Known gap: `see @check.py:42` and a URL path `https://host/x/check.py:42` are skipped too.
 # A match starts only at a token head (no path char, or one `/` that itself starts a token, before it).
-LINE_ANCHOR = re.compile(r'(?<![\w.-])(?<![\w.-]/)(?:[\w.-]+/)*[.-]*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
+LINE_ANCHOR = re.compile(r'(?<![\w.-])(?<![\w.-]/)(?:[\w.-]+/)*\.*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
 HOST_PREFIXES = ('://', '@')
 
 
@@ -344,6 +346,18 @@ def draft_errors(text):
     problems += [f'{key}: is written by the CLI later; remove it from the draft'
                  for key in CLI_LINES if ticket.find_lines(lines, key)]
     return problems
+
+
+REPRO_OPERATOR = re.compile(r'[;|<>]|&&')
+
+
+def draft_warnings(text):
+    """The warnings for a draft that passed draft_errors: a `Repro:` value with a shell operator is not one
+    plain command, and the test writer runs it as written."""
+    repro = ticket.value_of(ticket.split_lines(text), 'Repro') or ''
+    if REPRO_OPERATOR.search(repro):
+        return ['Repro: should be one plain command (no ; && || | > <), because the test writer runs it as written']
+    return []
 
 
 def slice(folder):

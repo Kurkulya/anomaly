@@ -430,6 +430,25 @@ class CheckStoriesTest(unittest.TestCase):
                  'Source: user, 2026-10-08 — owner: ticket 05 (D-2)\n')
         self.assertEqual(self.stories(), ([], []))
 
+    def test_the_owner_value_ends_at_the_first_why_or_source(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: a D-n in the Why or Source text
+        after the owner is not the owner."""
+        lines = (
+            '- D-4: Export is out of scope \u2014 owner: ticket 05. Why: D-2 covers export. Source: user\n',
+            '- D-4: Export is out of scope \u2014 owner: ticket 05. Source: D-2 follow-up. Why: cheap\n',
+            '- D-5: The owner: field stays free text. Why: D-2 set it. Source: user\n',
+        )
+        for line in lines:
+            with self.subTest(line=line):
+                self.put(decisions=GOOD_DECISIONS + line)
+                errors, _ = self.stories()
+                self.assertFalse([e for e in errors if 'owner' in e or 'D-' in e], errors)
+
+    def test_a_d_n_owner_followed_by_why_and_source_is_still_an_error(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1."""
+        self.put(decisions=GOOD_DECISIONS + '- D-4: leave xlsx out \u2014 owner: D-3. Why: x. Source: user\n')
+        self.assert_error(5, 'D-', file_name='decisions.md')
+
     def test_oversize_files_only_warn(self):
         self.put(stories=GOOD_STORIES + 'x' * (6 * 1024), decisions=GOOD_DECISIONS + 'x' * (8 * 1024))
         errors, warnings = self.stories()
@@ -578,11 +597,23 @@ class CheckSliceTest(unittest.TestCase):
         self.assert_error('01-first.md:9:', 'notes.org:12', 'path')
 
     def test_line_anchor_is_linear_on_a_very_long_line_and_keeps_its_anchors(self):
-        """Adhoc 2026-10-08-review-security-lows, AC-1: no retry at every start position (Nit)."""
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: the time grows about 4x for 4x the
+        input, on a run of `a.a/` and on a run of `-`."""
         from anomaly_loop import check
-        started = time.perf_counter()
-        self.assertIsNone(check.line_anchor('a.a/' * 8000))
-        self.assertLess(time.perf_counter() - started, 2.0)
+
+        def best(text):
+            times = []
+            for _ in range(3):
+                started = time.perf_counter()
+                check.line_anchor(text)
+                times.append(time.perf_counter() - started)
+            return min(times)
+
+        for unit in ('a.a/', '-'):
+            with self.subTest(unit=repr(unit)):
+                small, large = best(unit * 16000), best(unit * 64000)
+                self.assertLess(large / small, 8, (small, large))
+        self.assertIsNone(check.line_anchor('-' * 16000))
         self.assertTrue(check.line_anchor('see .eslintrc.js:4').group(0).endswith('eslintrc.js:4'))
         self.assertTrue(check.line_anchor('/abs/p.py:9').group(0).endswith('p.py:9'))
         self.assertIsNone(check.line_anchor('https://example.com/x/check.py:42'))
