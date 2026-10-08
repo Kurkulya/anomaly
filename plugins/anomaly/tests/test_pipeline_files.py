@@ -44,7 +44,7 @@ ALLOW_RULE = re.compile(r'"allow"\s*:|permissions\.allow')
 TOOL_RULE = re.compile(r'\b(?:Bash|Read|Edit|Write|WebFetch)\([^)\n]*\)')   # a rule in the text a user reads
 QUOTED = re.compile(r'"([^"\n]*)"|\'[^\'\n]*\'')   # a double-quoted span (group 1) or a single-quoted one, left to right
 PLACEHOLDER = re.compile(r'<[^<>\n]*>')
-FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<)")
+FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--from\b)")
 
 
 def pipeline_files(root):
