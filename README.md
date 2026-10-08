@@ -1488,6 +1488,21 @@ interview's `decisions.md` into the `stories.md` the owner reads.
 - It adds one `specify` line to `log.md` (the AC ids, ended by `;`), a `specify` work-unit line, and
   offers `/anomaly:slice`.
 
+## The slice skill
+
+`/anomaly:slice <work unit>` is slash-only (`disable-model-invocation: true`). It cuts `stories.md`
+and `decisions.md` into the self-contained tickets `anomaly:build` runs.
+
+- It shows a numbered list (title, blocked by, covers, tests) and writes nothing until the user
+  approves it.
+- It writes `.anomaly/<work unit>/tickets/NN-slug.md` in the formats doc shape, with the ACs and
+  `D-n` lines each ticket needs copied verbatim and no line numbers. Each `T-n` term line and ADR
+  draft lands in the first ticket that needs it, named in `Touches:`.
+- It runs `check slice`, then `anomaly:review` in `tickets` mode. A Blocker stops it before it
+  offers the next build step.
+- It adds one `slice` line to `log.md` per gate result, a `slice` work-unit line, and offers
+  `/anomaly:build <work unit> <NN>` for the first ticket with no open blocker, then `/clear` once.
+
 ## Development
 
 Run the tests from the plugin folder:
