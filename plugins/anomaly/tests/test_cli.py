@@ -141,6 +141,13 @@ class SkillFileTest(unittest.TestCase):
         self.assertTrue(self.BUILD_SKILL.is_file(), self.BUILD_SKILL.relative_to(PLUGIN).as_posix())
         return self.BUILD_SKILL.read_text(encoding='utf-8')
 
+    def test_the_build_skill_cli_only_anomaly_rule_names_the_diagnose_repro_script_as_its_one_exception(self):
+        """Adhoc 2026-10-08-durable-runnable-repro, AC-1."""
+        lines = [line for line in self.build_text().splitlines() if 'goes through the CLI' in line]
+        self.assertEqual(len(lines), 1)
+        self.assertRegex(lines[0].lower(), r'diagnose')
+        self.assertRegex(lines[0].lower(), r'repro')
+
     def test_the_build_skill_is_model_invocable_and_its_description_names_conduct_and_an_explicit_request(self):
         """AC-29 (the 250-character limit is the all-skills check above)."""
         fields = frontmatter.split(self.build_text())[0]
@@ -542,6 +549,12 @@ class PlanningDocsTest(unittest.TestCase):
                       '/anomaly:<name>', '- Decision:', '- Revisit:', '## Out of scope', '(verbatim', '— owner:'):
             with self.subTest(token=token):
                 self.assertIn(token, text)
+
+    def test_the_formats_doc_repro_shape_is_the_runnable_command_without_a_red_now_suffix(self):
+        """Adhoc 2026-10-08-durable-runnable-repro, AC-1: `Repro: <command>` runs as written."""
+        text = self.doc_text(self.FORMATS)
+        self.assertIn('Repro: <command>', text)
+        self.assertNotIn('(red now)', text)
 
     def test_the_boundaries_doc_names_clear_the_three_stages_and_the_context_zone(self):
         """AC-4: /clear is never offered between interview, specify and slice; the ~150k zone."""
@@ -1127,6 +1140,14 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertRegex(text, r'ticket adhoc\b[^\n]*--from')
         self.assertRegex(text, r'Write tool')
         self.assertRegex(text.lower(), r'scratchpad')
+
+    def test_the_loop_script_goes_to_adhoc_with_a_repro_name_and_the_repro_line_runs_it(self):
+        """Adhoc 2026-10-08-durable-runnable-repro, AC-1: the script outlives the session; the draft stays in the
+        scratchpad (the test above)."""
+        text = self.text()
+        self.assertRegex(text, r'\.anomaly/adhoc/\S*-repro')
+        self.assertTrue(any('`Repro:`' in line and 'script' in line.lower() for line in text.splitlines()),
+                        'no line says the Repro: line runs the loop script')
 
     def test_it_logs_a_diagnose_work_unit_line(self):
         """AC-27."""
