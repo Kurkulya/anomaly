@@ -955,5 +955,121 @@ class SpecifySkillTest(unittest.TestCase):
         self.assertIn('/anomaly:specify', section)
 
 
+class SliceSkillTest(unittest.TestCase):
+    """Workflow-plan ticket 10 (AC-22 to AC-24): the slice skill's text, by key tokens. The rule trace against
+    the brief is run by review, not here. The all-skills checks (250-character description, folder set) cover
+    the new folder through ALLOWED_TOOLS_SKILLS."""
+    SKILL = PLUGIN / 'skills' / 'slice' / 'SKILL.md'
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/slice/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_slice_skill_is_slash_only_limited_to_the_cli_and_says_so_in_a_third_person_description(self):
+        """AC-22. The size limit is 6 KB (the ticket), tighter than the 8 KB of the all-skills check."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'slice')
+        self.assertEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+        description = fields.get('description', '')
+        self.assertLessEqual(len(description), 250)
+        self.assertRegex(description.lower(), r'slash[- ]only|only as a slash|slash command')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertLessEqual(self.SKILL.stat().st_size, 6144)
+
+    def test_it_reads_stories_and_decisions_and_shows_a_numbered_list_for_approval_before_it_writes(self):
+        """AC-22."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('stories.md', text)
+        self.assertIn('decisions.md', text)
+        self.assertRegex(lowered, r'numbered list')
+        for part in ('title', 'blocked by', 'covers', 'tests'):
+            with self.subTest(part=part):
+                self.assertIn(part, lowered)
+        self.assertRegex(lowered, r'approv')
+        self.assertRegex(lowered, r'before it writes|writes nothing|before writing|nothing is written|only after')
+        self.assertRegex(text, r'tickets/NN-slug\.md')
+
+    def test_it_copies_acs_and_d_lines_verbatim_and_writes_no_line_numbers(self):
+        """AC-22, with the Amended line of the ticket 05 review."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertRegex(lowered, r'verbatim')
+        self.assertRegex(text, r'AC-n|AC-\d')
+        self.assertRegex(text, r'D-n|D-\d')
+        self.assertRegex(lowered, r'no line numbers|path:nn')
+        self.assertRegex(text, r'Source:')
+        self.assertRegex(lowered, r'fenced|fence')
+
+    def test_it_writes_only_the_ready_statuses_and_none_of_the_lines_build_writes_later(self):
+        """AC-22."""
+        text = self.text()
+        self.assertIn('ready-for-agent', text)
+        self.assertIn('ready-for-human', text)
+        self.assertRegex(text, r'Result:')   # named only to say that slice never writes it
+        self.assertRegex(text.lower(), r'never writes?|does not write|writes none|not write')
+
+    def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
+        text = self.text()
+        for name in ('formats.md', 'boundaries.md'):
+            with self.subTest(doc=name):
+                self.assertRegex(text, rf'docs/{re.escape(name)}')
+                self.assertTrue((PLUGIN / 'docs' / name).is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+
+    def test_term_lines_and_adr_drafts_land_in_the_first_ticket_that_needs_them_through_touches(self):
+        """AC-23."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('Touches:', text)
+        self.assertRegex(text, r'T-n|T-\d')
+        self.assertRegex(lowered, r'\badr\b')
+        self.assertRegex(lowered, r'first ticket')
+
+    def test_it_runs_check_slice_then_the_tickets_review_and_a_blocker_stops_it_before_the_next_build_step(self):
+        """AC-24, with the Blocker, warning and last-review rules of the review amendments."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('check slice', text)
+        self.assertRegex(text, r'anomaly:review')
+        self.assertRegex(lowered, r'`?tickets`? mode|mode `?tickets`?')
+        self.assertLess(text.index('check slice'), text.index('anomaly:review'))
+        self.assertRegex(lowered, r'exit 1|exits 1')
+        self.assertIn('warning:', text)
+        self.assertIn('Blocker', text)
+        self.assertRegex(lowered, r'every other finding|all other findings|other findings')
+        self.assertIn('delta', lowered)
+        self.assertRegex(lowered, r'work-unit folder|work unit folder')
+        self.assertIn('lens tally sum', text)
+        self.assertRegex(lowered, r'last review')
+        self.assertNotRegex(text, r'anomaly:plan\b')
+
+    def test_it_logs_one_log_line_per_gate_result_and_a_slice_work_unit_line_without_costs(self):
+        """AC-24."""
+        text = self.text()
+        self.assertRegex(text, r'log add\b[^\n]*--stage slice')
+        self.assertRegex(text, r'worklog add\b[^\n]*--stage slice')
+        self.assertRegex(text.lower(), r'no cost|never cost|without cost|carry no cost')
+
+    def test_it_offers_the_build_of_the_first_unblocked_ticket_through_ticket_gate(self):
+        """AC-24."""
+        text = self.text()
+        self.assertIn('anomaly:build', text)
+        self.assertIn('ticket gate', text)
+        self.assertRegex(text.lower(), r'first ticket')
+        self.assertRegex(text.lower(), r'blocker|blocked')
+
+    def test_the_readme_has_a_slice_skill_section_naming_the_slash_command(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The slice skill$')
+        section = text.split('## The slice skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:slice', section)
+
+
 if __name__ == '__main__':
     unittest.main()
