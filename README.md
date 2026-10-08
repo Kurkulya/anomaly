@@ -1403,9 +1403,9 @@ to, so its earlier bytes stay as they are; the new line takes the file's line en
 without one gets it first. The folder must exist (the command never creates it) but may be anywhere,
 inside `.anomaly/` or `.scratch/` or not. A folder that does not exist, a stage that is not one word
 (letters, digits and `.` `_` `-`; a `:` is refused because it would end the stage in the line), and
-text that is empty or has a line break stop the command with an `anomaly:` line and no write. Put `--`
-before a text that starts with `-`. Cost numbers do not belong in `log.md`; the command does not
-check this.
+text that is empty or has a line break, and a `log.md` that is a symlink stop the command with an
+`anomaly:` line and no write. Put `--` before a text that starts with `-`. Cost numbers do not belong
+in `log.md`; the command does not check this.
 
 ## Command line
 

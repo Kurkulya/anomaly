@@ -214,14 +214,15 @@ TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
 # A host:port right after `://` or `@` is not path:NN; a bare example.com:8080 is reported. The whole
 # match is dropped (finditer does not restart inside it), so no tail of the host is reported.
 # Known gap: `see @check.py:42` and a URL path `https://host/x/check.py:42` are skipped too.
-LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
+# A match starts only at a token head (no path char, or one `/` that itself starts a token, before it).
+LINE_ANCHOR = re.compile(r'(?<![\w.-])(?<![\w.-]/)(?:[\w.-]+/)*[.-]*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
 HOST_PREFIXES = ('://', '@')
 
 
 def line_anchor(body):
     """The first path:NN in a line that does not follow `://` or `@`, or None."""
     for match in LINE_ANCHOR.finditer(body):
-        if not body[:match.start()].endswith(HOST_PREFIXES):
+        if not body.endswith(HOST_PREFIXES, 0, match.start()):
             return match
     return None
 

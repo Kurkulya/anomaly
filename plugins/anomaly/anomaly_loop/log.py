@@ -6,8 +6,9 @@ The time is the CLI clock in constants.TICKET_TIME_FORMAT (worklog.now_text); th
 file is made when it is missing and is only appended to, so earlier bytes (a byte order mark included) are
 never rewritten. The new line takes the line ending the file already uses (ticket.line_ending: the first
 one found, else LF); a last line without an ending gets one first. A folder that does not exist, a stage
-that is not one word, and text that is empty or breaks the line are refused with no write; the folder is
-never created. Any existing folder is allowed, inside `.anomaly/` or `.scratch/` or not.
+that is not one word, text that is empty or breaks the line, and a log.md that is a symlink are refused
+with no write; the folder is never created. Any existing folder is allowed, inside `.anomaly/` or
+`.scratch/` or not.
 """
 from . import files, paths, privacy, records, ticket, worklog
 from .files import RecordError
@@ -35,6 +36,8 @@ def run_add(args, environ):
                           f'(at most {privacy.IDENTIFIER_MAX_CHARS} characters), with no spaces or line breaks')
     text = records.require_one_line(f'{LABEL}: the text', args.text)
     path = folder / FILE_NAME
+    if path.is_symlink():
+        raise RecordError(f'{LABEL}: {FILE_NAME} is a symlink, refused: {path}')
     lines = ticket.split_lines(files.read_input(path, keep_bom=True)) if path.is_file() else []
     ending = ticket.line_ending(lines)
     separator = ending if lines and not lines[-1][1] else ''
