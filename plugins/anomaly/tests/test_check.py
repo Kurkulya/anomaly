@@ -539,3 +539,31 @@ class CheckSliceTest(unittest.TestCase):
         code, out, err = run()
         self.assertEqual((code, err), (1, ''), out)
         self.assertIn('03-third.md:4:', out)
+
+    def test_a_line_anchor_in_a_fenced_block_or_a_copied_decision_line_is_not_an_error(self):
+        body = '\n- D-3: x. Why: y. Source: a.py:3\n```\na.py:10\n```\nSee ticket.py:199 here.\n'
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body=body))
+        errors, _ = self.slice()
+        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(errors[0].startswith('tickets/01-first.md:13:'), errors)
+
+    def test_an_unreadable_blocked_by_value_is_an_error_on_its_line(self):
+        self.put('03-third', slice_ticket('03', covers='none', blocked='soon'))
+        self.assert_error('03-third.md:4:', 'soon', 'Blocked by: none | 01, 03')
+
+    def test_a_missing_stories_file_is_an_error(self):
+        (self.folder / 'stories.md').unlink()
+        self.assert_error('stories.md:', 'missing')
+
+    def test_a_missing_folder_is_a_cli_error(self):
+        assert_cli_error(self, run_cli('check', 'slice', str(self.folder / 'missing')), 'missing')
+
+    def test_an_empty_tests_or_jira_value_is_an_error_on_its_own_line(self):
+        for key, line in (('Tests', 7), ('Jira', 6)):
+            with self.subTest(key=key):
+                self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', **{key.lower(): ''}))
+                self.assert_error(f'01-first.md:{line}:', f'{key}: is empty')
+
+    def test_ready_for_human_without_a_reason_is_an_error_quoting_the_value(self):
+        self.put('03-third', slice_ticket('03', covers='none', status='ready-for-human'))
+        self.assert_error('03-third.md:5:', '"ready-for-human"', '(<why>)')
