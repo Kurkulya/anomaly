@@ -38,7 +38,6 @@ LINE_ORDER = ('Status', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed',
 HEADER_KEYS = ('Jira', 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
 SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', 'Jira', 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
               'Red-changed')   # Base: the work unit's integration branch, which build reads here
-REPRO_SHAPE = 'Repro: <command> (red now)'   # the light-path line of docs/formats.md § Ticket
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
 BOM = chr(0xFEFF)   # a byte order mark; written as a code point so the file holds no invisible character
@@ -408,10 +407,7 @@ def adhoc_ticket(task, slug, today):
     task = ' '.join(task.split())
     if not task:
         raise RecordError('the task text is empty')
-    if slug is not None and not records.is_slug(slug):
-        raise RecordError(f'the slug is lowercase words joined by - (letters and digits), got: {slug}')
-    if slug is not None and len(slug) > TICKET_SLUG_MAX_CHARS:
-        raise RecordError(f'the slug is at most {TICKET_SLUG_MAX_CHARS} characters, got {len(slug)}')
+    check_slug(slug)
     title = task[:TICKET_TITLE_MAX_CHARS]
     text = (f'# Adhoc: {title}\n\nCovers: AC-1\nBlocked by: None\nStatus: {TICKET_STATUS_READY}\n\n'
             f'**What to build:** {task}\n\nAcceptance criteria:\n\n- [ ] AC-1: {task}\n')
@@ -424,32 +420,12 @@ def draft_title(lines):
     return next((m.group(1) for i, (body, _) in enumerate(lines) if i not in skip and (m := HEADING.match(body))), None)
 
 
-def check_draft(text):
-    """The problems of a light-path draft (formats.md § Ticket), each naming the line and its shape;
-    an empty list when the draft is valid. The line shapes are check.py's (a lazy import: check
-    imports this module)."""
-    from . import check
-    lines, parsed = split_lines(text), parse(text)
-    problems = []
-    if not draft_title(lines):
-        problems.append('no title: the first line is "# <title>"')
-    for key, shape in (('Covers', check.COVERS_SHAPE), ('Blocked by', check.BLOCKED_SHAPE),
-                       ('Tests', check.TESTS_SHAPE), ('Repro', REPRO_SHAPE)):
-        if not find_lines(lines, key):
-            problems.append(f'no {key}: line ({shape})')
-        elif not value_of(lines, key).strip():
-            problems.append(f'{key}: is empty ({shape})')
-    if parsed.blockers_unreadable:
-        problems.append(f'Blocked by: "{parsed.blocked_by}" is not only two-digit ticket numbers (NN) ({check.BLOCKED_SHAPE})')
-    if not find_lines(lines, 'Status'):
-        problems.append(f'no Status: line (Status: {TICKET_STATUS_READY})')
-    elif parsed.status != TICKET_STATUS_READY:
-        problems.append(f'Status: "{value_of(lines, "Status")}" must be {TICKET_STATUS_READY}')
-    skip = fenced(lines)
-    if not any(i not in skip and CHECKBOX.match(body) for i, (body, _) in enumerate(lines)):
-        problems.append('no acceptance criterion: add a line like "- [ ] AC-1: <criterion>" '
-                        f'({check.AC_SHAPE})')
-    return problems
+def check_slug(slug):
+    """Refuse a `--slug` that is no slug or is too long; None (not given) passes."""
+    if slug is not None and not records.is_slug(slug):
+        raise RecordError(f'the slug is lowercase words joined by - (letters and digits), got: {slug}')
+    if slug is not None and len(slug) > TICKET_SLUG_MAX_CHARS:
+        raise RecordError(f'the slug is at most {TICKET_SLUG_MAX_CHARS} characters, got {len(slug)}')
 
 
 # ---------- the command line ----------
@@ -497,7 +473,7 @@ def register(commands, common):
     red.add_argument('--repo', help=gitrepo.REPO_HELP)
     red.add_argument('--changed', help='the reason the test file changed after its red commit')
     adhoc = actions.add_parser('adhoc', parents=[common],
-                               help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text')
+                               help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text or --from a checked draft')
     adhoc.add_argument('task', nargs='?', help='the task, in words (or give --from)')
     adhoc.add_argument('--from', dest='draft', metavar='DRAFT',
                        help='a checked light-path draft file, written unchanged (instead of the task text)')
@@ -594,13 +570,11 @@ def run_result(args, environ):
 def draft_ticket(path, slug, today):
     """(file name, text) of an adhoc ticket from a draft file; a refusal names every problem."""
     text = read_text(path, 'draft')
-    problems = check_draft(text)
+    from . import check   # a lazy import: check.py imports this module at its top
+    problems = check.draft_errors(text)
     if problems:
         raise RecordError(f'{path}: the draft is refused: ' + '; '.join(problems))
-    if slug is not None and not records.is_slug(slug):
-        raise RecordError(f'the slug is lowercase words joined by - (letters and digits), got: {slug}')
-    if slug is not None and len(slug) > TICKET_SLUG_MAX_CHARS:
-        raise RecordError(f'the slug is at most {TICKET_SLUG_MAX_CHARS} characters, got {len(slug)}')
+    check_slug(slug)
     return f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md', text
 
 

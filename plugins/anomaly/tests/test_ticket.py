@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import cli, privacy, ticket
+from anomaly_loop import check, cli, privacy, ticket
 from anomaly_loop.constants import TICKET_TITLE_MAX_CHARS
 from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 
@@ -853,10 +853,10 @@ def draft_text(drop=(), replace=None, extra=''):
 
 
 class DraftCheckTest(unittest.TestCase):
-    """The draft check as a unit: `ticket.check_draft(text)` returns the list of problems (empty when valid)."""
+    """The draft check as a unit: `check.draft_errors(text)` returns the list of problems (empty when valid)."""
 
     def check(self, text):
-        return getattr(ticket, 'check_draft')(text)
+        return check.draft_errors(text)
 
     def test_a_valid_draft_has_no_problem(self):
         self.assertEqual(self.check(draft_text()), [])
@@ -877,6 +877,28 @@ class DraftCheckTest(unittest.TestCase):
             with self.subTest(status=status):
                 problems = self.check(draft_text(replace={'Status:': f'Status: {status}'}))
                 self.assertIn('Status', ' '.join(problems))
+
+    def test_an_unreadable_blocked_by_is_refused(self):
+        problems = self.check(draft_text(replace={'Blocked by:': 'Blocked by: 3'}))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn('Blocked by', problems[0])
+
+    def test_an_empty_blocked_by_gives_one_problem(self):
+        problems = self.check(draft_text(replace={'Blocked by:': 'Blocked by:'}))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn('empty', problems[0])
+
+    def test_an_empty_tests_value_is_refused(self):
+        problems = self.check(draft_text(replace={'Tests:': 'Tests:'}))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn('Tests', problems[0])
+
+    def test_a_line_the_cli_writes_later_is_refused(self):
+        for line in ('Result: a', 'Metrics: b', 'Reviewed: c', 'Verified: d', 'Red: e', 'Red-changed: f'):
+            with self.subTest(line=line):
+                problems = self.check(draft_text(extra=line + '\n'))
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(line.split(':')[0], problems[0])
 
 
 class AdhocFromTest(TicketTestCase):
@@ -909,13 +931,6 @@ class AdhocFromTest(TicketTestCase):
             self.assertIn(line, text.splitlines())
         self.assertNotIn('\r', text)
 
-    def test_the_written_ticket_shows_its_repro_line(self):
-        self.adhoc_from()
-        path = self.adhoc_dir / '2026-10-04-fix-the-flaky-parser-test.md'
-        shown = self.run_ticket('show', str(path))[1].splitlines()
-        self.assertIn(DRAFT_LINES['Repro:'], shown)
-        self.assertIn('Status: ready-for-agent', shown)
-
     def test_slug_overrides_the_slug_cut_from_the_title(self):
         code, out, err = self.adhoc_from(None, '--slug', 'parser-flake')
         self.assertEqual((code, err), (0, ''))
@@ -931,9 +946,14 @@ class AdhocFromTest(TicketTestCase):
         self.assert_error(result, 'Tests:', 'Repro:', 'Blocked by:')
         self.assertFalse(self.adhoc_dir.exists())
 
-    def test_a_draft_with_a_status_other_than_ready_for_agent_is_refused(self):
-        result = self.adhoc_from(draft_text(replace={'Status:': 'Status: in-progress'}))
-        self.assert_error(result, 'Status')
+    def test_neither_a_task_nor_a_draft_is_refused(self):
+        result = self.run_ticket('adhoc', '--repo', str(self.repo))
+        self.assert_error(result, '--from')
+        self.assertFalse(self.adhoc_dir.exists())
+
+    def test_a_bad_slug_with_a_draft_is_refused(self):
+        result = self.adhoc_from(None, '--slug', 'Not A Slug')
+        self.assert_error(result, 'slug')
         self.assertFalse(self.adhoc_dir.exists())
 
     def test_a_jira_line_in_the_draft_is_kept(self):

@@ -196,6 +196,8 @@ COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
 JIRA_SHAPE = 'Jira: <key> | no-ticket'
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
+REPRO_SHAPE = 'Repro: <command> (red now)'
+CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
 
 
 def blocker_cycle(graph, start):
@@ -213,40 +215,65 @@ def blocker_cycle(graph, start):
     return None
 
 
+def where(lines, key):
+    """The 1-based number of the first line of this key."""
+    return ticket.find_lines(lines, key)[0] + 1
+
+
+def status_errors(lines, parsed):
+    """(line number, message) pairs for a missing or wrong `Status:` line."""
+    if not ticket.find_lines(lines, 'Status'):
+        return [(1, f'no Status: line ({STATUS_SHAPE})')]
+    raw = ticket.value_of(lines, 'Status')
+    if parsed.status not in STATUS_WORDS:
+        return [(where(lines, 'Status'), f'Status: "{raw}" is not a status word ({", ".join(STATUS_WORDS)})')]
+    if parsed.status == TICKET_STATUS_HUMAN and not HUMAN_STATUS.fullmatch(raw):
+        return [(where(lines, 'Status'), f'Status: "{raw}" gives no reason ({STATUS_SHAPE})')]
+    return []
+
+
+def blocked_errors(lines, parsed, empty_is_error=False):
+    """(line number, message) pairs for a missing or unreadable `Blocked by:` line. With `empty_is_error`
+    an empty value is reported as empty, not as unreadable."""
+    if not parsed.has_blocked_line:
+        return [(1, f'no Blocked by: line ({BLOCKED_SHAPE})')]
+    if empty_is_error and not parsed.blocked_by.strip():
+        return [(where(lines, 'Blocked by'), f'Blocked by: is empty ({BLOCKED_SHAPE})')]
+    if parsed.blockers_unreadable:
+        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" is not only two-digit '
+                                             f'ticket numbers (NN) ({BLOCKED_SHAPE})')]
+    return []
+
+
+def key_errors(lines, keys):
+    """(line number, message) pairs for each `(key, shape)` whose line is missing or empty."""
+    errors = []
+    for key, shape in keys:
+        if not ticket.find_lines(lines, key):
+            errors.append((1, f'no {key}: line ({shape})'))
+        elif not ticket.value_of(lines, key).strip():
+            errors.append((where(lines, key), f'{key}: is empty ({shape})'))
+    return errors
+
+
 def ticket_errors(name, text, parsed, folder, graph):
     """Errors for one ticket file: the missing or wrong lines, an unresolved blocker, a line anchor.
     Fills `graph` with the resolved blockers of the ticket, keyed by its number."""
     lines = ticket.split_lines(text)
-    where = lambda key: ticket.find_lines(lines, key)[0] + 1
-    errors = []
-    if not ticket.find_lines(lines, 'Status'):
-        errors.append(f'{name}:1: no Status: line ({STATUS_SHAPE})')
-    else:
-        raw = ticket.value_of(lines, 'Status')
-        if parsed.status not in STATUS_WORDS:
-            errors.append(f'{name}:{where("Status")}: Status: "{raw}" is not a status word '
-                          f'({", ".join(STATUS_WORDS)})')
-        elif parsed.status == TICKET_STATUS_HUMAN and not HUMAN_STATUS.fullmatch(raw):
-            errors.append(f'{name}:{where("Status")}: Status: "{raw}" gives no reason ({STATUS_SHAPE})')
-    if not parsed.has_blocked_line:
-        errors.append(f'{name}:1: no Blocked by: line ({BLOCKED_SHAPE})')
-    elif parsed.blockers_unreadable:
-        errors.append(f'{name}:{where("Blocked by")}: Blocked by: "{parsed.blocked_by}" is not only two-digit '
-                      f'ticket numbers (NN) ({BLOCKED_SHAPE})')
-    else:
+    errors = [f'{name}:{number}: {message}'
+              for number, message in status_errors(lines, parsed) + blocked_errors(lines, parsed)]
+    if parsed.has_blocked_line and not parsed.blockers_unreadable:
         number = TICKET_NUMBER.match(name.rsplit('/', 1)[-1]).group(1)
         graph[number] = []
         for blocker in parsed.blockers:
             if ticket.find_blocker(folder, blocker) is None:
-                errors.append(f'{name}:{where("Blocked by")}: blocked by {blocker}: no ticket file '
+                errors.append(f'{name}:{where(lines, "Blocked by")}: blocked by {blocker}: no ticket file '
                               f'{blocker}-*.md in tickets/ ({BLOCKED_SHAPE})')
             else:
                 graph[number].append(blocker)
-    for key, shape in (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE), ('Jira', JIRA_SHAPE)):
-        if not ticket.find_lines(lines, key):
-            errors.append(f'{name}:1: no {key}: line ({shape})')
-        elif not ticket.value_of(lines, key).strip():
-            errors.append(f'{name}:{where(key)}: {key}: is empty ({shape})')
+    errors += [f'{name}:{number}: {message}'
+               for number, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
+                                                         ('Jira', JIRA_SHAPE)))]
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
         match = None if number - 1 in skip or D_LINE.match(body) else LINE_ANCHOR.search(body)
@@ -254,6 +281,29 @@ def ticket_errors(name, text, parsed, folder, graph):
             errors.append(f'{name}:{number}: {match.group(0)} is a path with a line number '
                           f'({TOUCHES_SHAPE})')
     return errors
+
+
+def draft_errors(text):
+    """The problems of a light-path ticket draft for `ticket adhoc --from` (formats.md § Ticket): a
+    heading, the required lines (the same line checks as ticket_errors), `Status: ready-for-agent`, at
+    least one AC checkbox and none of the lines the CLI writes later. Empty when the draft is valid."""
+    lines, parsed = ticket.split_lines(text), ticket.parse(text)
+    problems = []
+    if not ticket.draft_title(lines):
+        problems.append('no "# <title>" heading')
+    if ticket.find_lines(lines, 'Status') and parsed.status != TICKET_STATUS_READY:
+        problems.append(f'Status: "{ticket.value_of(lines, "Status")}" must be {TICKET_STATUS_READY}')
+    else:
+        problems += [message for _, message in status_errors(lines, parsed)]
+    problems += [message for _, message in blocked_errors(lines, parsed, empty_is_error=True)]
+    problems += [message for _, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
+                                                             ('Repro', REPRO_SHAPE)))]
+    skip = ticket.fenced(lines)
+    if not any(index not in skip and ticket.CHECKBOX.match(body) for index, (body, _) in enumerate(lines)):
+        problems.append('no acceptance criterion: add a line like "- [ ] AC-1: <criterion>"')
+    problems += [f'{key}: is written by the CLI later; remove it from the draft'
+                 for key in CLI_LINES if ticket.find_lines(lines, key)]
+    return problems
 
 
 def slice(folder):
