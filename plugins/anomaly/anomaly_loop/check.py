@@ -31,12 +31,13 @@ only the edits after the red commit it was written for.
 """
 import argparse
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import files, gitrepo, ticket
-from .constants import (TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE, TICKET_STATUS_HUMAN,
-                        TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_READY,
-                        TICKET_STATUS_WONTFIX)
+from .constants import (TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
+                        TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
+                        TICKET_STATUS_READY, TICKET_STATUS_WONTFIX)
+from .records import is_date
 
 
 def head_problem(repo, key, value, head):
@@ -107,16 +108,17 @@ OWNER_SHAPE = '- <item> — owner: <unit, ticket or ADR>'
 D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
 OWNER_MARKER = '— owner:'
 TODO_KEY_SHAPE = 'TODO(<owner>, revisit YYYY-MM-DD)'
-TODO_KEY = re.compile(r'TODO\([^(),]+, revisit \d{4}-\d{2}-\d{2}\)')
+TODO_KEY = re.compile(r'TODO\([^(),]+, revisit (\d{4}-\d{2}-\d{2})\)')   # the date must also be a real one
 BACKTICKED = re.compile(r'`([^`]+)`')
-TICKET_REF = re.compile(r'\bticket (\d+)\b(?: (?:of|in) `([^`]+)`)?')   # (number, unit named after it or '')
+TICKET_REF = re.compile(r'\bticket (\d+)\b(?: of `([^`]+)`)?')   # (number, unit named after it or '')
 ADR_REF = re.compile(r'\bADR-(\d{4})\b')
 OWNER_HOME_DIRS = ('.anomaly', '.scratch')   # a unit folder is `<root>/<one of these>/<name>/`
-ADHOC_DIR = 'adhoc'   # `<root>/.anomaly/adhoc/` stores adhoc tickets; it is no unit folder
+TICKET_FOLDERS = ('tickets', 'issues')   # a unit keeps its tickets in `tickets/`, or in `issues/` before the switch-over
 ADR_GLOBS = ('docs/adr/{}-*.md', '.anomaly/*/adr/{}-*.md', '.scratch/*/adr/{}-*.md')
 # A file path is an owner only when it is a ticket file or an ADR file, never any file of the checkout.
 OWNER_FILE = re.compile(r'(?:\.anomaly|\.scratch)/[^/]+/tickets/\d+-[^/]+\.md|\.scratch/[^/]+/issues/\d+-[^/]+\.md|'
-                        r'\.anomaly/adhoc/[^/]+\.md|(?:docs|(?:\.anomaly|\.scratch)/[^/]+)/adr/\d{4}-[^/]+\.md')
+                        + re.escape(TICKET_ADHOC_DIR.as_posix()) + r'/[^/]+\.md|'
+                        r'(?:docs|(?:\.anomaly|\.scratch)/[^/]+)/adr/\d{4}-[^/]+\.md')
 
 
 def owner_value(line):
@@ -135,9 +137,11 @@ def owner_names_decision(line):
 
 
 def relative_parts(name):
-    """The path parts of `name`, or () when it has none, has `..` or is absolute."""
+    """The path parts of `name`, or () when it has none, has `..` or has an anchor (a root or a drive, read
+    the POSIX way and the Windows way, so the answer is the same on every platform)."""
     path = Path(name)
-    return () if '..' in path.parts or path.is_absolute() else path.parts
+    anchored = PurePosixPath(name).anchor or PureWindowsPath(name).anchor
+    return () if '..' in path.parts or anchored else path.parts
 
 
 def unit_folders(root, name):
@@ -152,7 +156,7 @@ def unit_folders(root, name):
     else:
         return []
     try:
-        return [] if parts[-1] == ADHOC_DIR else [path for path in candidates if path.is_dir()]
+        return [] if parts[-1] == TICKET_ADHOC_DIR.name else [path for path in candidates if path.is_dir()]
     except OSError:
         return []
 
@@ -168,35 +172,33 @@ def owner_file_exists(root, name):
         return False
 
 
-def name_exists(root, name):
-    """True when `name` is a unit folder (see unit_folders) or an existing ticket or ADR file path."""
-    return bool(unit_folders(root, name)) or owner_file_exists(root, name)
-
-
 def ticket_exists(root, folder, number, unit):
-    """True when `tickets/NN-*.md` exists in the unit folder named by `unit` (a name or path, as in
-    unit_folders), or in the checked work-unit `folder` when `unit` is empty. NN is padded to the ticket
-    number width."""
+    """True when `tickets/NN-*.md` (or `issues/NN-*.md`) exists in the unit folder named by `unit` (a name or
+    path, as in unit_folders), or in the checked work-unit `folder` when `unit` is empty. NN is padded to the
+    ticket number width."""
     units = unit_folders(root, unit.strip()) if unit else [folder]
-    return any(ticket.find_blocker(path / 'tickets', number.zfill(TICKET_NUMBER_DIGITS)) for path in units)
+    padded = number.zfill(TICKET_NUMBER_DIGITS)
+    return any(ticket.find_blocker(path / name, padded) for path in units for name in TICKET_FOLDERS)
 
 
 def owner_exists(owner, folder):
-    """True when the owner value carries a `TODO(<owner>, revisit YYYY-MM-DD)` key, or names something in
-    the checkout (no git lookup): a unit folder, the path of a ticket or ADR file, `ticket NN` or `ADR-NNNN`
-    (`docs/adr/`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md` of the unit named by
-    "of `unit`" or "in `unit`" right after it, else of the checked work-unit folder; a ticket never passes
-    on its unit alone, and a backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR
-    file. `<root>` is the grandparent of the work-unit folder. A bracketed text is a citation and names
-    nothing."""
-    if TODO_KEY.search(owner):
+    """True when the owner value carries a `TODO(<owner>, revisit YYYY-MM-DD)` key with a real date, or names
+    something in the checkout (no git lookup): a unit folder other than the checked one (a unit is never its
+    own owner), the path of a ticket or ADR file, `ticket NN` or `ADR-NNNN` (`docs/adr/`, or the `adr/` of
+    any unit folder). `ticket NN` is `tickets/NN-*.md` (or `issues/NN-*.md`) of the unit named by "of `unit`"
+    right after it, else of the checked work-unit folder; a ticket never passes on its unit alone, and a
+    backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR file. `<root>` is the
+    grandparent of the work-unit folder. A bracketed text is a citation and names nothing."""
+    if any(is_date(day) for day in TODO_KEY.findall(owner)):
         return True
     folder = Path(folder).resolve()
     root = folder.parent.parent
     plain = BRACKETED.sub('', owner)
     names = [name.strip() for name in BACKTICKED.findall(plain)] + [plain.replace('`', '').strip().rstrip('.')]
     refs = TICKET_REF.findall(plain)
-    return (any((owner_file_exists if refs else name_exists)(root, name) for name in names)
+    return (any(owner_file_exists(root, name)
+                or not refs and any(path.resolve() != folder for path in unit_folders(root, name))
+                for name in names)
             or any(ticket_exists(root, folder, number, unit) for number, unit in refs)
             or any(any(root.glob(pattern.format(number))) for number in ADR_REF.findall(plain)
                    for pattern in ADR_GLOBS))
@@ -213,34 +215,47 @@ def owner_missing(shape):
             f'or carry {TODO_KEY_SHAPE}; a person or a skill needs the key and a placeholder is never an owner ({shape})')
 
 
-def stories_errors(text, folder):
+def ac_ids(text):
+    """(ids, errors) for the `- AC-n:` lines of stories.md: ids maps each AC id to the number of the first
+    line that holds it; a repeated id is an error. No owner is looked up."""
+    ids, errors = {}, []
+    for number, line in enumerate(text.splitlines(), 1):
+        match = AC_LINE.match(line)
+        if not match:
+            continue
+        ac = match.group(1)
+        if ac in ids:
+            errors.append(f'stories.md:{number}: {ac} is already used on line {ids[ac]}; '
+                          f'each AC id is unique ({AC_SHAPE})')
+        else:
+            ids[ac] = number
+    return ids, errors
+
+
+def stories_errors(text, folder, look_up_owners=True):
     """Errors for stories.md: duplicate AC ids and Out of scope lines with no `— owner:`, an owner that names a D-n
     outside brackets, or an owner that is not found in the checkout and has no TODO key (the work-unit
-    `folder` resolves the names). Also the ids found."""
-    errors, found, in_scope_out = [], {}, False
+    `folder` resolves the names; `look_up_owners=False` skips that last check). Also the ids found."""
+    found, errors = ac_ids(text)
+    in_scope_out = False
     for number, line in enumerate(text.splitlines(), 1):
         if line.startswith('#'):
             in_scope_out = line.strip().lower() == '## out of scope'
-        match = AC_LINE.match(line)
-        if match:
-            ac = match.group(1)
-            if ac in found:
-                errors.append(f'stories.md:{number}: {ac} is already used on line {found[ac]}; '
-                              f'each AC id is unique ({AC_SHAPE})')
-            else:
-                found[ac] = number
-        elif in_scope_out and line.startswith('- ') and OWNER_MARKER not in line:
+        if not in_scope_out or not line.startswith('- ') or AC_LINE.match(line):
+            continue
+        if OWNER_MARKER not in line:
             errors.append(f'stories.md:{number}: an Out of scope line needs the marker — owner: ({OWNER_SHAPE})')
-        elif in_scope_out and line.startswith('- ') and owner_names_decision(line):
+        elif owner_names_decision(line):
             errors.append(f'stories.md:{number}: an owner is a unit, ticket or ADR, not a D-n ({OWNER_SHAPE})')
-        elif in_scope_out and line.startswith('- ') and not owner_exists(owner_value(line), folder):
+        elif look_up_owners and not owner_exists(owner_value(line), folder):
             errors.append(f'stories.md:{number}: {owner_missing(OWNER_SHAPE)}')
     return errors, found
 
 
-def decisions_errors(text, folder):
+def decisions_errors(text, folder, look_up_owners=True):
     """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `— owner:` names a D-n outside brackets
-    or is not found in the checkout and has no TODO key. A `T-n` line needs no Source."""
+    or is not found in the checkout and has no TODO key (`look_up_owners=False` skips that last check). A
+    `T-n` line needs no Source."""
     errors = []
     for number, line in enumerate(text.splitlines(), 1):
         if not D_LINE.match(line):
@@ -250,7 +265,7 @@ def decisions_errors(text, folder):
         elif owner_names_decision(line):
             errors.append(f'decisions.md:{number}: an owner is a unit, ticket or ADR, '
                           f'not a D-n ({D_OWNER_SHAPE})')
-        elif (owner := owner_value(line)) is not None and not owner_exists(owner, folder):
+        elif look_up_owners and (owner := owner_value(line)) is not None and not owner_exists(owner, folder):
             errors.append(f'decisions.md:{number}: {owner_missing(D_OWNER_SHAPE)}')
     return errors
 
@@ -275,18 +290,24 @@ def logged_ac_ids(text):
 def stories(folder):
     """(errors, warnings) for a work-unit folder, each a list of one-line strings. A missing
     stories.md is an error line; a missing decisions.md or log.md is empty (no decisions, no
-    recorded ids). Sizes over 6 KB (stories.md) and 8 KB (decisions.md) only warn."""
+    recorded ids). Sizes over 6 KB (stories.md) and 8 KB (decisions.md) only warn. A folder that is not
+    `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no owner lookup, since
+    `<root>` is found from that layout."""
     folder = Path(folder)
     if not folder.is_dir():
         raise files.RecordError(f'{folder}: not a folder')
     errors, warnings = [], []
+    in_layout = folder.resolve().parent.name in OWNER_HOME_DIRS
+    if not in_layout:
+        errors.append('folder: a work unit is a folder at <root>/.anomaly/<unit> or <root>/.scratch/<unit>; '
+                      'this one is not, so its owners cannot be looked up (move the folder there)')
     stories_text = read_optional(folder / 'stories.md')
     decisions_text = read_optional(folder / 'decisions.md')
     log_text = read_optional(folder / 'log.md')
     if stories_text is None:
         errors.append('stories.md: the file is missing (a work unit keeps its stories in stories.md)')
     else:
-        found_errors, found = stories_errors(stories_text, folder)
+        found_errors, found = stories_errors(stories_text, folder, in_layout)
         errors.extend(found_errors)
         logged, log_errors = logged_ac_ids(log_text or '')
         errors.extend(log_errors)
@@ -297,7 +318,7 @@ def stories(folder):
         if len(stories_text.encode('utf-8')) > STORIES_WARN_BYTES:
             warnings.append('stories.md: over 6 KB; consider splitting the work unit')
     if decisions_text is not None:
-        errors.extend(decisions_errors(decisions_text, folder))
+        errors.extend(decisions_errors(decisions_text, folder, in_layout))
         if len(decisions_text.encode('utf-8')) > DECISIONS_WARN_BYTES:
             warnings.append('decisions.md: over 8 KB; consider moving settled decisions out')
     return errors, warnings
@@ -475,7 +496,7 @@ def slice(folder):
     else:
         covered = {ac for _, _, parsed in loaded for ac in parsed.covers}
         errors.extend(f'stories.md:{number}: {ac} is in no ticket\'s Covers: line ({COVERS_SHAPE})'
-                      for ac, number in stories_errors(stories_text, folder)[1].items() if ac not in covered)
+                      for ac, number in ac_ids(stories_text)[0].items() if ac not in covered)
     for name, text, parsed in loaded:
         errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph))
         if len(text.encode('utf-8')) > SLICE_WARN_BYTES:
@@ -516,9 +537,10 @@ def register(commands, common):
                      'an AC id that a specify: line of log.md named and stories.md no longer holds, a D-n line\n'
                      'with no Source:, an Out of scope line with no — owner: marker, an owner after — owner:\n'
                      'that names a D-n outside brackets, an owner (an Out of scope line, or a D-n line with\n'
-                     '— owner:) that is not in the checkout (a unit folder, ticket NN or ticket NN of `<unit>`,\n'
-                     'ADR-NNNN or a ticket or ADR file path)\n'
-                     'and carries no TODO(<owner>, revisit YYYY-MM-DD) key.\n'
+                     '— owner:) that is not in the checkout (a unit folder other than the checked one, ticket NN\n'
+                     'or ticket NN of `<unit>` in tickets/ or issues/, ADR-NNNN or a ticket or ADR file path)\n'
+                     'and carries no TODO(<owner>, revisit YYYY-MM-DD) key with a real date, a work-unit folder\n'
+                     'that is not <root>/.anomaly/<unit> or <root>/.scratch/<unit> (one error, no owner lookup).\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
                      'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
                      'anomaly: line and exit 2.'))
