@@ -778,7 +778,7 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertIn('ADR', text)
         self.assertRegex(text, r'D-n|D-\d')
         self.assertIn('settled', lowered)
-        self.assertLess(lowered.index('settled'), lowered.index('round'))
+        self.assertLess(*(lowered.split('---', 2)[2].index(word) for word in ('settled already', '\n## a round')))
         self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*8\b')
         self.assertIn('Assumes:', text)
         self.assertIn('Recommend:', text)

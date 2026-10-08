@@ -1442,8 +1442,8 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   `.anomaly/<work unit>/decisions.md`. It edits no other file and makes no commit.
 - It closes with a table of the decisions and one confirm question, writes an `interview` work-unit
   line (`worklog add --stage interview`) and offers `/anomaly:specify`.
-- Its recommendations are counted as accepted, overridden or revised for `observe`; the lens name for
-  that count is not yet allowed in `lens tally add`.
+- The close table shows the counts of its recommendations accepted, rejected and revised. Recording
+  them as a lens is a later ticket (09).
 
 ## Development
 
