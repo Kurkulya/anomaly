@@ -56,7 +56,7 @@ Docs-only ticket: no red step; `ticket red --changed '<why>'`. A later test-file
 
 ## Implement [I10-I14]
 
-Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled, model `model implement`. In a worktree also follow [WORKTREE.md](WORKTREE.md) and pass it on. Follow-ups, and resuming a stopped agent at once: SendMessage to the same agent. An "interim" notice: check the branch at once. [N3]
+Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled, model `model implement`. In a worktree also follow [WORKTREE.md](WORKTREE.md) and pass it on. Follow-ups, and resuming a stopped agent at once: SendMessage to the same agent. An "interim" notice: check the branch. [N3]
 
 ## Shared close
 
@@ -79,7 +79,7 @@ No `Tests:` line: 1-2, 3 if the area has e2e specs, 4 for a UI ticket. [N10] Fai
 1. `check pre-merge`. Any failed line or exit 2: do not merge.
 2. `git merge --no-ff -F <msg file> <ticket branch>`, subject `chore(<scope>): merge <NN-slug>`.
 3. Conflict: `git merge --abort`; the same agent merges the integration tip into its branch; then verify, the review's conflict-merge round (name the conflicted files) and `ticket verified` on the new tip; back to 1.
-4. Lockfile changed: name each new dependency, then `command install`. Codegen inputs changed: `command codegen` (pending verdict, I38).
+4. Lockfile changed: name each new dependency to the user, then `command install`. Codegen inputs changed: `command codegen` (pending verdict, I38).
 5. `git branch -d <ticket branch>`. Never push.
 
 **Close** [I32-I34, N9], seams pending verdict (I34):
