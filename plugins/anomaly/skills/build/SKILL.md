@@ -44,7 +44,7 @@ Start as above, but:
 1. `ticket adhoc` prints the ticket's path. Work-unit key = that file name without `.md`. `worklog start`/`add` take no `--ticket` or `--docs`. Resume by that path.
 2. A `branch` or `commit` value that holds `<key>`: ask the user; never guess. [I2]
 3. Start branch = the current head's branch; read it for the integration branch, `<integration>` and `<checkout>` below (no step 6). Detached head, the head on the base branch, or (resuming) not on the start branch: ask the user. [I8] The ticket-branch slug and the merge subject use the adhoc file stem.
-4. Then Red first, Implement and the Shared close, with a combined-mode review and no `seams prune` or `seams add`.
+4. Red first, Implement and the Shared close, with a combined-mode review and no `seams prune` or `seams add`.
 
 ## Red first, always [N7, AC-32]
 
@@ -56,7 +56,7 @@ Docs-only ticket: no red step; `ticket red --changed '<why>'`. A later test-file
 
 ## Implement [I10-I14]
 
-Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled, model `model implement`. In a worktree also follow [WORKTREE.md](WORKTREE.md) and pass it on. Follow-ups, and resuming a stopped agent at once: SendMessage to the same agent. An "interim" notice: check the branch. [N3]
+Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled, model `model implement`. In a worktree also follow [WORKTREE.md](WORKTREE.md) and pass it on. Follow-ups, and resuming a stopped agent at once: SendMessage to the same agent. An "interim" notice: check the branch at once. [N3]
 
 ## Shared close
 

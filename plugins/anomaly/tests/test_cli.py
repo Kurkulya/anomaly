@@ -1119,6 +1119,7 @@ class DiagnoseSkillTest(unittest.TestCase):
         red = re.search(r'\bred\b|red-capable|repro', lowered)
         self.assertIsNotNone(red, 'no red-capable command or repro in the prose')
         self.assertLess(red.start(), lowered.index('hypothes'))
+        self.assertRegex(lowered, r'in chat as a numbered list')
 
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
         """AC-27."""
