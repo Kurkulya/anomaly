@@ -795,6 +795,7 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*8\b')
         self.assertIn('Assumes:', text)
         self.assertIn('Recommend:', text)
+        self.assertIn('Conflicts: <D-n / ADR-n / none>', text)
         self.assertIn('defaults', lowered)
         self.assertRegex(lowered, r'low[- ]risk')
 
@@ -844,7 +845,7 @@ class InterviewSkillTest(unittest.TestCase):
             self.assertRegex(text, r'(?i)no (question or )?option[^\n]{0,40}reopen|'
                                    r'never[^\n]{0,40}(offer|option)[^\n]{0,40}reopen')
         with self.subTest('the conflict is named under Settled already and only the user reopens it'):
-            self.assertTrue(any('Settled already' in line
+            self.assertTrue(any(re.search(r'named (under|in) Settled already', line)
                                 and re.search(r'(?i)only the user reopens|user (may|can) reopen', line)
                                 for line in rule),
                             'the conflict line drops Settled already or the user right to reopen')
