@@ -1508,6 +1508,19 @@ and `decisions.md` into the self-contained tickets `anomaly:build` runs.
 - It adds one `slice` line to `log.md` per gate result, a `slice` work-unit line, and offers
   `/anomaly:build <work unit> <NN>` for the first ticket with no open blocker, then `/clear` once.
 
+## The diagnose skill
+
+`anomaly:diagnose` is model-invocable: it starts on a reported bug or a request to diagnose. It
+finds the root cause and changes no source.
+
+- It runs a red-capable command before any hypothesis, and cites the root cause as `file:line` or
+  probe output, else marks it "unverified".
+- It removes every probe edit and leaves `git status` clean: no branch, commit or push.
+- It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
+  passes it to `ticket adhoc --from`, which checks it.
+- It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
+  `/anomaly:build <adhoc ticket path>`.
+
 ## Development
 
 Run the tests from the plugin folder:

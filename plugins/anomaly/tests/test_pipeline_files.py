@@ -18,7 +18,7 @@ from pathlib import Path
 from anomaly_loop import cli, constants, frontmatter
 from tests.fixtures import PLUGIN, plugin_files
 
-ALLOWED_TOOLS_SKILLS = ('build', 'interview', 'review', 'slice', 'specify')   # the pipeline skills whose tools are limited to the CLI
+ALLOWED_TOOLS_SKILLS = ('build', 'diagnose', 'interview', 'review', 'slice', 'specify')   # the pipeline skills whose tools are limited to the CLI
 PLACEHOLDER_FREE_SKILLS = ALLOWED_TOOLS_SKILLS   # the skills whose docs other than SKILL.md hold no `${…}`
 MANAGED_DIRS = {   # as the Claude Code documentation on managed settings gives them
     'win32': Path('C:/Program Files/ClaudeCode'),            # documented, and read on this machine
@@ -44,7 +44,7 @@ ALLOW_RULE = re.compile(r'"allow"\s*:|permissions\.allow')
 TOOL_RULE = re.compile(r'\b(?:Bash|Read|Edit|Write|WebFetch)\([^)\n]*\)')   # a rule in the text a user reads
 QUOTED = re.compile(r'"([^"\n]*)"|\'[^\'\n]*\'')   # a double-quoted span (group 1) or a single-quoted one, left to right
 PLACEHOLDER = re.compile(r'<[^<>\n]*>')
-FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<)")
+FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--from\s+(?:<[^>]*>|\S+)(?:\s+--[\w-]+\s+(?:<[^>]*>|\S+))*\s*$)")
 
 
 def pipeline_files(root):
@@ -460,7 +460,10 @@ class FreeTextTest(TempPluginTest):
                 'Run `ticket red --changed "<why>"` then.\n'
                 'Plain words "<like this>" are prose.\n'),
             'agents/code.md': f'```\n{call} --data "${{CLAUDE_PLUGIN_DATA}}" --owner \'<owner>\'\n```\n',
-            'skills/observe/SKILL.md': '```\n{"session": "<session id>"}\n```\n'})
+            'skills/observe/SKILL.md': '```\n{"session": "<session id>"}\n```\n',
+            'skills/diagnose/SKILL.md': (
+                f'```\n{constants.CLI_COMMAND} ticket adhoc --from <draft file> --slug <slug> --repo <checkout>\n'
+                f'{constants.CLI_COMMAND} ticket adhoc --from <draft file> <task>\n```\n')})
         self.assertEqual(free_text_hits(self.root), [
             'skills/build/SKILL.md:2: free text not in single quotes',
             'skills/build/SKILL.md:2: placeholder in double quotes',
@@ -468,7 +471,8 @@ class FreeTextTest(TempPluginTest):
             'skills/build/SKILL.md:4: placeholder in double quotes',
             'skills/build/SKILL.md:5: free text not in single quotes',
             'skills/build/SKILL.md:6: free text not in single quotes',
-            'skills/build/SKILL.md:8: placeholder in double quotes'])
+            'skills/build/SKILL.md:8: placeholder in double quotes',
+            'skills/diagnose/SKILL.md:3: free text not in single quotes'])
 
     def test_the_pipeline_files_of_this_plugin_put_free_text_in_single_quotes(self):
         self.assertEqual(free_text_hits(PLUGIN), [])
