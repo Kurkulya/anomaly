@@ -1467,8 +1467,25 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   `.anomaly/<work unit>/decisions.md`. It edits no other file and makes no commit.
 - It closes with a table of the decisions and one confirm question, writes an `interview` work-unit
   line (`worklog add --stage interview`) and offers `/anomaly:specify`.
-- The close table shows the counts of its recommendations accepted, rejected and revised. Recording
-  them as a lens is a later ticket (09).
+- The close table shows the counts of its recommendations accepted, rejected and revised.
+  `/anomaly:specify` records them with `lens tally add --lens interview`.
+
+## The specify skill
+
+`/anomaly:specify <work unit>` is slash-only (`disable-model-invocation: true`). It turns the
+interview's `decisions.md` into the `stories.md` the owner reads.
+
+- It stops before it writes anything when `decisions.md` still holds `Open:` items, and sends the
+  user back to `/anomaly:interview`.
+- It writes `.anomaly/<work unit>/stories.md` (Sources with the Gathered date, Why, rules for all
+  stories, numbered stories with continuous `AC-n`, verbatim source criteria tagged, an Out of scope
+  list with owners) and appends `D-n` lines, each with a `Source:`. It writes no `T-n` line and no
+  `CONTEXT.md` row.
+- Agreed ADRs are drafted in `.anomaly/<work unit>/adr/` with a number free on every branch.
+- It runs `check stories`, then `anomaly:review` in `spec` mode, then shows a digest of at most 5
+  lines and waits for approval. A Blocker stops it before the digest.
+- It adds one `specify` line to `log.md` (the AC ids, ended by `;`), a `specify` work-unit line, and
+  offers `/anomaly:slice`.
 
 ## Development
 
