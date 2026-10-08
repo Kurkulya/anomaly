@@ -1144,7 +1144,7 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   (its text starts `ACs: AC-1, AC-2, …;`) and `stories.md` no longer holds (the error is
   `log.md:<line>` of the first `specify:` line that named it; a `specify:` line without that
   shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need none); a line
-  under `## Out of scope` with no `owner:`. Warnings, never a failure: `stories.md` over 6 KB,
+  under `## Out of scope` with no `owner:`; an `owner:` that names a `D-n`. Warnings, never a failure: `stories.md` over 6 KB,
   `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a clean
   run prints `stories check passed for <folder>`); a folder that is not there is one `anomaly:` line and exit 2.
   A missing `stories.md` is an error line; a missing `decisions.md` or `log.md` is read as empty.
@@ -1480,8 +1480,9 @@ turns an idea into settled decisions and terms by asking the user in rounds.
 - The close table shows the counts of its recommendations accepted, rejected and revised.
   `/anomaly:specify` records them with `lens tally add --lens interview`.
 - No question reopens a settled ADR or `D-n`, even when the idea asks for it; the conflict is named
-  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner. `Open:` holds
-  only unanswered items, because it stops `/anomaly:specify`.
+  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner (another unit,
+  ticket or ADR, never a `D-n`; when none is known, it asks). `Open:` holds only unanswered items,
+  because it stops `/anomaly:specify`.
 
 ## The specify skill
 

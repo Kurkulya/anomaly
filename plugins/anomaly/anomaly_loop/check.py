@@ -97,11 +97,19 @@ AC_LINE = re.compile(r'^- (AC-\d+):')
 D_LINE = re.compile(r'^- D-\d+:')
 SPECIFY_LINE = re.compile(r'^\S+ \S+ specify:')
 SPECIFY_IDS = re.compile(r'^\S+ \S+ specify: ACs: ([^;]*);')
+D_TOKEN = re.compile(r'\bD-\d+')
 # The shapes below are the exact text of docs/formats.md; a test holds them to it.
 AC_SHAPE = '- AC-1: <criterion>'
 D_SHAPE = '- D-n: <decision>. Why: <one line>. Source: <where>'
 SPECIFY_SHAPE = 'ACs: AC-1, AC-2, …;'
 OWNER_SHAPE = '- <item> — owner: <unit, ticket or ADR>'
+D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
+
+
+def owner_names_decision(line):
+    """True when the text after the last `owner:` on the line holds a D-n token."""
+    _, marker, owner = line.rpartition('owner:')
+    return bool(marker) and D_TOKEN.search(owner) is not None
 
 
 def read_optional(path):
@@ -110,7 +118,8 @@ def read_optional(path):
 
 
 def stories_errors(text):
-    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner. Also the ids found."""
+    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner or a D-n owner.
+    Also the ids found."""
     errors, found, in_scope_out = [], {}, False
     for number, line in enumerate(text.splitlines(), 1):
         if line.startswith('#'):
@@ -125,14 +134,24 @@ def stories_errors(text):
                 found[ac] = number
         elif in_scope_out and line.startswith('- ') and 'owner:' not in line:
             errors.append(f'stories.md:{number}: an Out of scope line needs an owner ({OWNER_SHAPE})')
+        elif in_scope_out and line.startswith('- ') and owner_names_decision(line):
+            errors.append(f'stories.md:{number}: an owner is a unit, ticket or ADR, not a D-n ({OWNER_SHAPE})')
     return errors, found
 
 
 def decisions_errors(text):
-    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`. A `T-n` line needs none."""
-    return [f'decisions.md:{number}: a decision needs a Source: ({D_SHAPE})'
-            for number, line in enumerate(text.splitlines(), 1)
-            if D_LINE.match(line) and 'Source:' not in line]
+    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `owner:` names a D-n.
+    A `T-n` line needs no Source."""
+    errors = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not D_LINE.match(line):
+            continue
+        if 'Source:' not in line:
+            errors.append(f'decisions.md:{number}: a decision needs a Source: ({D_SHAPE})')
+        elif owner_names_decision(line):
+            errors.append(f'decisions.md:{number}: an owner is a unit, ticket or ADR, '
+                          f'not a D-n ({D_OWNER_SHAPE})')
+    return errors
 
 
 def logged_ac_ids(text):
@@ -381,9 +400,10 @@ def register(commands, common):
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
         description=('Check a work-unit folder against the shapes in docs/formats.md. Errors: a duplicate AC id,\n'
                      'an AC id that a specify: line of log.md named and stories.md no longer holds, a D-n line\n'
-                     'with no Source:, an Out of scope line with no owner:. Warnings: stories.md over 6 KB,\n'
-                     'decisions.md over 8 KB. Each is one line on stdout; exit 1 on any error, 0 otherwise;\n'
-                     'an error (a folder that is not there) is one anomaly: line and exit 2.'))
+                     'with no Source:, an Out of scope line with no owner:, an owner: that names a D-n.\n'
+                     'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
+                     'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
+                     'anomaly: line and exit 2.'))
     check_stories.add_argument('folder', help='the work-unit folder (holds stories.md)')
     check_stories.set_defaults(handler=run_stories)
     check_slice = actions.add_parser(

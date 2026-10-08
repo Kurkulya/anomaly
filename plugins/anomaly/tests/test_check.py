@@ -396,6 +396,19 @@ class CheckStoriesTest(unittest.TestCase):
         self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', ''))
         self.assert_error(15, 'owner:', file_name='stories.md')
 
+    def test_an_out_of_scope_line_whose_owner_is_a_d_n_is_an_error(self):
+        self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', ' — owner: export D-3'))
+        self.assert_error(15, 'owner:', 'D-', file_name='stories.md')
+
+    def test_a_decision_that_leaves_an_item_out_of_scope_with_a_d_n_as_owner_is_an_error(self):
+        self.put(decisions=GOOD_DECISIONS + '- D-3: leave xlsx out. Why: later. Source: user, 2026-10-08 — owner: D-3\n')
+        self.assert_error(5, 'D-', file_name='decisions.md')
+
+    def test_a_d_n_outside_the_owner_value_of_a_decision_is_not_an_error(self):
+        self.put(decisions=GOOD_DECISIONS + '- D-3: the owner: field is required, see D-2. Why: x. '
+                 'Source: user, 2026-10-08 — owner: ticket 05\n')
+        self.assertEqual(self.stories(), ([], []))
+
     def test_oversize_files_only_warn(self):
         self.put(stories=GOOD_STORIES + 'x' * (6 * 1024), decisions=GOOD_DECISIONS + 'x' * (8 * 1024))
         errors, warnings = self.stories()
