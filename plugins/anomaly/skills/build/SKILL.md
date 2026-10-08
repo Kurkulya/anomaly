@@ -10,7 +10,7 @@ Explicit request only (user or `conduct`). [I35] Read only the ticket and `seams
 
 ## The CLI calls
 
-One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes, where nothing runs; write a ' as ’. No `python`: try `python3`. `<checkout>` is the integration branch's checkout. Every `.scratch` or `.anomaly` edit goes through the CLI, never Write, Edit or the shell. [N12, I39]
+One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes, where nothing runs; write a ' as ’. No `python`: try `python3`. `<checkout>` is the integration branch's checkout. Every `.scratch` or `.anomaly` edit goes through the CLI, never Write, Edit or the shell, except the `<key>-repro` script `diagnose` writes. [N12, I39]
 
 ```
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog start <work-unit key> build --ticket <NN> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
@@ -40,11 +40,11 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work-un
 
 ## Light path: a free-text task [N8, N9, AC-39]
 
-Start as above, with these changes:
+Start as above, but:
 1. `ticket adhoc` prints the ticket's path. Work-unit key = that file name without `.md`. `worklog start`/`add` take no `--ticket` or `--docs`. Resume by that path.
-2. A `branch` or `commit` value that holds `<key>`: ask the user for the key; never guess it. [I2]
+2. A `branch` or `commit` value that holds `<key>`: ask the user; never guess. [I2]
 3. Start branch = the current head's branch; read it for the integration branch, `<integration>` and `<checkout>` below (no step 6). Detached head, the head on the base branch, or (resuming) not on the start branch: ask the user. [I8] The ticket-branch slug and the merge subject use the adhoc file stem.
-4. Then Red first, Implement and the Shared close, with a combined-mode review and no `seams prune` or `seams add`.
+4. Red first, Implement and the Shared close, with a combined-mode review and no `seams prune` or `seams add`.
 
 ## Red first, always [N7, AC-32]
 
@@ -85,7 +85,7 @@ No `Tests:` line: 1-2, 3 if the area has e2e specs, 4 for a UI ticket. [N10] Fai
 **Close** [I32-I34, N9], seams pending verdict (I34):
 1. `seams prune`. An `ambiguous:` line: ask the user.
 2. `seams add` per new single-owner seam, after grepping for a second owner; owner as `` `<path>` (`name`, …) ``.
-3. `ticket result` with `--branch` and every count, 0 included (resuming: only the counts you know); `--open` lists flakes and kept findings, left out if none.
+3. `ticket result` with `--branch` and every count, 0 included (resuming: only the counts you know); `--open` lists flakes and kept findings, if any.
 4. `worklog add`.
 
 Only these ticket lines and `seams.md` change. [O47]

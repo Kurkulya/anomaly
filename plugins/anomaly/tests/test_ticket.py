@@ -160,7 +160,7 @@ class ShowTest(TicketTestCase):
 
     def test_prints_the_repro_line(self):
         """AC-26: a light-path ticket's `Repro:` line is shown, so `build` reads the command from `ticket show`."""
-        repro = 'Repro: python3 -m unittest tests.test_x (red now)'
+        repro = 'Repro: python3 -m unittest tests.test_x'
         path = self.ticket_path(TICKET_TEXT.replace('Tests: unit (CLI in-process)',
                                                     f'Tests: unit (CLI in-process)\n{repro}'))
         code, out, err = self.run_ticket('show', str(path))
@@ -838,7 +838,7 @@ DRAFT_LINES = {
     'Status:': 'Status: ready-for-agent',
     'Blocked by:': 'Blocked by: none',
     'Tests:': 'Tests: unit (CLI in-process)',
-    'Repro:': 'Repro: python3 -m unittest tests.test_parser (red now)',
+    'Repro:': 'Repro: python3 -m unittest tests.test_parser',
 }
 DRAFT_BODY = '\n**What to build:** stop the parser test from failing at random.\n\n- [ ] AC-1: the parser test passes ten runs in a row\n'
 
