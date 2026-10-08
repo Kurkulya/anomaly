@@ -473,7 +473,8 @@ def register(commands, common):
     red.add_argument('--repo', help=gitrepo.REPO_HELP)
     red.add_argument('--changed', help='the reason the test file changed after its red commit')
     adhoc = actions.add_parser('adhoc', parents=[common],
-                               help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text or --from a checked draft')
+                               help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text '
+                                    'or --from a checked draft')
     adhoc.add_argument('task', nargs='?', help='the task, in words (or give --from)')
     adhoc.add_argument('--from', dest='draft', metavar='DRAFT',
                        help='a checked light-path draft file, written unchanged (instead of the task text)')
