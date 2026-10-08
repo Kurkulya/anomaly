@@ -192,6 +192,7 @@ HUMAN_STATUS = re.compile(rf'{re.escape(TICKET_STATUS_HUMAN)} \(.+\)')
 TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
 # A host:port right after `://` or `@` is not path:NN; a bare example.com:8080 is reported. The whole
 # match is dropped (finditer does not restart inside it), so no tail of the host is reported.
+# Known gap: `see @check.py:42` and a URL path `https://host/x/check.py:42` are skipped too.
 LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
 HOST_PREFIXES = ('://', '@')
 
@@ -202,6 +203,8 @@ def line_anchor(body):
         if not body[:match.start()].endswith(HOST_PREFIXES):
             return match
     return None
+
+
 # The shapes below are the exact text of the Ticket block in docs/formats.md.
 STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
