@@ -905,7 +905,7 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
   `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
-  `confirmed` or `refuted`). A draft with a line or the section missing, or one that names a blocker,
+  `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
   `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from

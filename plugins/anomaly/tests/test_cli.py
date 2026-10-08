@@ -1192,6 +1192,7 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertRegex(lowered, r'hypotheses[^\n]*\bdraft\b|\bdraft\b[^\n]*hypotheses')
         self.assertRegex(lowered, r'confirmed|refuted')
         self.assertNotRegex(lowered, r'in chat as a numbered list|own (chat )?message')
+        self.assertRegex(lowered, r'before any probe file')
         self.assertRegex(lowered, r'brief[^.\n]{0,30}facts only')
         self.assertRegex(lowered, r'(never|no) (a )?(question|ask)[^.\n]{0,40}cause|never[^.\n]{0,40}cause')
 
