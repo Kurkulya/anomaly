@@ -1148,9 +1148,11 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   that `build` cannot run is caught by code before the plan gate. Errors, each a line
   `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
-  `Covers:`, `Tests:` or `Jira:` line (a key or `no-ticket`); a `Status:` that is not a triage word
-  or run state of `formats.md`; a blocker with no `NN-*.md` file or in a cycle; a path with a line
-  number (`check.py:42`). Warning: a ticket over 5 KB. Exit codes and the `warning:` prefix as for
+  `Covers:`, `Tests:` or `Jira:` line, or one with an empty value (`Jira:` accepts any word for now:
+  the key is not checked until the tracker port exists); a `Status:` that is not a triage word
+  or run state of `formats.md`, or `ready-for-human` without `(<why>)`; a blocker with no `NN-*.md`
+  file or in a cycle; a path with a line number (`check.py:42`) outside fenced code blocks and
+  copied `- D-n:` lines. Warning: a ticket over 5 KB. Exit codes and the `warning:` prefix as for
   `check stories` (a clean run prints `slice check passed for <folder>`). Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line

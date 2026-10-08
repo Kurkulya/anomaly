@@ -32,7 +32,9 @@ import re
 from pathlib import Path
 
 from . import files, gitrepo, ticket
-from .constants import TICKET_FIELD_SEPARATOR
+from .constants import (TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE, TICKET_STATUS_HUMAN,
+                        TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_READY,
+                        TICKET_STATUS_WONTFIX)
 
 
 def head_problem(repo, key, value, head):
@@ -182,8 +184,10 @@ def stories(folder):
 # ---------- slice ----------
 
 SLICE_WARN_BYTES = 5 * 1024
-STATUS_WORDS = ('ready-for-agent', 'ready-for-human', 'needs-info', 'wontfix', 'in-progress', 'done')
-TICKET_NUMBER = re.compile(r'^(\d{2})-')
+STATUS_WORDS = (TICKET_STATUS_READY, TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_WONTFIX,
+                TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_DONE)
+HUMAN_STATUS = re.compile(rf'{TICKET_STATUS_HUMAN} \(.+\)')
+TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
 LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-]+\.[A-Za-z]\w*:\d+\b')
 # The shapes below are the exact text of the Ticket block in docs/formats.md.
 STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
@@ -217,14 +221,18 @@ def ticket_errors(name, text, parsed, folder, graph):
     errors = []
     if not ticket.find_lines(lines, 'Status'):
         errors.append(f'{name}:1: no Status: line ({STATUS_SHAPE})')
-    elif parsed.status not in STATUS_WORDS:
-        errors.append(f'{name}:{where("Status")}: Status: {parsed.status} is not a status word '
-                      f'({", ".join(STATUS_WORDS)})')
+    else:
+        raw = ticket.value_of(lines, 'Status')
+        if parsed.status not in STATUS_WORDS:
+            errors.append(f'{name}:{where("Status")}: Status: "{raw}" is not a status word '
+                          f'({", ".join(STATUS_WORDS)})')
+        elif parsed.status == TICKET_STATUS_HUMAN and not HUMAN_STATUS.fullmatch(raw):
+            errors.append(f'{name}:{where("Status")}: Status: "{raw}" gives no reason ({STATUS_SHAPE})')
     if not parsed.has_blocked_line:
         errors.append(f'{name}:1: no Blocked by: line ({BLOCKED_SHAPE})')
     elif parsed.blockers_unreadable:
-        errors.append(f'{name}:{where("Blocked by")}: Blocked by: {parsed.blocked_by} holds no ticket number '
-                      f'({BLOCKED_SHAPE})')
+        errors.append(f'{name}:{where("Blocked by")}: Blocked by: "{parsed.blocked_by}" is not only two-digit '
+                      f'ticket numbers (NN) ({BLOCKED_SHAPE})')
     else:
         number = TICKET_NUMBER.match(name.rsplit('/', 1)[-1]).group(1)
         graph[number] = []
@@ -234,12 +242,14 @@ def ticket_errors(name, text, parsed, folder, graph):
                               f'{blocker}-*.md in tickets/ ({BLOCKED_SHAPE})')
             else:
                 graph[number].append(blocker)
-    for missing, shape in ((not parsed.has_covers_line, COVERS_SHAPE), (not parsed.tests, TESTS_SHAPE),
-                           (not parsed.jira, JIRA_SHAPE)):
-        if missing:
-            errors.append(f'{name}:1: no {shape.split(":")[0]}: line ({shape})')
+    for key, shape in (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE), ('Jira', JIRA_SHAPE)):
+        if not ticket.find_lines(lines, key):
+            errors.append(f'{name}:1: no {key}: line ({shape})')
+        elif not ticket.value_of(lines, key).strip():
+            errors.append(f'{name}:{where(key)}: {key}: is empty ({shape})')
+    skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
-        match = LINE_ANCHOR.search(body)
+        match = None if number - 1 in skip or D_LINE.match(body) else LINE_ANCHOR.search(body)
         if match:
             errors.append(f'{name}:{number}: {match.group(0)} is a path with a line number '
                           f'({TOUCHES_SHAPE})')
@@ -250,7 +260,7 @@ def slice(folder):
     """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
     stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or Jira:
     line, a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
-    line anchor. A ticket over 5 KB only warns."""
+    line anchor (fenced code blocks and copied `- D-n:` lines are not checked). A ticket over 5 KB only warns."""
     folder = Path(folder)
     if not folder.is_dir():
         raise files.RecordError(f'{folder}: not a folder')
@@ -314,34 +324,31 @@ def register(commands, common):
         description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
                      'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
-                     'line anchor. Warning: a ticket over 5 KB. Each is one line on stdout; exit 1 on any error,\n'
+                     'line anchor (not in a fenced block or a copied - D-n: line). Warning: a ticket over 5 KB. Each is one line on stdout; exit 1 on any error,\n'
                      '0 otherwise; an error (a folder that is not there) is one anomaly: line and exit 2.'))
     check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
     check_slice.set_defaults(handler=run_slice)
 
 
-def run_stories(args, environ):
-    errors, warnings = stories(args.folder)
+def print_check(word, errors, warnings, folder):
+    """Print the errors, then the warnings, then a `<word> check passed` line when there is no error;
+    the exit code: 1 on any error, 0 otherwise."""
     for line in errors:
         print(line)
     for line in warnings:
         print(f'warning: {line}')
     if errors:
         return 1
-    print(f'stories check passed for {Path(args.folder).name}')
+    print(f'{word} check passed for {Path(folder).name}')
     return 0
+
+
+def run_stories(args, environ):
+    return print_check('stories', *stories(args.folder), args.folder)
 
 
 def run_slice(args, environ):
-    errors, warnings = slice(args.folder)
-    for line in errors:
-        print(line)
-    for line in warnings:
-        print(f'warning: {line}')
-    if errors:
-        return 1
-    print(f'slice check passed for {Path(args.folder).name}')
-    return 0
+    return print_check('slice', *slice(args.folder), args.folder)
 
 
 def run_pre_merge(args, environ):

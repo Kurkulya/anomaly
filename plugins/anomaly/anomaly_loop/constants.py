@@ -137,6 +137,9 @@ TICKET_STATUS_DONE = 'done'          # ticket Status: words the commands write o
 TICKET_STATUS_IN_PROGRESS = 'in-progress'
 TICKET_STATUS_READY = 'ready-for-agent'
 TICKET_STATUS_UNKNOWN = 'unknown'    # what a ticket without a readable Status: line reports
+TICKET_STATUS_HUMAN = 'ready-for-human'   # the other triage words of docs/formats.md
+TICKET_STATUS_NEEDS_INFO = 'needs-info'
+TICKET_STATUS_WONTFIX = 'wontfix'
 
 # ---------- pipeline skills ----------
 
