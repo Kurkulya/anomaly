@@ -356,8 +356,10 @@ class CheckStoriesTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.folder = Path(tmp.name).resolve() / 'unit'
-        self.folder.mkdir()
+        self.root = Path(tmp.name).resolve()
+        self.folder = self.root / '.anomaly' / 'unit'
+        self.folder.mkdir(parents=True)
+        write_text(self.folder / 'tickets' / '05-x.md', '# 05: x\n')
         self.put(stories=GOOD_STORIES, decisions=GOOD_DECISIONS, log=GOOD_LOG)
 
     def put(self, **texts):
@@ -415,11 +417,11 @@ class CheckStoriesTest(unittest.TestCase):
         self.assertEqual(self.stories(), ([], []))
 
     def test_a_bracketed_d_n_after_an_out_of_scope_owner_is_a_citation_not_an_error(self):
+        """Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1: the owners resolve, so only the bracket is tested."""
+        (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
         owners = (
             'owner: phase 2 `workflow-conduct` (D-11)',
-            'owner: `anomaly:calibrate` (D-10)',
             'owner: a later work unit, TODO(VK, revisit 2026-11-05) (D-5)',
-            'owner: VK, after phase 2 ships (D-3)',
             'owner: ticket 05 [D-3]',
         )
         for owner in owners:
@@ -431,6 +433,76 @@ class CheckStoriesTest(unittest.TestCase):
         self.put(decisions=GOOD_DECISIONS + '- D-3: leave xlsx out. Why: later. '
                  'Source: user, 2026-10-08 — owner: ticket 05 (D-2)\n')
         self.assertEqual(self.stories(), ([], []))
+
+    DECISION_WITH_OWNER = '- D-3: leave xlsx out. Why: later. Source: user, 2026-10-08 — owner: {}\n'
+
+    def test_an_out_of_scope_owner_that_exists_or_carries_a_todo_key_passes(self):
+        """Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1: in stories.md and in decisions.md."""
+        write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
+        write_text(self.folder / 'adr' / '0005-y.md', '# 5\n')
+        (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
+        write_text(self.root / '.scratch' / 'workflow-conduct' / 'issues' / '01-a.md', '# 1\n')
+        write_text(self.root / '.anomaly' / 'adhoc' / '2026-10-08-x.md', '# x\n')
+        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
+        owners = (
+            'ticket 05',
+            'ticket 03 of `workflow-conduct`',
+            'ticket 3 of `.scratch/workflow-conduct`',
+            'ticket 5',
+            'ticket 05, `.anomaly/unit/tickets/05-x.md`',
+            'the `export` part of ticket 05',
+            'ADR-0003',
+            'ADR-0005',
+            '`unit`',
+            'workflow-conduct',
+            '`.anomaly/unit`',
+            '`.scratch/workflow-conduct`',
+            '.anomaly/unit/tickets/05-x.md',
+            '`.anomaly/adhoc/2026-10-08-x.md`',
+            '.scratch/workflow-conduct/issues/01-a.md',
+            'docs/adr/0003-x.md',
+            '.anomaly/unit/adr/0005-y.md',
+            'phase 2 `workflow-conduct` (D-11)',
+            'a later work unit, TODO(VK, revisit 2026-11-05) (D-5)',
+            'tags-edit, TODO(VK, revisit 2026-11-08)',
+        )
+        for owner in owners:
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner),
+                         decisions=GOOD_DECISIONS + self.DECISION_WITH_OWNER.format(owner))
+                self.assertEqual(self.stories(), ([], []))
+
+    def test_an_out_of_scope_owner_that_is_a_placeholder_a_person_a_skill_or_not_found_is_an_error(self):
+        """Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1: the error names the file and the line."""
+        write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
+        write_text(self.root / 'README.md', '# readme\n')
+        write_text(self.root / '.anomaly' / 'adhoc' / '2026-10-08-x.md', '# x\n')
+        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
+        write_text(self.root / 'plugins' / 'anomaly' / 'skills' / 'calibrate' / 'SKILL.md', '# calibrate\n')
+        owners = (
+            'OWNER-NEEDED (D-3)',
+            'tags-edit (D-14)',
+            '`anomaly:calibrate` (D-10)',
+            'VK, after phase 2 ships (D-3)',
+            'ADR-0004',
+            'README.md',
+            '`plugins/anomaly/skills/calibrate/SKILL.md`',
+            'ticket 05 of `other-unit`',
+            '`workflow-conduct`, ticket 03',
+            'ticket 05 of `workflow-conduct`',
+            'adhoc',
+            '`.anomaly/adhoc`',
+            '`.scratch/missing`',
+            '`.anomaly/../docs/adr/0003-x.md`',
+            str(self.root / 'docs' / 'adr' / '0003-x.md'),
+        )
+        for owner in owners:
+            with self.subTest(owner=owner, file='stories.md'):
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+                self.assert_error(15, 'must exist', file_name='stories.md')
+            with self.subTest(owner=owner, file='decisions.md'):
+                self.put(stories=GOOD_STORIES, decisions=GOOD_DECISIONS + self.DECISION_WITH_OWNER.format(owner))
+                self.assert_error(5, 'must exist', file_name='decisions.md')
 
     def test_the_owner_value_ends_at_the_first_why_or_source(self):
         """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: a D-n in the Why or Source text

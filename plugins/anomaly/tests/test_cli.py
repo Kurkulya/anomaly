@@ -830,7 +830,9 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertTrue(rules, 'no rule line holds ADR or D-n with settled, even when and conflict')
 
     def test_a_gap_the_user_settles_as_out_of_scope_is_a_d_n_with_an_owner_and_open_is_only_for_the_unanswered(self):
-        """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify."""
+        """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify. Adhoc
+        2026-10-08-check-stories-owner-must-exist, AC-1: the owner must exist or carry a TODO(<owner>, revisit ...)
+        key, and interview never writes a placeholder owner."""
         text = self.text()
         self.assertRegex(text, r'(?is)out of scope[^\n]*D-n[^\n]*owner|out of scope[^\n]*owner[^\n]*D-n|'
                                r'D-n[^\n]*owner[^\n]*out of scope|D-n[^\n]*out of scope[^\n]*owner')
@@ -844,6 +846,11 @@ class InterviewSkillTest(unittest.TestCase):
                             for line in text.splitlines()), 'Open: is not said to be only for the unanswered')
         self.assertRegex(text, r'(?is)`?Open:`?[^\n]*\b(?:block|blocks|stop|stops)\b[^\n]*specify|'
                                r'specify[^\n]*\b(?:block|blocks|blocked|stop|stops|stopped)\b[^\n]*`?Open:`?')
+        self.assertTrue(any(re.search(r'(?i)\bexist', line) for line in rule),
+                        'the rule does not say the owner must exist')
+        self.assertTrue(any(re.search(r'TODO\([^)]*revisit', line) for line in rule),
+                        'the rule does not name the TODO(<owner>, revisit ...) key')
+        self.assertRegex(text, r'(?i)never[^\n]{0,40}placeholder')
 
     def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
         text = self.text()
@@ -983,13 +990,19 @@ class SpecifySkillTest(unittest.TestCase):
         self.assertIn('Out of scope', examples[0])
 
     def test_an_out_of_scope_owner_is_a_unit_ticket_or_adr_never_the_deferring_d_n_and_the_user_is_asked(self):
-        """2026-10-08-out-of-scope-owner-check AC-1."""
+        """2026-10-08-out-of-scope-owner-check AC-1. Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1:
+        the owner must exist or carry a TODO(<owner>, revisit ...) key, and specify never writes a placeholder."""
         text = self.text()
         rule = [line for line in text.splitlines() if re.search(r'(?i)out of scope', line) and re.search(r'(?i)owner', line)]
         self.assertTrue(rule, 'no line ties out of scope and owner')
         self.assertTrue(any(re.search(r'(?i)never a `?D-n', line) for line in rule),
                         'the rule does not say the owner is not the D-n itself')
         self.assertRegex(text, r'(?i)\bask\b[^\n]*owner|owner[^\n]*\bask\b')
+        self.assertTrue(any(re.search(r'(?i)\bexist', line) for line in rule),
+                        'the rule does not say the owner must exist')
+        self.assertTrue(any(re.search(r'TODO\([^)]*revisit', line) for line in rule),
+                        'the rule does not name the TODO(<owner>, revisit ...) key')
+        self.assertRegex(text, r'(?i)never[^\n]{0,40}placeholder')
 
     def test_the_readme_has_a_specify_skill_section_naming_the_slash_command(self):
         readme = self.ROOT / 'README.md'
