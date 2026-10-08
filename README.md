@@ -1496,8 +1496,9 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   line (`worklog add --stage interview`) and offers `/anomaly:specify`.
 - The close table shows the counts of its recommendations accepted, rejected and revised.
   `/anomaly:specify` records them with `lens tally add --lens interview`.
-- No question reopens a settled ADR or `D-n`, even when the idea asks for it; the conflict is named
-  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner after `— owner:`
+- No question or option reopens a settled ADR or `D-n`, even when the idea asks for it. A part of the
+  idea in conflict with one is written, without a question and in every round, as an out-of-scope
+  `D-n` owned by that ADR (or the unit holding that `D-n`). A gap the user settles as out of scope is a `D-n` whose decision names an owner after `— owner:`
   (another unit, ticket or ADR, never a `D-n`; it must exist or carry `TODO(<owner>, revisit
   YYYY-MM-DD)`, never a placeholder; when none is known, it asks, then recommends the key; only if
   the user declines does it write an `Open:` line and say that `/anomaly:specify` will stop on it).
