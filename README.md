@@ -835,7 +835,7 @@ python plugins/anomaly/scripts/anomaly.py ticket reviewed   <ticket> <sha> [--re
 python plugins/anomaly/scripts/anomaly.py ticket verified   <ticket> <sha> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> <sha> <test path> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> --changed <reason>
-python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> [--slug <slug>] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from <draft> [--slug <slug>] [--repo <dir>]
 ```
 
 - A state line is plain (`Status: done`) or bold (`**Status:** done`); both are read, `Blocked
@@ -847,8 +847,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> [--slug 
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, `Jira`,
-  `Tests`, `Base` (the integration branch, which `build` reads here), `Reviewed`, `Verified`,
-  `Red`, `Red-changed`) and a `warning:` line when the ticket
+  `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`,
+  `Verified`, `Red`, `Red-changed`) and a `warning:` line when the ticket
   has no `Blocked by:` line or its value is not only two-digit ticket numbers (see `ticket gate`).
 - `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
@@ -902,6 +902,11 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> [--slug 
   The AC-1 line holds the whole task text; only the title line is cut short.
   The task is put on one line, so its text cannot add a state line. It prints the path and never
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
+  `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
+  a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
+  `Repro: <command> (red now)`, an AC). A draft with a line missing, or one that names a blocker,
+  is refused with each problem named and nothing is written; a valid one is written unchanged, a
+  `Jira:` line kept and none added. The slug comes from the title unless `--slug` gives it.
 
 ## Benchmark
 
@@ -1029,6 +1034,10 @@ The modes, in one line each (the full dispatch table is in
 - **cumulative**: the whole branch before the MR, all three reviewers.
 - **combined**: a docs-only diff or the light path, one code reviewer with the feature checklist.
 - **rules**: a rewritten skill checked against its rule ledger by the feature reviewer.
+- **`spec`** and **`tickets`** (the plan gate): the end of `specify` and `slice`. No range, no
+  diff, no `risk`; the caller passes the work-unit folder and `anomaly:plan` checks it, counted
+  under lens `plan`. A Blocker stops the calling skill; Warnings and Nits go in its handoff. A
+  fix gets a delta round from the same agent, on the lines changed since its report.
 
 - It stops before any dispatch when the range does not resolve or the diff is empty. A docs-only
   diff (no source, config, script or test file) uses combined mode.
@@ -1046,19 +1055,24 @@ The modes, in one line each (the full dispatch table is in
   last delta round, or after its first round when it had no Blocker or High), stores its counts over all its rounds with `lens tally add`, `--revised`
   always passed; after the session's last review, `lens tally sum` and one `observe apply` put
   each lens into home once.
+- A rule trace: in ticket or combined mode, when the ticket's `Tests:` line names
+  `rule trace <brief path> <SKILL.md path>`, the skill also runs a rules-mode pass on that pair. Its
+  High findings go back to the caller, and every delta round on that ticket runs the rules pass
+  again on the fixed SKILL.md (rules mode has no diff range) while it has an open High.
 
 ## Reviewer agents
 
-The plugin ships three read-only reviewer agents in `plugins/anomaly/agents/`. Only the
-`review` skill dispatches them, and it passes the model: no agent file pins one. Each has the
-tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or fewer
-and a file of 6 KB or less.
+The plugin ships four read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones and `anomaly:plan`, the planning
+gate's. Only the `review` skill dispatches them, and it passes the model: no agent file pins
+one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
+characters or fewer and a file of 6 KB or less.
 
 | Agent | Checks | Modes |
 |---|---|---|
 | `anomaly:code` | defects against the repo's written rules and sound design: correctness, resources, performance, contracts, tests, second copies of ledger-owned seams, design smells, new dependencies, suppressed linter or type errors | ticket, delta, cumulative, combined (adds the feature checklist, read at run time from `agents/feature.md`) |
 | `anomaly:feature` | the diff does what its ticket or spec asks and no more: the AC coverage table, scope, visible changes, docs drift, deferral targets, claims against their sources, known items; in cumulative mode a keep, rewrite or delete verdict per characterization test file | ticket, delta, cumulative, rules (loads `skills/review/rules-mode.md`, 2 KB or less, in that mode only) |
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
+| `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
 
 Each agent prints one finding per line in the shape above, with the fix always after ` — fix: `
 and nothing after the closing `observed` or `unverified`; then a `fine: <class> — ...` line for
@@ -1073,7 +1087,7 @@ A disputed cover is settled by a mutation probe that the agent proposes and `rev
 scratchpad copy after you say yes. Security problem text starts with the two-digit label (`A03 Injection: ...`),
 and a found secret value is never printed. Most rules in an agent file carry their ledger id in
 brackets (`[C1]`, `[T2]`) for the rule trace; a rule whose verdict is still open says "pending
-verdict". The rules-mode doc sits beside the `review` skill, not under `agents/`,
+verdict". The rules-mode and plan-mode docs sit beside the `review` skill, not under `agents/`,
 because Claude Code loads every Markdown file under `agents/` as an agent.
 
 Pass bars, set by the workflow-build spec in the local work folder: the median of three hand
@@ -1090,11 +1104,15 @@ runs through `bench score`, with at most 1 false High per run.
 ## The pre-merge check and the seam ledger
 
 `check pre-merge` makes three rules of the pipeline checks instead of requests, from the ticket
-file and git. `seams prune` and `seams add` keep the seam ledger true after a merge. Neither
+file and git. `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
+`check slice` checks that its tickets can be run.
+`seams prune` and `seams add` keep the seam ledger true after a merge. None of them
 needs a home or a profile.
 
 ```
 python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder>
+python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder>
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
 python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name> --owner <owner file> --replaces <old way> --ticket <NN>
 ```
@@ -1120,6 +1138,31 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   lines when it records the first `Red:` line or a different sha: each reason covers only the
   edits after the red commit it was written for. A `Red-changed:` line never excuses a wrong `Reviewed:` or `Verified:`. A test path
   written with backslashes is read with forward slashes.
+- `check stories` reads `stories.md`, `decisions.md` and `log.md` of a work-unit folder against the
+  shapes in `plugins/anomaly/docs/formats.md`. Errors, each a line `<file>:<line>: ...` with the
+  allowed shape: a duplicate `AC-<n>` id; an AC id that an earlier `specify:` line of `log.md` named
+  (its text starts `ACs: AC-1, AC-2, …;`) and `stories.md` no longer holds (the error is
+  `log.md:<line>` of the first `specify:` line that named it; a `specify:` line without that
+  shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need none); a line
+  under `## Out of scope` with no `owner:`. Warnings, never a failure: `stories.md` over 6 KB,
+  `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a clean
+  run prints `stories check passed for <folder>`); a folder that is not there is one `anomaly:` line and exit 2.
+  A missing `stories.md` is an error line; a missing `decisions.md` or `log.md` is read as empty.
+  Nothing is written.
+- `check slice` reads `stories.md` and `tickets/NN-slug.md` of a work-unit folder, so a ticket set
+  that `build` cannot run is caught by code before the plan gate. Errors, each a line
+  `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
+  ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
+  `Covers:`, `Tests:` or `Jira:` line, or one with an empty value (`Jira:` accepts any word for now:
+  the key is not checked until the tracker port names the key line, phase 2, D-11); a `Status:`
+  that is not a triage word or run state of `formats.md`, or `ready-for-human` without
+  `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
+  (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
+  or `@` is not one; a bare one such as `example.com:8080` is; a path right after `@`, such as
+  `@check.py:42`, or in a URL path right after the host (no port), such as
+  `https://host/x/check.py:42`, is skipped too). Warning: a ticket over 5 KB. Exit codes and the
+  `warning:` prefix as for `check stories` (a clean run prints `slice check passed for <folder>`).
+  Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line
   names a file when its owner file is that path or the end of it; a bare name that matches
@@ -1196,8 +1239,9 @@ python plugins/anomaly/scripts/anomaly.py ci log   <commit|ref> [--pipeline] [--
 
 ## Risk areas, lens tally and work units
 
-Three small commands serve the review and build skills. None of them needs a profile; `lens tally
-add` reads the profile's `reviewers` only to learn the org lens names.
+Four small commands serve the review and build skills: `risk`, `lens tally`, `worklog` and `log add`
+(which writes a work unit's `log.md`, and also serves specify and slice). None of them needs a
+profile; `lens tally add` reads the profile's `reviewers` only to learn the org lens names.
 
 ### risk
 
@@ -1258,9 +1302,10 @@ and, after the session's last review, sums them with
   the file `a`); both commands refuse it before anything is written. The counts are whole
   numbers of 0 or more, and `accepted` and `rejected` are both required.
 - The lens names are fixed: `code`, `feature`, `security` (the core reviewers `anomaly:code`,
-  `anomaly:feature`, `anomaly:security`) and each org reviewer's adapter name from the
-  `reviewers` port (see Ports and the repo layer). Any other name is one `anomaly:` line that
-  lists the allowed names, exit 2, and nothing is written.
+  `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`),
+  `interview` (the interview's recommendations) and each org reviewer's adapter name from the
+  `reviewers` port (see Ports and the repo layer). Any other name is one `anomaly:` line that lists
+  the allowed names, exit 2, and nothing is written.
 - `--revised <n>` counts the accepted findings whose fix differed from the one the reviewer
   proposed, so it is at most `--accepted` (more is one `anomaly:` line naming both counts, exit
   2). The tally line, the batch line and the home line gain `revised` only when it is passed;
@@ -1344,6 +1389,24 @@ Every pipeline skill run (`build`, `review`, the later stages) leaves one line, 
   with a hint to run `measure`. A unit with no lines stops the command with an `anomaly:` line that
   names the units that exist.
 
+### log
+
+```
+python plugins/anomaly/scripts/anomaly.py log add <folder> --stage <stage> [--] '<text>'
+```
+
+`log add` is the one writer of a work unit's `log.md` (the line shape is in
+[docs/formats.md](plugins/anomaly/docs/formats.md)). It appends one line `<YYYY-MM-DD HH:MM> <stage>:
+<text>` to `<folder>/log.md` and writes nothing else. The time is the CLI clock, in the same format
+as `worklog start`; the model passes none. The file is made when it is missing and is only appended
+to, so its earlier bytes stay as they are; the new line takes the file's line ending, and a last line
+without one gets it first. The folder must exist (the command never creates it) but may be anywhere,
+inside `.anomaly/` or `.scratch/` or not. A folder that does not exist, a stage that is not one word
+(letters, digits and `.` `_` `-`; a `:` is refused because it would end the stage in the line), and
+text that is empty or has a line break stop the command with an `anomaly:` line and no write. Put `--`
+before a text that starts with `-`. Cost numbers do not belong in `log.md`; the command does not
+check this.
+
 ## Command line
 
 The skills run these; they are also usable by hand. Every command takes `--home <dir>`, and
@@ -1360,12 +1423,13 @@ python plugins/anomaly/scripts/anomaly.py nudge     --home <dir> --data <dir> [-
 python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc ...
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py bench     score <defects.json> <findings>...
-python plugins/anomaly/scripts/anomaly.py check     pre-merge ...
+python plugins/anomaly/scripts/anomaly.py check     pre-merge|stories|slice ...
 python plugins/anomaly/scripts/anomaly.py seams     prune|add ...
 python plugins/anomaly/scripts/anomaly.py ci        watch|log <target> [--project <group/project>] [--repo <dir>] ...
 python plugins/anomaly/scripts/anomaly.py risk      <range> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py lens      tally add|sum ...
 python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
+python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1390,9 +1454,76 @@ python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 - `lens` takes `tally add` or `tally sum`; its options are in the same section.
 - `worklog` takes `start`, `add` or `report`; `add` appends one work-unit line to home and `report`
   prints what one work unit cost; the options are in the same section.
+- `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
+
+## Planning formats
+
+The planning skills share their file shapes (`stories.md`, `decisions.md`, tickets, `log.md`, triage
+words, the next-step offer, the ADR front block) in `docs/formats.md`. Where each planning stage ends,
+and when `/clear` may be offered, is in `docs/boundaries.md`.
+
+## The interview skill
+
+`/anomaly:interview` is slash-only (`disable-model-invocation: true`): the model never starts it. It
+turns an idea into settled decisions and terms by asking the user in rounds.
+
+- It runs the `gather` port, then lists what is already settled (ADRs and `D-n` lines) before round 1.
+- Each round asks at most 8 questions, hard-to-reverse first. Every question has `Assumes:` and
+  `Recommend:`; low-risk items with an obvious answer go in one defaults block.
+- After each round it writes `D-n` lines (with a `Source:`) and `T-n` lines (settled terms) to
+  `.anomaly/<work unit>/decisions.md`. It edits no other file and makes no commit.
+- It closes with a table of the decisions and one confirm question, writes an `interview` work-unit
+  line (`worklog add --stage interview`) and offers `/anomaly:specify`.
+- The close table shows the counts of its recommendations accepted, rejected and revised.
+  `/anomaly:specify` records them with `lens tally add --lens interview`.
+
+## The specify skill
+
+`/anomaly:specify <work unit>` is slash-only (`disable-model-invocation: true`). It turns the
+interview's `decisions.md` into the `stories.md` the owner reads.
+
+- It stops before it writes anything when `decisions.md` still holds `Open:` items, and sends the
+  user back to `/anomaly:interview`.
+- It writes `.anomaly/<work unit>/stories.md` (Sources with the Gathered date, Why, rules for all
+  stories, numbered stories with continuous `AC-n`, verbatim source criteria tagged, an Out of scope
+  list with owners) and appends `D-n` lines, each with a `Source:`. It writes no `T-n` line and no
+  `CONTEXT.md` row.
+- Agreed ADRs are drafted in `.anomaly/<work unit>/adr/` with a number free on every branch.
+- It runs `check stories`, then `anomaly:review` in `spec` mode, then shows a digest of at most 5
+  lines and waits for approval. A Blocker stops it before the digest.
+- It adds one `specify` line to `log.md` (the AC ids, ended by `;`), a `specify` work-unit line, and
+  offers `/anomaly:slice`.
+
+## The slice skill
+
+`/anomaly:slice <work unit>` is slash-only (`disable-model-invocation: true`). It cuts `stories.md`
+and `decisions.md` into the self-contained tickets `anomaly:build` runs.
+
+- It shows a numbered list (title, blocked by, covers, tests) and writes nothing until the user
+  approves it.
+- It writes `.anomaly/<work unit>/tickets/NN-slug.md` in the formats doc shape, with the ACs and
+  `D-n` lines each ticket needs copied verbatim and no line numbers. Each `T-n` term line and ADR
+  draft lands in the first ticket that needs it, named in `Touches:`.
+- It runs `check slice`, then `anomaly:review` in `tickets` mode. A Blocker stops it before it
+  offers the next build step.
+- It adds one `slice` line to `log.md` per gate result, a `slice` work-unit line, and offers
+  `/anomaly:build <work unit> <NN>` for the first ticket with no open blocker, then `/clear` once.
+
+## The diagnose skill
+
+`anomaly:diagnose` is model-invocable: it starts on a reported bug or a request to diagnose. It
+finds the root cause and changes no source.
+
+- It runs a red-capable command before any hypothesis, and cites the root cause as `file:line` or
+  probe output, else marks it "unverified".
+- It removes every probe edit and leaves `git status` clean: no branch, commit or push.
+- It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
+  passes it to `ticket adhoc --from`, which checks it.
+- It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
+  `/anomaly:build <adhoc ticket path>`.
 
 ## Development
 
@@ -1409,8 +1540,8 @@ when a link names a host other than a reserved example host, and it runs every s
 against a home with no profile. Without a profile the identifier check is skipped.
 
 `tests/test_pipeline_files.py` and `tests/test_cli.py` hold the static checks over the text of the
-pipeline (every skill except the four loop skills, its extra docs, and the agent files). They pass
-while those files do not exist. Once they do:
+pipeline (every skill except the four loop skills, its extra docs, the agent files and the files
+under `docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
   `SKILL.md` is 8 KB or less and an agent file is 6 KB or less.
@@ -1431,7 +1562,8 @@ while those files do not exist. Once they do:
   permissions.
 - This `README.md` names every command group of `--help` and every `<group> <action>` pair of
   `<group> --help`.
-- No doc of `build` or `review` other than `SKILL.md` holds a `${…}` placeholder: in a skill
+- No doc of `build` or `review` other than `SKILL.md`, nor any file under `docs/`, holds a `${…}`
+  placeholder: in a skill
   folder Claude Code fills `${CLAUDE_PLUGIN_ROOT}`-style placeholders only in `SKILL.md`
   (`${user_config.*}` not even there, ADR-0001).
 

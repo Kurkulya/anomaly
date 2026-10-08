@@ -1,6 +1,6 @@
 # ADR-0011: A work unit lives under `.anomaly/<work-unit>/`, and both layouts are read until the switch-over
 
-Status: Accepted; partly superseded by ADR-0012 (the work-unit line is no longer only `{feature, stage, session, date}`) and by ADR-0014 (`worklog report` now reads `work-units.jsonl`, not `measure`) · Date: 2026-10-06 · Owner: VK · Revisit-by: 2026-11-05
+Status: Accepted; partly superseded by ADR-0012 (the work-unit line is no longer only `{feature, stage, session, date}`) and by ADR-0014 (`worklog report` now reads `work-units.jsonl`, not `measure`) and by ADR-0015 (the `log.md` writer, `anomaly log add`) · Date: 2026-10-06 · Owner: VK · Revisit-by: 2026-11-05
 
 ## Context
 

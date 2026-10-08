@@ -96,3 +96,5 @@ brief rule N16 (`.scratch/workflow-build/briefs/build.md`); Claude Code document
 settings (the file paths per platform, the `managed-settings.d` drop-ins and the legacy Windows
 path) and on settings (the user-scope file), read 2026-10-04; managed settings file on this
 machine, observed 2026-10-04.
+
+Amended 2026-10-08: the scan also covers the plugin's docs/ folder (planning formats and boundaries).

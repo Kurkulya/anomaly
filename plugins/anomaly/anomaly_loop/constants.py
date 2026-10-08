@@ -56,7 +56,7 @@ WORK_UNITS_FILE = 'work-units.jsonl'   # one line per pipeline stage run: {featu
 WORKLOG_BUILD_STAGE = 'build'   # the stage whose line, written after the merge, marks a ticket as merged
 WORKLOG_REVIEW_STAGE = 'review'   # the one stage whose line may carry a review mode
 WORKLOG_TICKET_STAGES = (WORKLOG_BUILD_STAGE, WORKLOG_REVIEW_STAGE)   # the stages whose line, and start, may name one ticket (--ticket)
-REVIEW_MODES = ('ticket', 'delta', 'cumulative', 'combined', 'rules')   # the review modes of AC-45
+REVIEW_MODES = ('ticket', 'delta', 'cumulative', 'combined', 'rules', 'spec', 'tickets')   # the review modes of AC-45, and the plan-gate modes
 
 # ---------- file names: data folder (throwaway) ----------
 
@@ -137,6 +137,9 @@ TICKET_STATUS_DONE = 'done'          # ticket Status: words the commands write o
 TICKET_STATUS_IN_PROGRESS = 'in-progress'
 TICKET_STATUS_READY = 'ready-for-agent'
 TICKET_STATUS_UNKNOWN = 'unknown'    # what a ticket without a readable Status: line reports
+TICKET_STATUS_HUMAN = 'ready-for-human'   # the other triage words of docs/formats.md
+TICKET_STATUS_NEEDS_INFO = 'needs-info'
+TICKET_STATUS_WONTFIX = 'wontfix'
 
 # ---------- pipeline skills ----------
 

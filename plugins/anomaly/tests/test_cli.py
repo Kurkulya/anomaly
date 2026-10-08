@@ -80,8 +80,8 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_exactly_the_three_core_reviewers_read_only_and_with_no_pinned_model(self):
-        self.assertEqual(sorted(path.stem for path in self.agents()), sorted(lens.core_lenses()))
+    def test_the_agents_are_the_core_reviewers_and_the_plan_reviewer_read_only_and_with_no_pinned_model(self):
+        self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), lens.PLAN_LENS)))   # plan: the plan-gate reviewer, outside the core lenses
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
             with self.subTest(agent=path.stem):
@@ -116,9 +116,10 @@ class SkillFileTest(unittest.TestCase):
         self.assertLessEqual(self.REVIEW_BRIEF.stat().st_size, self.REVIEW_BRIEF_MAX_BYTES)
         self.assertIn(self.REVIEW_BRIEF.name, self.REVIEW_SKILL.read_text(encoding='utf-8'))
 
-    def test_the_review_skill_has_a_dispatch_row_or_heading_for_each_of_the_five_modes(self):
-        """AC-45: ticket, delta, cumulative, combined and rules."""
+    def test_the_review_skill_has_a_dispatch_row_or_heading_for_each_of_the_seven_modes(self):
+        """AC-45: ticket, delta, cumulative, combined and rules; plan-gate ticket 07 (AC-14): spec and tickets."""
         text = self.review_text()
+        self.assertLessEqual({'spec', 'tickets'}, set(constants.REVIEW_MODES))
         for mode in constants.REVIEW_MODES:
             with self.subTest(mode=mode):
                 self.assertRegex(text, re.compile(rf'^(?:\|\s*|#+\s*)`?{mode}`?\b', re.M))
@@ -172,6 +173,41 @@ class SkillFileTest(unittest.TestCase):
         self.assertIn('not meaningful', text)
         self.assertIn('diff.md', text)
         self.assertRegex(text, r'(?<![\w-])cp(?![\w-])')
+
+    def test_ticket_mode_runs_a_rules_pass_on_a_brief_and_skill_pair_the_tests_line_names(self):
+        """Rule-trace ticket AC-1: the trigger lives in review, so `build` SKILL.md stays unchanged (AC-2)."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        # The trigger: a ticket's `Tests:` line naming `rule trace <brief path> <SKILL.md path>`.
+        trigger = re.search(r'Tests:[^\n]{0,200}rule trace|rule trace[^\n]{0,200}Tests:', text, re.I)
+        self.assertIsNotNone(trigger, 'no ticket-mode trigger on a `Tests:` line naming a rule trace')
+        around = text[text.rfind('\n', 0, trigger.start()) + 1:].split('\n', 1)[0].lower()  # the trigger's own line
+        self.assertIn('ticket', around)
+        self.assertIn('combined', around)
+        self.assertIn('rules mode', around)     # the extra pass is a rules-mode pass ...
+        self.assertIn('anomaly:feature', around)  # ... by the feature agent
+        self.assertIn('brief', around)       # on the brief ...
+        self.assertIn('skill.md', around)    # ... and SKILL.md pair
+        step7 = next(line for line in text.split('\n') if line.startswith('7. '))
+        self.assertIn('rules pass', step7)   # `ticket reviewed` waits for the rules pass too
+        self.assertNotIn('rule trace', self.build_text().lower())
+
+    def test_a_delta_round_on_a_rule_trace_ticket_reruns_the_rules_pass_on_the_fixed_skill(self):
+        """Rule-trace ticket AC-1: rules mode has no diff range, so the re-run is review's answer to a delta request."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        section = text.split('## Delta rounds', 1)[1].split('\n## ', 1)[0].lower()
+        self.assertIn('rule trace', section)
+        self.assertIn('rules', section)
+        self.assertRegex(section, r'fixed|again|re-?run')
+
+    def test_the_readme_review_section_names_the_rule_trace_pass(self):
+        """Rule-trace ticket AC-1."""
+        readme = PLUGIN.parent.parent / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        section = text.split('## The review skill', 1)[1].split('\n## ', 1)[0].lower()
+        self.assertIn('rule trace', section)
+        self.assertIn('rules', section)
 
 
 class ReadmeTest(unittest.TestCase):
@@ -474,6 +510,651 @@ class CliTest(unittest.TestCase):
                                     '--projects', str(self.root / 'absent'))
         self.assertEqual(code, 2)
         self.assertIn('transcript folder', err)
+
+
+class PlanningDocsTest(unittest.TestCase):
+    """The planning docs under `docs/` (workflow-plan ticket 02, AC-3 to AC-5): each within its budget."""
+    DOCS_DIR = PLUGIN / 'docs'
+    FORMATS = DOCS_DIR / 'formats.md'
+    BOUNDARIES = DOCS_DIR / 'boundaries.md'
+    DOC_BUDGETS = {FORMATS.name: 6 * 1024, BOUNDARIES.name: 2 * 1024}   # shared shapes; where each planning stage ends
+    README = PLUGIN.parent.parent / 'README.md'
+    CONTEXT = PLUGIN.parent.parent / 'CONTEXT.md'
+
+    def doc_text(self, path):
+        self.assertTrue(path.is_file(), f'docs/{path.name} is missing')
+        return path.read_text(encoding='utf-8')
+
+    def test_each_planning_doc_exists_within_its_budget(self):
+        for name, max_bytes in self.DOC_BUDGETS.items():
+            with self.subTest(doc=name):
+                path = self.DOCS_DIR / name
+                self.assertTrue(path.is_file(), f'docs/{name} is missing')
+                self.assertLessEqual(path.stat().st_size, max_bytes)
+
+    def test_the_formats_doc_defines_each_shared_shape(self):
+        """AC-3: stories.md, the D-n and T-n lines, the ticket, the log.md line, the triage words, the
+        next-step offer, the ADR front block."""
+        text = self.doc_text(self.FORMATS)
+        for token in ('## stories.md', '## decisions.md', '- D-n:', '- T-n:', 'Source:', 'Avoid:', 'Amended <date>:',
+                      'Jira:', 'no-ticket', 'Repro:', '## log.md', 'anomaly log add', 'ACs: AC-1',
+                      'ready-for-agent', 'ready-for-human (', 'needs-info', 'wontfix', '`in-progress` and `done`',
+                      '/anomaly:<name>', '- Decision:', '- Revisit:', '## Out of scope', '(verbatim', '— owner:'):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_the_boundaries_doc_names_clear_the_three_stages_and_the_context_zone(self):
+        """AC-4: /clear is never offered between interview, specify and slice; the ~150k zone."""
+        text = self.doc_text(self.BOUNDARIES)
+        plain = text.replace('`', '')
+        for rule in (r'Never offer /clear between interview, specify and slice', r'Offer /clear once, after slice',
+                     r'model never runs it', r'about 150k tokens'):
+            with self.subTest(rule=rule):
+                self.assertRegex(plain, rule)
+
+    def test_the_readme_has_a_planning_formats_section_naming_both_docs(self):
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        parts = self.README.read_text(encoding='utf-8').split('## Planning formats', 1)
+        self.assertEqual(len(parts), 2, 'README.md has no "## Planning formats" section')
+        section = parts[1].split('\n## ', 1)[0]
+        for name in self.DOC_BUDGETS:
+            with self.subTest(doc=name):
+                self.assertIn(f'docs/{name}', section)
+
+    def test_the_glossary_has_a_term_line_row(self):
+        if not self.CONTEXT.is_file():
+            self.skipTest('no CONTEXT.md two folders above the plugin: an installed copy, not the repository')
+        rows = [line for line in self.CONTEXT.read_text(encoding='utf-8').splitlines()
+                if line.startswith('| **term line**')]
+        self.assertEqual(len(rows), 1)
+        self.assertIn('T-n', rows[0])
+
+
+class PlanReviewerTest(unittest.TestCase):
+    """Ticket 06 (AC-12, AC-13): the read-only plan reviewer agent and its two mode docs."""
+    AGENT = PLUGIN / 'agents' / 'plan.md'
+    MODE_DOC_MAX_BYTES = 3 * 1024   # each mode doc, loaded only in its mode
+    SPEC = PLUGIN / 'skills' / 'review' / 'plan-spec.md'
+    TICKETS = PLUGIN / 'skills' / 'review' / 'plan-tickets.md'
+    README = PLUGIN.parent.parent / 'README.md'
+
+    def text(self, path):
+        self.assertTrue(path.is_file(), path.relative_to(PLUGIN).as_posix())
+        return path.read_text(encoding='utf-8')
+
+    def items(self, path, headings):
+        """Each heading is the start of one numbered check item in the doc (`3. Sizing.`); the item must exist as its own line."""
+        text = self.text(path)
+        for heading in headings:
+            with self.subTest(doc=path.name, check=heading):
+                self.assertRegex(text, re.compile(rf'^\d+\. {heading}\b', re.M))
+
+    def test_the_plan_agent_names_both_modes_returns_its_report_and_loads_the_two_mode_docs(self):
+        text = self.text(self.AGENT)
+        lowered = text.lower()
+        for mode in ('spec', 'tickets'):
+            self.assertRegex(lowered, rf'`{mode}`|\b{mode} mode\b')
+        self.assertRegex(lowered, r'writes? no file|no file')
+        self.assertRegex(lowered, r'final message')
+        for doc in ('skills/review/plan-spec.md', 'skills/review/plan-tickets.md'):
+            self.assertIn(doc, text)
+
+    def test_each_plan_mode_doc_fits_in_3_KB(self):
+        for path in (self.SPEC, self.TICKETS):
+            with self.subTest(doc=path.name):
+                self.text(path)
+                self.assertLessEqual(path.stat().st_size, self.MODE_DOC_MAX_BYTES)
+
+    def test_spec_mode_checks_claims_testable_acs_owned_out_of_scope_lines_and_open_questions(self):
+        """AC-12."""
+        self.items(self.SPEC, ['Code claims', 'Tool claims', 'Testable ACs', 'Out of scope', 'Open questions'])
+        text = self.text(self.SPEC)
+        self.assertRegex(text, r'cite a `file:line` or a commit')
+        self.assertRegex(text, r'its source, an ADR or a probe')
+        self.assertRegex(text, r'names an owner')
+        self.assertRegex(text, r'left at the gate is a Blocker')
+
+    def test_tickets_mode_checks_the_seven_slice_checks(self):
+        """AC-13: ordering, invented paths, hidden dependencies, sizing, Restates overlap, AC coverage, Tests level."""
+        self.items(self.TICKETS, ['Ordering', 'Invented paths', 'Hidden dependencies between parallel tickets', 'Sizing',
+                                  '`Restates:` complete', 'AC coverage', '`Tests:` level per AC'])
+        self.assertIn('`Covers:` is complete', self.text(self.TICKETS))
+        self.assertIn('`Restates:` lists must not share a file', self.text(self.TICKETS))
+
+    def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        section = self.README.read_text(encoding='utf-8').split('## Reviewer agents', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('anomaly:plan', section)
+        for mode in ('spec', 'tickets'):
+            self.assertRegex(section, rf'`{mode}`|\b{mode}\b')
+
+    def test_the_new_files_do_not_name_the_org_plan_reviewers(self):
+        """ADR-0006: plan-audit and plan-sanity are not copied and not named."""
+        for path in (self.AGENT, self.SPEC, self.TICKETS):
+            text = self.text(path).lower()
+            for name in ('plan-audit', 'plan-sanity'):
+                with self.subTest(doc=path.name, name=name):
+                    self.assertNotIn(name, text)
+
+
+class PlanGateReviewTest(unittest.TestCase):
+    """Workflow-plan ticket 07 (AC-14, AC-15): the review skill's `spec` and `tickets` modes, the plan lens,
+    the README and glossary lines, and ADR-0015."""
+    ROOT = PLUGIN.parent.parent
+    REVIEW = PLUGIN / 'skills' / 'review'
+    SKILL = REVIEW / 'SKILL.md'
+    PLAN_AGENT = PLUGIN / 'agents' / 'plan.md'
+    BRIEFS = REVIEW / 'BRIEFS.md'
+
+    def skill(self):
+        self.assertTrue(self.SKILL.is_file())
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def section(self, heading):
+        return self.skill().split(heading, 1)[1].split('\n## ', 1)[0]
+
+    def mode_rows(self):
+        return {mode: line for mode in ('spec', 'tickets')
+                for line in self.skill().splitlines() if re.match(rf'\|\s*`?{mode}`?\s*\|', line)}
+
+    def test_the_mode_table_has_a_row_for_spec_and_tickets_that_dispatch_the_plan_agent(self):
+        rows = self.mode_rows()
+        self.assertEqual(sorted(rows), ['spec', 'tickets'])
+        for mode, row in rows.items():
+            with self.subTest(mode=mode):
+                self.assertIn('anomaly:plan', row)
+
+    def test_step_1_skips_risk_and_the_diff_for_spec_and_tickets_as_for_rules(self):
+        step = next(line for line in self.skill().splitlines() if line.startswith('1. '))
+        self.assertRegex(step, r'(?s)(?:\bspec\b.*\btickets\b|\btickets\b.*\bspec\b).*skip|skip.*(?:\bspec\b.*\btickets\b|\btickets\b.*\bspec\b)')
+
+    def test_the_ports_step_names_the_plan_agent_among_the_reviewers(self):
+        step = next(line for line in self.skill().splitlines() if line.startswith('2. '))
+        self.assertIn('anomaly:plan', step)
+
+    def test_the_lens_step_names_the_plan_lens(self):
+        step = next(line for line in self.skill().splitlines() if line.startswith('9. '))
+        self.assertIn(f'`{lens.PLAN_LENS}`', step)
+
+    def test_a_failed_read_of_the_plan_agents_mode_doc_is_answered_with_that_file_by_sendmessage(self):
+        section = self.section('## When an agent\'s read fails')
+        self.assertIn('anomaly:plan', section)
+        for doc in ('plan-spec.md', 'plan-tickets.md'):
+            with self.subTest(doc=doc):
+                self.assertIn(doc, section)
+
+    def test_a_blocker_stops_the_calling_skill_and_warnings_and_nits_go_in_its_handoff(self):
+        """AC-15."""
+        text = self.skill()
+        lowered = text.lower()
+        self.assertRegex(lowered, r'blocker[^.\n]*(stops?|halts?)[^.\n]*(calling skill|caller)'
+                                  r'|(stops?|halts?)[^.\n]*(calling skill|caller)[^.\n]*blocker')
+        self.assertRegex(lowered, r'warnings?[^.\n]*nits?[^.\n]*handoff|handoff[^.\n]*warnings?[^.\n]*nits?')
+
+    def test_a_plan_mode_delta_round_rechecks_the_changed_lines_and_the_caller_passes_the_work_unit_folder(self):
+        """AC-15: a fix gets a delta round from the same agent."""
+        section = self.section('## Delta rounds').lower()
+        self.assertIn('anomaly:plan', section)
+        self.assertRegex(section, r'stories\.md')
+        self.assertRegex(section, r'decisions\.md')
+        self.assertRegex(section, r'changed')
+        self.assertRegex(section, r'work-unit folder')
+
+    def test_the_plan_agent_or_the_review_brief_carries_a_delta_line_for_the_changed_lines(self):
+        """Amended 2026-10-08: `agents/plan.md` had none."""
+        carriers = [path for path in (self.PLAN_AGENT, self.BRIEFS)
+                    if re.search(r'(?i)(delta|re-?check)[^\n]*(changed|since)|(changed|since)[^\n]*(delta|re-?check)',
+                                 path.read_text(encoding='utf-8'))]
+        self.assertTrue(carriers, 'neither agents/plan.md nor review/BRIEFS.md has a plan delta line')
+
+    def test_the_readme_review_section_names_the_spec_and_tickets_modes(self):
+        if not (self.ROOT / 'README.md').is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        section = (self.ROOT / 'README.md').read_text(encoding='utf-8').split('## The review skill', 1)[1].split('\n## ', 1)[0]
+        for mode in ('spec', 'tickets'):
+            with self.subTest(mode=mode):
+                self.assertRegex(section, rf'`{mode}`')
+        self.assertIn('anomaly:plan', section)
+
+    def test_the_glossary_has_one_plan_gate_row_avoiding_plan_sanity_and_claim_check(self):
+        context = self.ROOT / 'CONTEXT.md'
+        if not context.is_file():
+            self.skipTest('no CONTEXT.md two folders above the plugin: an installed copy, not the repository')
+        rows = [line for line in context.read_text(encoding='utf-8').splitlines() if line.startswith('| **plan gate**')]
+        self.assertEqual(len(rows), 1)
+        for token in ('spec', 'tickets', 'Blocker', 'plan-sanity', 'claim check'):
+            with self.subTest(token=token):
+                self.assertIn(token, rows[0])
+
+    def test_adr_0015_is_accepted_and_adr_0011_names_it_as_partly_superseding(self):
+        adrs = self.ROOT / 'docs' / 'adr'
+        if not adrs.is_dir():
+            self.skipTest('no docs/adr two folders above the plugin: an installed copy, not the repository')
+        found = sorted(adrs.glob('0015-plan-gate-in-review-and-term-lines.md'))
+        self.assertEqual(len(found), 1, 'docs/adr/0015-plan-gate-in-review-and-term-lines.md is missing')
+        text = found[0].read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^# ADR-0015\b')
+        self.assertRegex(text, r'(?m)^Status: Accepted\b')
+        status = next(line for line in (next(adrs.glob('0011-*.md'))).read_text(encoding='utf-8').splitlines()
+                      if line.startswith('Status:'))
+        self.assertIn('ADR-0015', status)
+        self.assertIn('partly superseded', status)
+
+
+class InterviewSkillTest(unittest.TestCase):
+    """Workflow-plan ticket 08 (AC-16 to AC-18): the interview skill's text, by key tokens. The rule trace
+    against the brief is run by review, not here."""
+    SKILL = PLUGIN / 'skills' / 'interview' / 'SKILL.md'
+    SKILL_MAX_BYTES = 6 * 1024   # the brief's size; the all-skills cap is 8 KB
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/interview/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_interview_skill_fits_in_6_KB_and_its_tools_are_the_cli_only(self):
+        self.text()
+        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'interview')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+
+    def test_the_interview_skill_is_slash_only_with_a_third_person_description_that_says_so(self):
+        """AC-16: `disable-model-invocation: true`; the 250-character limit is the all-skills check above."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('disable-model-invocation'), 'true')
+        description = fields.get('description', '')
+        self.assertRegex(description.lower(), r'slash[- ]only|only as a slash|slash command')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertNotIn('model-invocable', description.lower())
+
+    def test_it_gathers_then_lists_settled_adrs_and_decisions_before_asking_rounds_of_at_most_8_questions(self):
+        """AC-16."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('gather', text)
+        self.assertIn('ADR', text)
+        self.assertRegex(text, r'D-n|D-\d')
+        self.assertIn('settled', lowered)
+        self.assertLess(*(lowered.split('---', 2)[2].index(word) for word in ('settled already', '\n## a round')))
+        self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*8\b')
+        self.assertIn('Assumes:', text)
+        self.assertIn('Recommend:', text)
+        self.assertIn('defaults', lowered)
+        self.assertRegex(lowered, r'low[- ]risk')
+
+    def test_it_writes_d_and_t_lines_with_a_source_after_each_round_and_edits_nothing_else(self):
+        """AC-17."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('decisions.md', text)
+        self.assertRegex(text, r'\.anomaly/<work unit>/decisions\.md')
+        self.assertIn('T-n', text)
+        self.assertIn('Source:', text)
+        self.assertRegex(lowered, r'after each round|after every round|each round')
+        self.assertRegex(lowered, r'no other file|nothing else|no other')
+        self.assertRegex(lowered, r'no commit|not commit|never commit|makes no commit|do not commit')
+
+    def test_it_closes_with_a_decisions_table_and_one_confirm_question_a_worklog_line_and_the_specify_offer(self):
+        """AC-18."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('table', lowered)
+        self.assertRegex(lowered, r'one confirm|single confirm|confirm question')
+        self.assertIn('worklog add', text)
+        self.assertIn('--stage interview', text)
+        self.assertIn('--feature', text)
+        self.assertIn('/anomaly:specify', text)
+
+    def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
+        text = self.text()
+        for name in ('formats.md', 'boundaries.md'):
+            with self.subTest(doc=name):
+                self.assertRegex(text, rf'\]\((?:\.\./)+docs/{re.escape(name)}\)|docs/{re.escape(name)}')
+                self.assertTrue((PLUGIN / 'docs' / name).is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+
+    def test_the_glossary_lens_row_names_the_interviews_recommendations_and_the_three_counts(self):
+        context = self.ROOT / 'CONTEXT.md'
+        if not context.is_file():
+            self.skipTest('no CONTEXT.md two folders above the plugin: an installed copy, not the repository')
+        rows = [line for line in context.read_text(encoding='utf-8').splitlines() if line.startswith('| **lens**')]
+        self.assertEqual(len(rows), 1)
+        self.assertIn('interview', rows[0])
+        self.assertIn('recommendations', rows[0])
+        for word in ('accepted', 'rejected', 'revised'):
+            with self.subTest(word=word):
+                self.assertIn(word, rows[0])
+
+    def test_the_readme_has_an_interview_skill_section_naming_the_slash_command(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The interview skill$')
+        section = text.split('## The interview skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:interview', section)
+
+
+class SpecifySkillTest(unittest.TestCase):
+    """Workflow-plan ticket 09 (AC-19 to AC-21): the specify skill's text, by key tokens. The rule trace against
+    the brief is run by review, not here. The all-skills checks (250-character description, 8 KB, folder set)
+    cover the new folder through ALLOWED_TOOLS_SKILLS."""
+    SKILL = PLUGIN / 'skills' / 'specify' / 'SKILL.md'
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/specify/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_specify_skill_is_slash_only_limited_to_the_cli_and_says_so_in_a_third_person_description(self):
+        """AC-19."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'specify')
+        self.assertEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+        description = fields.get('description', '')
+        self.assertLessEqual(len(description), 250)
+        self.assertRegex(description.lower(), r'slash[- ]only|only as a slash|slash command')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertLessEqual(self.SKILL.stat().st_size, SkillFileTest.SKILL_MAX_BYTES)
+
+    def test_it_writes_stories_md_and_appends_cited_d_lines_from_decisions_md(self):
+        """AC-19."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertRegex(text, r'\.anomaly/<work unit>/stories\.md')
+        self.assertIn('decisions.md', text)
+        for part in ('Sources', 'Gathered', 'Why', 'Out of scope'):
+            with self.subTest(part=part):
+                self.assertIn(part, text)
+        self.assertRegex(text, r'AC-n|AC-\d')
+        self.assertRegex(lowered, r'verbatim')
+        self.assertRegex(lowered, r'continuous|without gaps|no gap')
+        self.assertRegex(text, r'D-n|D-\d')
+        self.assertRegex(lowered, r'append')
+        self.assertRegex(lowered, r'cite|source:')
+
+    def test_it_never_writes_a_context_row_or_a_t_line(self):
+        text = self.text()
+        self.assertRegex(text, r'CONTEXT\.md')
+        self.assertRegex(text, r'T-n')
+        self.assertRegex(text.lower(), r'never|does not write|no `?context\.md`?|not write')
+
+    def test_open_items_in_decisions_md_stop_it_before_it_writes_anything_and_send_the_user_to_the_interview(self):
+        """Amended at ticket 09 build."""
+        text = self.text()
+        self.assertIn('Open:', text)
+        self.assertIn('/anomaly:interview', text)
+        self.assertRegex(text.lower(), r'before it writes|writes nothing|before writing|nothing is written')
+
+    def test_it_drafts_adrs_under_the_work_unit_with_a_number_free_on_every_branch(self):
+        """AC-20."""
+        text = self.text()
+        self.assertRegex(text, r'\.anomaly/<work unit>/adr/')
+        self.assertIn('git log --all -- docs/adr/', text)
+        self.assertRegex(text.lower(), r'free on every branch|every branch')
+        self.assertRegex(text, r'\.anomaly/\*/adr/')
+
+    def test_it_runs_check_stories_then_the_spec_review_then_a_digest_of_at_most_5_lines_and_waits(self):
+        """AC-21, with the Blocker and warning rules of the review amendments."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('check stories', text)
+        self.assertRegex(text, r'anomaly:review')
+        self.assertRegex(lowered, r'`?spec`? mode|mode `?spec`?')
+        self.assertLess(text.index('check stories'), text.index('anomaly:review'))
+        self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*5 lines')
+        self.assertRegex(lowered, r'wait|approv')
+        self.assertIn('Blocker', text)
+        self.assertRegex(lowered, r'exit 1|exits 1')
+        self.assertIn('warning:', text)
+        self.assertIn('delta', lowered)
+        self.assertIn('lens tally sum', text)
+        self.assertNotRegex(text, r'anomaly:plan\b')
+
+    def test_it_logs_one_log_line_with_a_semicolon_ended_id_list_and_a_specify_work_unit_line_without_costs(self):
+        """AC-21."""
+        text = self.text()
+        self.assertRegex(text, r'log add\b[^\n]*--stage specify')
+        self.assertRegex(text, r'ACs: AC-\d+(?:, AC-\d+)*;')
+        self.assertIn('worklog add', text)
+        self.assertRegex(text.lower(), r'no cost|never cost|without cost|carry no cost')
+
+    def test_it_records_the_interview_recommendation_counts_as_the_interview_lens(self):
+        text = self.text()
+        self.assertRegex(text, r'lens tally add\b[^\n]*--lens interview')
+
+    def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
+        text = self.text()
+        for name in ('formats.md', 'boundaries.md'):
+            with self.subTest(doc=name):
+                self.assertRegex(text, rf'docs/{re.escape(name)}')
+                self.assertTrue((PLUGIN / 'docs' / name).is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+
+    def test_it_holds_one_worked_stories_example_in_a_fence_with_numbered_acs(self):
+        """G26. test_neutral.py scans every plugin file, this skill included, but only for the owner's profile
+        identifiers (it skips without a profile), so a made-up domain is a review check, not a test."""
+        text = self.text()
+        fences = re.findall(r'(?ms)^```[a-z]*\n(.*?)^```', text)
+        examples = [block for block in fences if re.search(r'(?m)^.*\bAC-1\b', block)]
+        self.assertEqual(len(examples), 1, 'expected one fenced stories.md example holding AC-1')
+        self.assertRegex(examples[0], r'(?m)^.*\bAC-2\b')
+        self.assertIn('Out of scope', examples[0])
+
+    def test_the_readme_has_a_specify_skill_section_naming_the_slash_command(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The specify skill$')
+        section = text.split('## The specify skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:specify', section)
+
+
+class SliceSkillTest(unittest.TestCase):
+    """Workflow-plan ticket 10 (AC-22 to AC-24): the slice skill's text, by key tokens. The rule trace against
+    the brief is run by review, not here. The all-skills checks (250-character description, folder set) cover
+    the new folder through ALLOWED_TOOLS_SKILLS."""
+    SKILL = PLUGIN / 'skills' / 'slice' / 'SKILL.md'
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/slice/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_slice_skill_is_slash_only_limited_to_the_cli_and_says_so_in_a_third_person_description(self):
+        """AC-22. The size limit is 6 KB (the ticket), tighter than the 8 KB of the all-skills check."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'slice')
+        self.assertEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+        description = fields.get('description', '')
+        self.assertLessEqual(len(description), 250)
+        self.assertRegex(description.lower(), r'slash[- ]only|only as a slash|slash command')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertLessEqual(self.SKILL.stat().st_size, 6144)
+
+    def test_it_reads_stories_and_decisions_and_shows_a_numbered_list_for_approval_before_it_writes(self):
+        """AC-22."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('stories.md', text)
+        self.assertIn('decisions.md', text)
+        self.assertRegex(lowered, r'numbered list')
+        for part in ('title', 'blocked by', 'covers', 'tests'):
+            with self.subTest(part=part):
+                self.assertIn(part, lowered)
+        self.assertRegex(lowered, r'approv')
+        self.assertRegex(lowered, r'before it writes|writes nothing|before writing|nothing is written|only after')
+        self.assertRegex(text, r'tickets/NN-slug\.md')
+
+    def test_it_copies_acs_and_d_lines_verbatim_and_writes_no_line_numbers(self):
+        """AC-22, with the Amended line of the ticket 05 review."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertRegex(lowered, r'verbatim')
+        self.assertRegex(text, r'AC-n|AC-\d')
+        self.assertRegex(text, r'D-n|D-\d')
+        self.assertRegex(lowered, r'no line numbers|path:nn')
+        self.assertRegex(text, r'Source:')
+        self.assertRegex(lowered, r'fenced|fence')
+
+    def test_it_writes_only_the_ready_statuses_and_none_of_the_lines_build_writes_later(self):
+        """AC-22."""
+        text = self.text()
+        self.assertIn('ready-for-agent', text)
+        self.assertIn('ready-for-human', text)
+        self.assertRegex(text, r'Result:')   # named only to say that slice never writes it
+        self.assertRegex(text.lower(), r'never writes?|does not write|writes none|not write')
+
+    def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
+        text = self.text()
+        for name in ('formats.md', 'boundaries.md'):
+            with self.subTest(doc=name):
+                self.assertRegex(text, rf'docs/{re.escape(name)}')
+                self.assertTrue((PLUGIN / 'docs' / name).is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+
+    def test_term_lines_and_adr_drafts_land_in_the_first_ticket_that_needs_them_through_touches(self):
+        """AC-23."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('Touches:', text)
+        self.assertRegex(text, r'T-n|T-\d')
+        self.assertRegex(lowered, r'\badr\b')
+        self.assertRegex(lowered, r'first ticket')
+
+    def test_it_runs_check_slice_then_the_tickets_review_and_a_blocker_stops_it_before_the_next_build_step(self):
+        """AC-24, with the Blocker, warning and last-review rules of the review amendments."""
+        text = self.text()
+        lowered = text.lower()
+        self.assertIn('check slice', text)
+        self.assertRegex(text, r'anomaly:review')
+        self.assertRegex(lowered, r'`?tickets`? mode|mode `?tickets`?')
+        gate = text.split('\n## The checks and the gate', 1)[1].split('\n## ', 1)[0]
+        self.assertLess(gate.index('check slice'), gate.index('anomaly:review'))
+        self.assertRegex(lowered, r'exit 1|exits 1')
+        self.assertIn('warning:', text)
+        self.assertIn('Blocker', text)
+        self.assertRegex(lowered, r'every other finding|all other findings|other findings')
+        self.assertIn('delta', lowered)
+        self.assertRegex(lowered, r'work-unit folder|work unit folder')
+        self.assertIn('lens tally sum', text)
+        self.assertRegex(lowered, r'last review')
+        self.assertNotRegex(text, r'anomaly:plan\b')
+
+    def test_it_logs_one_log_line_per_gate_result_and_a_slice_work_unit_line_without_costs(self):
+        """AC-24."""
+        text = self.text()
+        self.assertRegex(text, r'log add\b[^\n]*--stage slice')
+        self.assertRegex(text, r'worklog add\b[^\n]*--stage slice')
+        self.assertRegex(text.lower(), r'no cost|never cost|without cost|carry no cost')
+
+    def test_it_offers_the_build_of_the_first_unblocked_ticket_through_ticket_gate(self):
+        """AC-24."""
+        section = self.text().split('\n## After the gate', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:build <work unit>', section)
+        self.assertIn('ticket gate', section)
+        self.assertRegex(section.lower(), r'first ticket with no open blocker')
+
+    def test_the_readme_has_a_slice_skill_section_naming_the_slash_command(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The slice skill$')
+        section = text.split('## The slice skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:slice', section)
+
+
+class DiagnoseSkillTest(unittest.TestCase):
+    """Workflow-plan ticket 13 (AC-27): the diagnose skill's text, by key tokens. The rule trace against the
+    brief is run by review, not here. The all-skills checks (250-character description, folder set, 8 KB)
+    cover the new folder through ALLOWED_TOOLS_SKILLS."""
+    SKILL = PLUGIN / 'skills' / 'diagnose' / 'SKILL.md'
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/diagnose/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def prose(self):
+        """The skill text after the frontmatter, without its fenced blocks (the CLI calls)."""
+        body = frontmatter.split(self.text())[1]
+        return re.sub(r'(?s)```.*?```', '', body)
+
+    def test_the_diagnose_skill_is_model_invocable_limited_to_the_cli_and_says_it_acts_on_a_reported_bug(self):
+        """AC-27. The size limit is 5 KB (the ticket), tighter than the 8 KB of the all-skills check."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'diagnose')
+        self.assertNotEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+        description = fields.get('description', '')
+        self.assertLessEqual(len(description), 250)
+        self.assertRegex(description.lower(), r'reported bug|diagnose')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertLessEqual(self.SKILL.stat().st_size, 5120)
+
+    def test_a_red_capable_command_runs_before_any_hypothesis(self):
+        """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order."""
+        lowered = self.prose().lower()
+        self.assertRegex(lowered, r'hypothes')
+        red = re.search(r'\bred\b|red-capable|repro', lowered)
+        self.assertIsNotNone(red, 'no red-capable command or repro in the prose')
+        self.assertLess(red.start(), lowered.index('hypothes'))
+
+    def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
+        """AC-27."""
+        text = self.text()
+        self.assertRegex(text, r'file:line')
+        self.assertRegex(text.lower(), r'probe output')
+        self.assertIn('unverified', text.lower())
+
+    def test_it_changes_no_source_and_leaves_the_tree_clean(self):
+        """AC-27."""
+        lowered = self.text().lower()
+        self.assertRegex(lowered, r'git status')
+        self.assertRegex(lowered, r'\bclean\b')
+        self.assertRegex(lowered, r'no source|changes no source|never edits|read-only')
+
+    def test_it_writes_the_ticket_through_ticket_adhoc_from_a_draft_written_in_the_scratchpad(self):
+        """AC-27, with ticket 12 (`--from`)."""
+        text = self.text()
+        self.assertRegex(text, r'ticket adhoc\b[^\n]*--from')
+        self.assertRegex(text, r'Write tool')
+        self.assertRegex(text.lower(), r'scratchpad')
+
+    def test_it_logs_a_diagnose_work_unit_line(self):
+        """AC-27."""
+        self.assertRegex(self.text(), r'worklog add\b[^\n]*--stage diagnose')
+
+    def test_it_offers_anomaly_build_with_the_path_of_the_adhoc_ticket(self):
+        """AC-27, with the build note of the ticket."""
+        text = self.text()
+        self.assertRegex(text, r'anomaly:build[^\n]*\.anomaly/adhoc/|anomaly:build <adhoc ticket path>')
+
+    def test_it_links_the_formats_doc_one_level_deep_and_does_not_restate_the_ticket_template(self):
+        """The Amended line of the ticket."""
+        text = self.text()
+        self.assertRegex(text, r'docs/formats\.md')
+        self.assertTrue((PLUGIN / 'docs' / 'formats.md').is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+        for block in re.findall(r'(?s)```.*?```', text):
+            self.assertFalse('Covers: AC-1' in block and 'Status: ready-for-agent' in block,
+                             'the ticket template is restated; link formats.md instead')
+
+    def test_the_readme_has_a_diagnose_skill_section_naming_the_skill(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The diagnose skill$')
+        section = text.split('## The diagnose skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('anomaly:diagnose', section)
 
 
 if __name__ == '__main__':

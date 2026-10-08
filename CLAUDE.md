@@ -3,10 +3,6 @@
 A Claude Code plugin marketplace with one plugin, `plugins/anomaly/`: skills, agents, hooks and a
 Python CLI (`scripts/anomaly.py` → `anomaly_loop/`). The README is the full reference.
 
-## Start here
-
-Read `NEXT.md` first: where the work stopped and the next ticket.
-
 ## Commands
 
 ```
@@ -38,4 +34,3 @@ Standard library only; no install step.
   the skill list.
 - **Windows paths in scripts**: write backslash paths with an editor tool or a raw string, never
   through `sed` or a plain Python literal. Write files with `newline='\n'`.
-- When work stops, update `NEXT.md` in the same commit.

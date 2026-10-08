@@ -1,5 +1,5 @@
-"""Reading and writing loop files: JSON lines and atomic whole-file writes, UTF-8 with LF; and
-the one reader of a UTF-8 text input (a record file, a batch, an option's file or standard input)."""
+"""Reading and writing loop files: JSON lines, atomic whole-file writes and a raw `append_text` (UTF-8, no line
+ending translation); and the one reader of a UTF-8 text input (a record file, a batch, an option's file or stdin)."""
 import json
 import os
 import sys
@@ -70,3 +70,12 @@ def append_line(path, obj):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'a', encoding='utf-8', newline='\n') as f:
         f.write(dump(obj) + '\n')
+
+
+def append_text(path, text):
+    """Add this text at the end of the file, as UTF-8 with no line ending translation; earlier bytes are
+    never rewritten. The file and its missing parent folders are made."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'ab') as f:
+        f.write(text.encode('utf-8'))
