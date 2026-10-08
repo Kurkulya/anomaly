@@ -409,6 +409,26 @@ class CheckStoriesTest(unittest.TestCase):
                  'Source: user, 2026-10-08 — owner: ticket 05\n')
         self.assertEqual(self.stories(), ([], []))
 
+    def test_an_out_of_scope_owner_that_is_a_bare_d_n_is_an_error(self):
+        self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', ' — owner: D-3'))
+        self.assert_error(15, 'owner:', 'D-', file_name='stories.md')
+
+    def test_a_bracketed_d_n_after_an_out_of_scope_owner_is_a_citation_not_an_error(self):
+        owners = (
+            'owner: phase 2 `workflow-conduct` (D-11)',
+            'owner: `anomaly:calibrate` (D-10)',
+            'owner: a later work unit, TODO(VK, revisit 2026-11-05) (D-5)',
+            'owner: VK, after phase 2 ships (D-3)',
+        )
+        for owner in owners:
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace('owner: ticket 05', owner))
+                self.assertEqual(self.stories(), ([], []))
+
+    def test_a_bracketed_d_n_after_a_decision_owner_is_a_citation_not_an_error(self):
+        self.put(decisions=GOOD_DECISIONS + '- D-3: leave xlsx out. Why: later. Source: user, 2026-10-08 — owner: ticket 05 (D-2)\n')
+        self.assertEqual(self.stories(), ([], []))
+
     def test_oversize_files_only_warn(self):
         self.put(stories=GOOD_STORIES + 'x' * (6 * 1024), decisions=GOOD_DECISIONS + 'x' * (8 * 1024))
         errors, warnings = self.stories()
