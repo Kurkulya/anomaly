@@ -38,7 +38,7 @@ Write `.anomaly/<work unit>/stories.md` in the shape of [formats.md](../../docs/
 - AC ids are continuous from AC-1 across all stories, never renumbered (formats.md). [C5]
 - Source criteria first and verbatim; the skill's own ACs after them, one testable sentence each, no Given/When/Then, real error paths and not only the happy path. [C4, US13-17]
 - A changed or withdrawn AC follows the amend rule in formats.md. [N8]
-- Every Out of scope line names an owner that holds the item: another unit, ticket or ADR, not the deferring `D-n` (a bracketed `(D-n)` citation after the owner is allowed); if none is known, ask the user who owns it. [N5]
+- Every Out of scope line names an owner that holds the item: another unit, ticket or ADR, never a `D-n` (a bracketed `(D-n)` citation after the owner is allowed); if none is known, ask the user who owns it. [N5]
 - On the 6 KB warning, suggest a split. [US19]
 
 Example, in a made-up domain:

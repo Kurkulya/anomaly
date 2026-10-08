@@ -906,7 +906,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
   `Repro: <command>`, an AC). A draft with a line missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
-  `Jira:` line kept and none added. The slug comes from the title unless `--slug` gives it.
+  `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
+  `warning:` on stderr (it should be one plain command) and is still written. The slug comes from the title unless `--slug` gives it.
 
 ## Benchmark
 
@@ -1525,6 +1526,8 @@ finds the root cause and changes no source.
   probe output, else marks it "unverified".
 - It removes every probe edit and leaves `git status` clean: no branch, commit or push. The loop
   script stays under the git-excluded `.anomaly/adhoc/` as `<key>-repro.<ext>`, so build can run it.
+  The ticket stem can differ from the `<key>` in the script name: `Repro:` holds the script's
+  absolute path, so build still runs it.
 - It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
   passes it to `ticket adhoc --from`, which checks it.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
