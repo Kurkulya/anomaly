@@ -138,7 +138,7 @@ def stories_errors(text):
             else:
                 found[ac] = number
         elif in_scope_out and line.startswith('- ') and OWNER_MARKER not in line:
-            errors.append(f'stories.md:{number}: an Out of scope line needs an owner ({OWNER_SHAPE})')
+            errors.append(f'stories.md:{number}: an Out of scope line needs the marker — owner: ({OWNER_SHAPE})')
         elif in_scope_out and line.startswith('- ') and owner_names_decision(line):
             errors.append(f'stories.md:{number}: an owner is a unit, ticket or ADR, not a D-n ({OWNER_SHAPE})')
     return errors, found
@@ -418,8 +418,8 @@ def register(commands, common):
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
         description=('Check a work-unit folder against the shapes in docs/formats.md. Errors: a duplicate AC id,\n'
                      'an AC id that a specify: line of log.md named and stories.md no longer holds, a D-n line\n'
-                     'with no Source:, an Out of scope line with no — owner:, an — owner: that names a D-n\n'
-                     'outside brackets.\n'
+                     'with no Source:, an Out of scope line with no — owner: marker, an owner after — owner:\n'
+                     'that names a D-n outside brackets.\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
                      'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
                      'anomaly: line and exit 2.'))

@@ -40,8 +40,8 @@ One line per entry, written after each round, settled items only. Numbers are ne
 - A changed line gets a second line `Amended <date>: <what changed>`.
 - `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
   the glossary.
-- A decision that leaves an item out of scope ends its text with `— owner: <unit, ticket or ADR>`. Only
-  the first `— owner:` counts, up to `. Why:`. The owner is never a `D-n`; a bracketed `(D-n)` citation is allowed.
+- A decision that leaves an item out of scope ends its text with `— owner: <unit, ticket or ADR>`. Only the first `— owner:`
+  counts, up to the first `. Why:` or `. Source:`. The owner is never a `D-n` (a bracketed `(D-n)` is allowed).
 
 ## Ticket
 
