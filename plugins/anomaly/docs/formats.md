@@ -27,7 +27,7 @@ Amended <date>: <what changed> — <why>
 - UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
-- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored. The owner must exist in the checkout (a unit folder under `.anomaly/` or `.scratch/`, written with or without backticks; a ticket file of this unit as `ticket NN`, or a path to a file; an ADR file as `ADR-NNNN`) or carry `TODO(<owner>, revisit YYYY-MM-DD)`. A person or a skill needs the key; a placeholder is never an owner.
+- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored. The owner must exist in the checkout (a unit folder under `.anomaly/` or `.scratch/`, written with or without backticks, bare or as a path; a ticket file of this unit as `ticket NN`, or the path of a ticket or ADR file; an ADR file as `ADR-NNNN`) or carry `TODO(<owner>, revisit YYYY-MM-DD)`. A person or a skill needs the key; a placeholder is never an owner.
 
 ## decisions.md
 
