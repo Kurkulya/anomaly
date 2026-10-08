@@ -1485,9 +1485,9 @@ turns an idea into settled decisions and terms by asking the user in rounds.
 - The close table shows the counts of its recommendations accepted, rejected and revised.
   `/anomaly:specify` records them with `lens tally add --lens interview`.
 - No question reopens a settled ADR or `D-n`, even when the idea asks for it; the conflict is named
-  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner (another unit,
-  ticket or ADR, never a `D-n`; when none is known, it asks). `Open:` holds only unanswered items,
-  because it stops `/anomaly:specify`.
+  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner after `— owner:`
+  (another unit, ticket or ADR, never a `D-n`; when none is known, it asks). `Open:` holds only
+  unanswered items, because it stops `/anomaly:specify`.
 
 ## The specify skill
 
