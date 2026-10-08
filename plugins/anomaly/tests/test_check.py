@@ -527,7 +527,7 @@ class CheckSliceTest(unittest.TestCase):
         self.assert_error('01-first.md:9:', 'app.module.ts:5', 'path')
 
     def test_a_host_and_port_after_a_scheme_or_an_at_sign_is_not_a_path_with_a_line_number(self):
-        for host in ('https://example.com:8080', 'https://example.co.uk:443', 'user@db.internal:5432'):
+        for host in ('https://example.com:8080', 'postgres://db.internal:5432', 'user@example.co.uk:443'):
             with self.subTest(host=host):
                 self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
                                                   body=f'\nServe it on {host} for the demo.\n'))
