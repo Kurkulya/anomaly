@@ -27,7 +27,7 @@ Amended <date>: <what changed> — <why>
 - UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
-- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored.
+- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored. The owner must exist in the checkout (a unit folder under `.anomaly/` or `.scratch/`, written with or without backticks; a ticket file of this unit as `ticket NN`, or a path to a file; an ADR file as `ADR-NNNN`) or carry `TODO(<owner>, revisit YYYY-MM-DD)`. A person or a skill needs the key; a placeholder is never an owner.
 
 ## decisions.md
 
@@ -41,7 +41,8 @@ One line per entry, written after each round, settled items only. Numbers are ne
 - `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
   the glossary.
 - A decision that leaves an item out of scope ends its text with `— owner: <unit, ticket or ADR>`. Only the first `— owner:`
-  counts, up to the first `. Why:` or `. Source:`. The owner is never a `D-n` (a bracketed `(D-n)` is allowed).
+  counts, up to the first `. Why:` or `. Source:`. The owner is never a `D-n` (a bracketed `(D-n)` is allowed), and
+  follows the same existence rule as an Out of scope owner.
 
 ## Ticket
 
