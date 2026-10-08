@@ -585,7 +585,7 @@ class CheckSliceTest(unittest.TestCase):
         self.assertLess(time.perf_counter() - started, 2.0)
         self.assertTrue(check.line_anchor('see .eslintrc.js:4').group(0).endswith('eslintrc.js:4'))
         self.assertTrue(check.line_anchor('/abs/p.py:9').group(0).endswith('p.py:9'))
-        self.assertIsNone(check.line_anchor('https://h/x/check.py:42'))
+        self.assertIsNone(check.line_anchor('https://example.com/x/check.py:42'))
 
     def test_an_oversize_ticket_only_warns(self):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='x' * (5 * 1024)))
