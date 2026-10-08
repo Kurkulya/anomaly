@@ -987,6 +987,15 @@ class SpecifySkillTest(unittest.TestCase):
         self.assertRegex(examples[0], r'(?m)^.*\bAC-2\b')
         self.assertIn('Out of scope', examples[0])
 
+    def test_an_out_of_scope_owner_is_a_unit_ticket_or_adr_never_the_deferring_d_n_and_the_user_is_asked(self):
+        """2026-10-08-out-of-scope-owner-check AC-1."""
+        text = self.text()
+        rule = [line for line in text.splitlines() if re.search(r'(?i)out of scope', line) and re.search(r'(?i)owner', line)]
+        self.assertTrue(rule, 'no line ties out of scope and owner')
+        self.assertTrue(any(re.search(r'(?i)not (?:that|the deferring|its own) `?D-n', line) for line in rule),
+                        'the rule does not say the owner is not the D-n itself')
+        self.assertRegex(text, r'(?i)\bask\b[^\n]*owner|owner[^\n]*\bask\b')
+
     def test_the_readme_has_a_specify_skill_section_naming_the_slash_command(self):
         readme = self.ROOT / 'README.md'
         if not readme.is_file():
