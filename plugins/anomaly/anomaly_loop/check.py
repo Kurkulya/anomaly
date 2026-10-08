@@ -98,6 +98,7 @@ D_LINE = re.compile(r'^- D-\d+:')
 SPECIFY_LINE = re.compile(r'^\S+ \S+ specify:')
 SPECIFY_IDS = re.compile(r'^\S+ \S+ specify: ACs: ([^;]*);')
 D_TOKEN = re.compile(r'\bD-\d+')
+BRACKETED = re.compile(r'\([^()]*\)|\[[^\[\]]*\]')
 # The shapes below are the exact text of docs/formats.md; a test holds them to it.
 AC_SHAPE = '- AC-1: <criterion>'
 D_SHAPE = '- D-n: <decision>. Why: <one line>. Source: <where>'
@@ -107,9 +108,10 @@ D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
 
 
 def owner_names_decision(line):
-    """True when the text after the last `owner:` on the line holds a D-n token."""
+    """True when the text after the last `owner:` on the line holds a D-n token outside brackets.
+    A D-n in round or square brackets is a citation, not the owner."""
     _, marker, owner = line.rpartition('owner:')
-    return bool(marker) and D_TOKEN.search(owner) is not None
+    return bool(marker) and D_TOKEN.search(BRACKETED.sub('', owner)) is not None
 
 
 def read_optional(path):
@@ -118,7 +120,7 @@ def read_optional(path):
 
 
 def stories_errors(text):
-    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner or a D-n owner.
+    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner or an owner that names a D-n outside brackets.
     Also the ids found."""
     errors, found, in_scope_out = [], {}, False
     for number, line in enumerate(text.splitlines(), 1):
@@ -140,7 +142,7 @@ def stories_errors(text):
 
 
 def decisions_errors(text):
-    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `owner:` names a D-n.
+    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `owner:` names a D-n outside brackets.
     A `T-n` line needs no Source."""
     errors = []
     for number, line in enumerate(text.splitlines(), 1):
@@ -400,7 +402,8 @@ def register(commands, common):
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
         description=('Check a work-unit folder against the shapes in docs/formats.md. Errors: a duplicate AC id,\n'
                      'an AC id that a specify: line of log.md named and stories.md no longer holds, a D-n line\n'
-                     'with no Source:, an Out of scope line with no owner:, an owner: that names a D-n.\n'
+                     'with no Source:, an Out of scope line with no owner:, an owner: that names a D-n\n'
+                     'outside brackets.\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
                      'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
                      'anomaly: line and exit 2.'))
