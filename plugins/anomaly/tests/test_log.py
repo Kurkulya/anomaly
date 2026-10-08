@@ -107,6 +107,21 @@ class RefusalTest(LogCase):
         self.assertFalse(missing.exists())
         self.assertEqual(self.listing(), before)
 
+    def test_a_log_file_that_is_a_symlink_is_refused_and_its_target_is_not_written(self):
+        """Adhoc 2026-10-08-review-security-lows, AC-1: A01, no append through a symlinked log.md."""
+        self.control()
+        target = self.root / 'target.txt'
+        target.write_bytes(b'secret\n')
+        try:
+            self.log.symlink_to(target)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f'symlinks are not available: {error}')
+        result = self.add()
+        assert_cli_error(self, result)
+        self.assertRegex(result[2], r'log\.md|symlink')
+        self.assertEqual(target.read_bytes(), b'secret\n')
+        self.assertTrue(self.log.is_symlink())
+
     def test_a_stage_with_a_space_or_a_colon_or_empty_text_is_refused_and_nothing_is_written(self):
         self.control()
         before = self.listing()

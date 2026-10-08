@@ -1188,6 +1188,14 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertTrue(any('`Repro:`' in line and 'script' in line.lower() for line in text.splitlines()),
                         'no line says the Repro: line runs the loop script')
 
+    def test_the_redact_rule_covers_the_draft_and_the_ticket_not_only_shown_output(self):
+        """Adhoc 2026-10-08-review-security-lows, AC-1: A09, secrets stay out of the files too."""
+        match = re.search(r'Redact secrets[^.]*\.', self.text())
+        self.assertIsNotNone(match, 'the skill has no "Redact secrets" sentence')
+        sentence = match.group(0).lower()
+        self.assertIn('draft', sentence)
+        self.assertIn('ticket', sentence)
+
     def test_it_logs_a_diagnose_work_unit_line(self):
         """AC-27."""
         self.assertRegex(self.text(), r'worklog add\b[^\n]*--stage diagnose')
