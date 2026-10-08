@@ -1150,7 +1150,7 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   brackets; an owner (on an Out of scope line or a `- D-<n>:` line) that is not in the checkout
   and carries no `TODO(<owner>, revisit YYYY-MM-DD)` key. The owner exists when it names a unit
   folder under `.anomaly/` or `.scratch/` (a bare name or a path), `ticket NN` (`tickets/NN-*.md`
-  of the unit), the path of a ticket file or an ADR file, or `ADR-NNNN` (`docs/adr/` or the `adr/`
+  of the unit) or ``ticket NN of `<unit>` `` (that unit's `tickets/`), the path of a ticket file or an ADR file, or `ADR-NNNN` (`docs/adr/` or the `adr/`
   of a unit folder); only the checkout counts, so an ADR on another branch fails, and any other
   file (a README, a skill) is no owner. A person or a skill needs the key. Only the first `— owner:`
   starts the owner; it ends at the first `. Why:` or

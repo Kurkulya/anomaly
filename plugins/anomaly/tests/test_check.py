@@ -488,6 +488,7 @@ class CheckStoriesTest(unittest.TestCase):
             'README.md',
             '`plugins/anomaly/skills/calibrate/SKILL.md`',
             'ticket 05 of `other-unit`',
+            '`workflow-conduct`, ticket 03',
             'ticket 05 of `workflow-conduct`',
             'adhoc',
             '`.anomaly/adhoc`',
