@@ -72,10 +72,16 @@ def append_line(path, obj):
         f.write(dump(obj) + '\n')
 
 
-def append_text(path, text):
+def append_text(path, text, *, no_follow=False):
     """Add this text at the end of the file, as UTF-8 with no line ending translation; earlier bytes are
-    never rewritten. The file and its missing parent folders are made."""
+    never rewritten. The file and its missing parent folders are made. With no_follow, a path that is a
+    symlink is not opened (OSError, errno ELOOP) where the platform has os.O_NOFOLLOW."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if no_follow and hasattr(os, 'O_NOFOLLOW'):
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o666)
+        with os.fdopen(fd, 'ab') as f:
+            f.write(text.encode('utf-8'))
+        return
     with open(path, 'ab') as f:
         f.write(text.encode('utf-8'))
