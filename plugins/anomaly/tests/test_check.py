@@ -521,6 +521,11 @@ class CheckSliceTest(unittest.TestCase):
                                           body='\nSee plugins/anomaly/anomaly_loop/check.py:42 for it.\n'))
         self.assert_error('01-first.md:9:', 'check.py:42', 'path')
 
+    def test_a_host_and_port_in_the_body_is_not_a_path_with_a_line_number(self):
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
+                                          body='\nServe it on example.com:8080 for the demo.\n'))
+        self.assertEqual(self.slice(), ([], []))
+
     def test_an_oversize_ticket_only_warns(self):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='x' * (5 * 1024)))
         errors, warnings = self.slice()

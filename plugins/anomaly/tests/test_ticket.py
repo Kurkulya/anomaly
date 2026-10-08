@@ -883,6 +883,11 @@ class DraftCheckTest(unittest.TestCase):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn('Blocked by', problems[0])
 
+    def test_a_draft_blocked_by_a_ticket_is_refused_saying_a_light_path_draft_has_none(self):
+        problems = self.check(draft_text(replace={'Blocked by:': 'Blocked by: 01'}))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn('light-path draft has Blocked by: none', problems[0])
+
     def test_an_empty_blocked_by_gives_one_problem(self):
         problems = self.check(draft_text(replace={'Blocked by:': 'Blocked by:'}))
         self.assertEqual(len(problems), 1, problems)
