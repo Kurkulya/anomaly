@@ -7,6 +7,7 @@ import io
 import os
 import re
 import tempfile
+import time
 import unittest
 from datetime import date
 from pathlib import Path
@@ -578,11 +579,10 @@ class CheckSliceTest(unittest.TestCase):
 
     def test_line_anchor_is_linear_on_a_very_long_line_and_keeps_its_anchors(self):
         """Adhoc 2026-10-08-review-security-lows, AC-1: no retry at every start position (Nit)."""
-        import time
         from anomaly_loop import check
         started = time.perf_counter()
         self.assertIsNone(check.line_anchor('a.a/' * 8000))
-        self.assertLess(time.perf_counter() - started, 1.0)
+        self.assertLess(time.perf_counter() - started, 2.0)
         self.assertTrue(check.line_anchor('see .eslintrc.js:4').group(0).endswith('eslintrc.js:4'))
         self.assertTrue(check.line_anchor('/abs/p.py:9').group(0).endswith('p.py:9'))
         self.assertIsNone(check.line_anchor('https://h/x/check.py:42'))

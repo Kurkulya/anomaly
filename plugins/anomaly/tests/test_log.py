@@ -108,19 +108,28 @@ class RefusalTest(LogCase):
         self.assertEqual(self.listing(), before)
 
     def test_a_log_file_that_is_a_symlink_is_refused_and_its_target_is_not_written(self):
-        """Adhoc 2026-10-08-review-security-lows, AC-1: A01, no append through a symlinked log.md."""
+        """Adhoc 2026-10-08-review-security-lows, AC-1: A01, no append through a symlinked log.md, also a
+        dangling one (a missing target must not be created)."""
         self.control()
         target = self.root / 'target.txt'
-        target.write_bytes(b'secret\n')
-        try:
-            self.log.symlink_to(target)
-        except (OSError, NotImplementedError) as error:
-            self.skipTest(f'symlinks are not available: {error}')
-        result = self.add()
-        assert_cli_error(self, result)
-        self.assertRegex(result[2], r'log\.md|symlink')
-        self.assertEqual(target.read_bytes(), b'secret\n')
-        self.assertTrue(self.log.is_symlink())
+        for case, content in (('existing target', b'secret\n'), ('missing target', None)):
+            with self.subTest(case=case):
+                if content is not None:
+                    target.write_bytes(content)
+                try:
+                    self.log.symlink_to(target)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f'symlinks are not available: {error}')
+                result = self.add()
+                assert_cli_error(self, result)
+                self.assertIn('symlink', result[2])
+                if content is None:
+                    self.assertFalse(target.exists())
+                else:
+                    self.assertEqual(target.read_bytes(), content)
+                self.assertTrue(self.log.is_symlink())
+                self.log.unlink()
+                target.unlink(missing_ok=True)
 
     def test_a_stage_with_a_space_or_a_colon_or_empty_text_is_refused_and_nothing_is_written(self):
         self.control()
