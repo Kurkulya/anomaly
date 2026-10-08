@@ -27,7 +27,7 @@ Amended <date>: <what changed> — <why>
 - UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
-- An Out of scope owner is a unit, ticket or ADR that holds the item, never a `D-n`.
+- An Out of scope owner is a unit, ticket or ADR that holds the item, never a `D-n` as the owner; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed.
 
 ## decisions.md
 
@@ -41,7 +41,7 @@ One line per entry, written after each round, settled items only. Numbers are ne
 - `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
   the glossary.
 - A decision that leaves an item out of scope ends its text with `— owner: <unit, ticket or ADR>`. The
-  owner is another unit, ticket or ADR, not that `D-n`.
+  owner is another unit, ticket or ADR, not that `D-n`; a bracketed `(D-n)` citation after the owner is allowed.
 
 ## Ticket
 
