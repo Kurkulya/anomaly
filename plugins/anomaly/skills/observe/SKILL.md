@@ -184,7 +184,7 @@ the two counts. Count only what happened in this session; never guess a count. A
 no decisions gets no entry. The entries are recorded together with the chosen anomalies, after
 the user's answer, unless the user declines them. The `review` skill records its own lenses
 through the CLI (`lens tally`), under the fixed names that command holds (`code`, `feature`,
-`security`, `plan` and the org reviewers' adapter names).
+`security`, `plan`, `interview` and the org reviewers' adapter names).
 
 ## Session kind
 
