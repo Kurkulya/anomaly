@@ -492,6 +492,7 @@ class CheckStoriesTest(unittest.TestCase):
             'adhoc',
             '`.anomaly/adhoc`',
             '`.scratch/missing`',
+            '',
             '`.anomaly/../docs/adr/0003-x.md`',
             str(self.root / 'docs' / 'adr' / '0003-x.md'),
         )
@@ -517,11 +518,35 @@ class CheckStoriesTest(unittest.TestCase):
         self.put(stories=GOOD_STORIES.replace('ticket 05', '`workflow-conduct`'), decisions=GOOD_DECISIONS)
         self.assertEqual(self.stories(), ([], []))
 
+    def test_a_bare_unit_name_of_the_checked_unit_fails_even_when_another_home_has_that_name(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `.scratch/unit` exists beside the checked
+        `.anomaly/unit`; the bare name `unit` still names the checked unit."""
+        (self.root / '.scratch' / 'unit').mkdir(parents=True)
+        for owner in ('`unit`', 'unit'):
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+                self.assert_error(15, 'must exist', file_name='stories.md')
+
+    def test_issues_count_only_in_a_scratch_unit(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `issues/` is the old `.scratch` layout;
+        a `.anomaly` unit keeps its tickets in `tickets/` only."""
+        write_text(self.root / '.anomaly' / 'other' / 'issues' / '01-a.md', '# 1\n')
+        write_text(self.root / '.scratch' / 'old' / 'issues' / '01-a.md', '# 1\n')
+        for owner, passes in (('ticket 01 of `other`', False), ('ticket 01 of `old`', True)):
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+                if passes:
+                    self.assertEqual(self.stories(), ([], []))
+                else:
+                    self.assert_error(15, 'must exist', file_name='stories.md')
+
     def test_the_ticket_nn_in_unit_form_is_dropped(self):
         """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: only "ticket NN of `unit`" names a
-        ticket of another unit; "in `unit`" fails even when that unit has the ticket."""
+        ticket of another unit; "in `unit`" fails even when that unit has the ticket, and also when the checked
+        unit has ticket NN (`ticket 05`) and the named unit has not."""
         write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
-        for owner in ('ticket 03 in `workflow-conduct`', 'ticket 03 in `.scratch/workflow-conduct`'):
+        for owner in ('ticket 03 in `workflow-conduct`', 'ticket 03 in `.scratch/workflow-conduct`',
+                      'ticket 05 in `workflow-conduct`'):
             with self.subTest(owner=owner):
                 self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
                 self.assert_error(15, 'must exist', file_name='stories.md')
@@ -541,23 +566,23 @@ class CheckStoriesTest(unittest.TestCase):
 
     def test_a_todo_key_needs_a_real_date(self):
         """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: month 13 and day 45 are no date. The
-        real date `2026-11-08` already passes (see the pass test above); it is repeated here as the guard."""
-        for date, passes in (('2026-13-45', False), ('2026-02-30', False), ('2026-11-08', True)):
+        real date `2026-11-08` passes in the pass test above."""
+        for date in ('2026-13-45', '2026-02-30'):
             with self.subTest(date=date):
                 owner = f'tags-edit, TODO(VK, revisit {date})'
                 self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
-                if passes:
-                    self.assertEqual(self.stories(), ([], []))
-                else:
-                    self.assert_error(15, 'must exist', file_name='stories.md')
+                self.assert_error(15, 'must exist', file_name='stories.md')
 
     def test_a_work_unit_folder_outside_the_known_layout_gets_one_layout_error(self):
         """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: a folder not at `<root>/.anomaly/<unit>`
-        or `<root>/.scratch/<unit>` gets one error that names both homes, not an error per owner."""
+        or `<root>/.scratch/<unit>` gets one error that names both homes, not an error per owner. The copy
+        names a missing unit as owner in both files, so a per-owner error would show."""
         import shutil
         from anomaly_loop import check
         stray = self.root / 'unit'
         shutil.copytree(self.folder, stray)
+        write_text(stray / 'stories.md', GOOD_STORIES.replace('ticket 05', '`missing-unit`'))
+        write_text(stray / 'decisions.md', GOOD_DECISIONS + self.DECISION_WITH_OWNER.format('`missing-unit`'))
         errors, _ = check.stories(stray)
         self.assertEqual(len(errors), 1, errors)
         self.assertIn('.anomaly', errors[0])

@@ -110,10 +110,12 @@ OWNER_MARKER = '— owner:'
 TODO_KEY_SHAPE = 'TODO(<owner>, revisit YYYY-MM-DD)'
 TODO_KEY = re.compile(r'TODO\([^(),]+, revisit (\d{4}-\d{2}-\d{2})\)')   # the date must also be a real one
 BACKTICKED = re.compile(r'`([^`]+)`')
-TICKET_REF = re.compile(r'\bticket (\d+)\b(?: of `([^`]+)`)?')   # (number, unit named after it or '')
+TICKET_REF = re.compile(r'\bticket (\d+)\b(?: (of|in) `([^`]+)`)?')   # (number, 'of' or 'in' or '', unit named after it or '')
 ADR_REF = re.compile(r'\bADR-(\d{4})\b')
-OWNER_HOME_DIRS = ('.anomaly', '.scratch')   # a unit folder is `<root>/<one of these>/<name>/`
-TICKET_FOLDERS = ('tickets', 'issues')   # a unit keeps its tickets in `tickets/`, or in `issues/` before the switch-over
+# The folders that hold the tickets of a unit, by the home folder of the unit: only the old `.scratch` layout
+# has `issues/`. A unit folder is `<root>/<one of these homes>/<name>/`.
+TICKET_FOLDERS = {'.anomaly': ('tickets',), '.scratch': ('tickets', 'issues')}
+OWNER_HOME_DIRS = tuple(TICKET_FOLDERS)
 ADR_GLOBS = ('docs/adr/{}-*.md', '.anomaly/*/adr/{}-*.md', '.scratch/*/adr/{}-*.md')
 # A file path is an owner only when it is a ticket file or an ADR file, never any file of the checkout.
 OWNER_FILE = re.compile(r'(?:\.anomaly|\.scratch)/[^/]+/tickets/\d+-[^/]+\.md|\.scratch/[^/]+/issues/\d+-[^/]+\.md|'
@@ -173,20 +175,22 @@ def owner_file_exists(root, name):
 
 
 def ticket_exists(root, folder, number, unit):
-    """True when `tickets/NN-*.md` (or `issues/NN-*.md`) exists in the unit folder named by `unit` (a name or
-    path, as in unit_folders), or in the checked work-unit `folder` when `unit` is empty. NN is padded to the
-    ticket number width."""
+    """True when `tickets/NN-*.md` (or, in a `.scratch` unit, `issues/NN-*.md`) exists in the unit folder named
+    by `unit` (a name or path, as in unit_folders), or in the checked work-unit `folder` when `unit` is empty.
+    NN is padded to the ticket number width."""
     units = unit_folders(root, unit.strip()) if unit else [folder]
     padded = number.zfill(TICKET_NUMBER_DIGITS)
-    return any(ticket.find_blocker(path / name, padded) for path in units for name in TICKET_FOLDERS)
+    return any(ticket.find_blocker(path / name, padded)
+               for path in units for name in TICKET_FOLDERS.get(path.parent.name, ('tickets',)))
 
 
 def owner_exists(owner, folder):
     """True when the owner value carries a `TODO(<owner>, revisit YYYY-MM-DD)` key with a real date, or names
     something in the checkout (no git lookup): a unit folder other than the checked one (a unit is never its
-    own owner), the path of a ticket or ADR file, `ticket NN` or `ADR-NNNN` (`docs/adr/`, or the `adr/` of
-    any unit folder). `ticket NN` is `tickets/NN-*.md` (or `issues/NN-*.md`) of the unit named by "of `unit`"
-    right after it, else of the checked work-unit folder; a ticket never passes on its unit alone, and a
+    own owner, also when its bare name is the name of the checked one), the path of a ticket or ADR file,
+    `ticket NN` or `ADR-NNNN` (`docs/adr/`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md`
+    (or `issues/NN-*.md` in a `.scratch` unit) of the unit named by "of `unit`" right after it, else of the
+    checked work-unit folder; "in `unit`" names no ticket. A ticket never passes on its unit alone, and a
     backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR file. `<root>` is the
     grandparent of the work-unit folder. A bracketed text is a citation and names nothing."""
     if any(is_date(day) for day in TODO_KEY.findall(owner)):
@@ -197,9 +201,10 @@ def owner_exists(owner, folder):
     names = [name.strip() for name in BACKTICKED.findall(plain)] + [plain.replace('`', '').strip().rstrip('.')]
     refs = TICKET_REF.findall(plain)
     return (any(owner_file_exists(root, name)
-                or not refs and any(path.resolve() != folder for path in unit_folders(root, name))
+                or not refs and name != folder.name
+                and any(path.resolve() != folder for path in unit_folders(root, name))
                 for name in names)
-            or any(ticket_exists(root, folder, number, unit) for number, unit in refs)
+            or any(ticket_exists(root, folder, number, unit) for number, word, unit in refs if word != 'in')
             or any(any(root.glob(pattern.format(number))) for number in ADR_REF.findall(plain)
                    for pattern in ADR_GLOBS))
 
@@ -538,7 +543,7 @@ def register(commands, common):
                      'with no Source:, an Out of scope line with no — owner: marker, an owner after — owner:\n'
                      'that names a D-n outside brackets, an owner (an Out of scope line, or a D-n line with\n'
                      '— owner:) that is not in the checkout (a unit folder other than the checked one, ticket NN\n'
-                     'or ticket NN of `<unit>` in tickets/ or issues/, ADR-NNNN or a ticket or ADR file path)\n'
+                     'or ticket NN of `<unit>` (never "in"; issues/ only in .scratch), ADR-NNNN or a ticket or ADR file path)\n'
                      'and carries no TODO(<owner>, revisit YYYY-MM-DD) key with a real date, a work-unit folder\n'
                      'that is not <root>/.anomaly/<unit> or <root>/.scratch/<unit> (one error, no owner lookup).\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
