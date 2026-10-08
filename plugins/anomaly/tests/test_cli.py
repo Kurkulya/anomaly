@@ -1154,6 +1154,16 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertLess(red.start(), lowered.index('hypothes'))
         self.assertRegex(lowered, r'in chat as a numbered list')
 
+    def test_the_hypotheses_are_their_own_chat_message_before_any_probe_and_the_explore_brief_asks_facts_only(self):
+        """Adhoc 2026-10-08-diagnose-hypothesis-list-in-chat, AC-1: the ranked list is a message of its own, sent
+        before any probe file is written; the explore brief asks for facts only, with no question that points
+        at a cause. Loose regexes on the lowered prose, so a short wording passes (5 KB limit)."""
+        lowered = self.prose().lower()
+        self.assertRegex(lowered, r'own (chat )?message')
+        self.assertRegex(lowered, r'before any probe')
+        self.assertRegex(lowered, r'facts only')
+        self.assertRegex(lowered, r'(never|no) (a )?(question|ask)[^.\n]{0,40}cause|never[^.\n]{0,40}cause')
+
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
         """AC-27."""
         text = self.text()
