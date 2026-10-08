@@ -1071,5 +1071,91 @@ class SliceSkillTest(unittest.TestCase):
         self.assertIn('/anomaly:slice', section)
 
 
+class DiagnoseSkillTest(unittest.TestCase):
+    """Workflow-plan ticket 13 (AC-27): the diagnose skill's text, by key tokens. The rule trace against the
+    brief is run by review, not here. The all-skills checks (250-character description, folder set, 8 KB)
+    cover the new folder through ALLOWED_TOOLS_SKILLS."""
+    SKILL = PLUGIN / 'skills' / 'diagnose' / 'SKILL.md'
+    ROOT = PLUGIN.parent.parent
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/diagnose/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def prose(self):
+        """The skill text after the frontmatter, without its fenced blocks (the CLI calls)."""
+        body = frontmatter.split(self.text())[1]
+        return re.sub(r'(?s)```.*?```', '', body)
+
+    def test_the_diagnose_skill_is_model_invocable_limited_to_the_cli_and_says_it_acts_on_a_reported_bug(self):
+        """AC-27. The size limit is 5 KB (the ticket), tighter than the 8 KB of the all-skills check."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'diagnose')
+        self.assertNotEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
+        description = fields.get('description', '')
+        self.assertLessEqual(len(description), 250)
+        self.assertRegex(description.lower(), r'reported bug|diagnose')
+        self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
+        self.assertLessEqual(self.SKILL.stat().st_size, 5120)
+
+    def test_a_red_capable_command_runs_before_any_hypothesis(self):
+        """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order."""
+        lowered = self.prose().lower()
+        self.assertRegex(lowered, r'hypothes')
+        red = re.search(r'\bred\b|red-capable|repro', lowered)
+        self.assertIsNotNone(red, 'no red-capable command or repro in the prose')
+        self.assertLess(red.start(), lowered.index('hypothes'))
+
+    def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
+        """AC-27."""
+        text = self.text()
+        self.assertRegex(text, r'file:line')
+        self.assertRegex(text.lower(), r'probe output')
+        self.assertIn('unverified', text.lower())
+
+    def test_it_changes_no_source_and_leaves_the_tree_clean(self):
+        """AC-27."""
+        lowered = self.text().lower()
+        self.assertRegex(lowered, r'git status')
+        self.assertRegex(lowered, r'\bclean\b')
+        self.assertRegex(lowered, r'no source|changes no source|never edits|read-only')
+
+    def test_it_writes_the_ticket_through_ticket_adhoc_from_a_draft_written_in_the_scratchpad(self):
+        """AC-27, with ticket 12 (`--from`)."""
+        text = self.text()
+        self.assertRegex(text, r'ticket adhoc\b[^\n]*--from')
+        self.assertRegex(text, r'Write tool')
+        self.assertRegex(text.lower(), r'scratchpad')
+
+    def test_it_logs_a_diagnose_work_unit_line(self):
+        """AC-27."""
+        self.assertRegex(self.text(), r'worklog add\b[^\n]*--stage diagnose')
+
+    def test_it_offers_anomaly_build_with_the_path_of_the_adhoc_ticket(self):
+        """AC-27, with the build note of the ticket."""
+        text = self.text()
+        self.assertRegex(text, r'anomaly:build[^\n]*\.anomaly/adhoc/|anomaly:build <adhoc ticket path>')
+
+    def test_it_links_the_formats_doc_one_level_deep_and_does_not_restate_the_ticket_template(self):
+        """The Amended line of the ticket."""
+        text = self.text()
+        self.assertRegex(text, r'docs/formats\.md')
+        self.assertTrue((PLUGIN / 'docs' / 'formats.md').is_file())
+        self.assertFalse((self.SKILL.parent / 'docs').exists())
+        for block in re.findall(r'(?s)```.*?```', text):
+            self.assertFalse('Covers: AC-1' in block and 'Status: ready-for-agent' in block,
+                             'the ticket template is restated; link formats.md instead')
+
+    def test_the_readme_has_a_diagnose_skill_section_naming_the_skill(self):
+        readme = self.ROOT / 'README.md'
+        if not readme.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = readme.read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^## The diagnose skill$')
+        section = text.split('## The diagnose skill', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('anomaly:diagnose', section)
+
+
 if __name__ == '__main__':
     unittest.main()
