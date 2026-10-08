@@ -1149,9 +1149,10 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   none); a line under `## Out of scope` with no `— owner:`; an owner that names a `D-n` outside
   brackets; an owner (on an Out of scope line or a `- D-<n>:` line) that is not in the checkout
   and carries no `TODO(<owner>, revisit YYYY-MM-DD)` key. The owner exists when it names a unit
-  folder under `.anomaly/` or `.scratch/`, `ticket NN` (`tickets/NN-*.md` of the unit), a path to
-  a file, or `ADR-NNNN` (`docs/adr/` or the `adr/` of a unit folder); only the checkout counts, so
-  an ADR on another branch fails. A person or a skill needs the key. Only the first `— owner:`
+  folder under `.anomaly/` or `.scratch/` (a bare name or a path), `ticket NN` (`tickets/NN-*.md`
+  of the unit), the path of a ticket file or an ADR file, or `ADR-NNNN` (`docs/adr/` or the `adr/`
+  of a unit folder); only the checkout counts, so an ADR on another branch fails, and any other
+  file (a README, a skill) is no owner. A person or a skill needs the key. Only the first `— owner:`
   starts the owner; it ends at the first `. Why:` or
   `. Source:`; a plain `owner:` elsewhere is ignored. Warnings, never a failure: `stories.md` over
   6 KB, `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a
