@@ -847,8 +847,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, `Jira`,
-  `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`, `Verified`,
-  `Red`, `Red-changed`) and a `warning:` line when the ticket
+  `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`,
+  `Verified`, `Red`, `Red-changed`) and a `warning:` line when the ticket
   has no `Blocked by:` line or its value is not only two-digit ticket numbers (see `ticket gate`).
 - `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
