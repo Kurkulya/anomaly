@@ -1161,7 +1161,8 @@ class DiagnoseSkillTest(unittest.TestCase):
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'own (chat )?message')
         self.assertRegex(lowered, r'before any probe')
-        self.assertRegex(lowered, r'facts only')
+        self.assertRegex(lowered, r'brief[^.\n]{0,30}facts only')
+        self.assertRegex(lowered, r'never only as labels')
         self.assertRegex(lowered, r'(never|no) (a )?(question|ask)[^.\n]{0,40}cause|never[^.\n]{0,40}cause')
 
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
