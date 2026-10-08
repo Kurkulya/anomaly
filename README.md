@@ -1145,10 +1145,13 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   allowed shape: a duplicate `AC-<n>` id; an AC id that an earlier `specify:` line of `log.md` named
   (its text starts `ACs: AC-1, AC-2, …;`) and `stories.md` no longer holds (the error is
   `log.md:<line>` of the first `specify:` line that named it; a `specify:` line without that
-  shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need none); a line
-  under `## Out of scope` with no `owner:`; an `owner:` that names a `D-n` outside brackets. Warnings, never a failure: `stories.md` over 6 KB,
-  `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a clean
-  run prints `stories check passed for <folder>`); a folder that is not there is one `anomaly:` line and exit 2.
+  shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need
+  none); a line under `## Out of scope` with no `— owner:`; an owner that names a `D-n` outside
+  brackets. Only the first `— owner:` starts the owner; it ends at the first `. Why:` or
+  `. Source:`; a plain `owner:` elsewhere is ignored. Warnings, never a failure: `stories.md` over
+  6 KB, `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a
+  clean run prints `stories check passed for <folder>`); a folder that is not there is one
+  `anomaly:` line and exit 2.
   A missing `stories.md` is an error line; a missing `decisions.md` or `log.md` is read as empty.
   Nothing is written.
 - `check slice` reads `stories.md` and `tickets/NN-slug.md` of a work-unit folder, so a ticket set
