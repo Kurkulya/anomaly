@@ -109,7 +109,7 @@ OWNER_MARKER = '— owner:'
 TODO_KEY_SHAPE = 'TODO(<owner>, revisit YYYY-MM-DD)'
 TODO_KEY = re.compile(r'TODO\([^(),]+, revisit \d{4}-\d{2}-\d{2}\)')
 BACKTICKED = re.compile(r'`([^`]+)`')
-TICKET_REF = re.compile(r'\bticket (\d+)\b')
+TICKET_REF = re.compile(r'\bticket (\d+)\b(?: (?:of|in) `([^`]+)`)?')   # (number, unit named after it or '')
 ADR_REF = re.compile(r'\bADR-(\d{4})\b')
 OWNER_HOME_DIRS = ('.anomaly', '.scratch')   # a unit folder is `<root>/<one of these>/<name>/`
 ADHOC_DIR = 'adhoc'   # `<root>/.anomaly/adhoc/` stores adhoc tickets; it is no unit folder
@@ -157,12 +157,10 @@ def unit_folders(root, name):
         return []
 
 
-def name_exists(root, name):
-    """True when `name` is a unit folder (see unit_folders), or the path of an existing ticket file or ADR
-    file (OWNER_FILE). Any other file, a name with `..` or no path part, an absolute path, or a name the
-    file system refuses (too long) names nothing."""
-    if unit_folders(root, name):
-        return True
+def owner_file_exists(root, name):
+    """True when `name` is the path of an existing ticket file or ADR file (OWNER_FILE). Any other file, a
+    name with `..` or no path part, an absolute path, or a name the file system refuses (too long) names
+    nothing."""
     try:
         return bool(relative_parts(name)) and OWNER_FILE.fullmatch(Path(name).as_posix()) is not None \
             and (root / name).is_file()
@@ -170,24 +168,36 @@ def name_exists(root, name):
         return False
 
 
+def name_exists(root, name):
+    """True when `name` is a unit folder (see unit_folders) or an existing ticket or ADR file path."""
+    return bool(unit_folders(root, name)) or owner_file_exists(root, name)
+
+
+def ticket_exists(root, folder, number, unit):
+    """True when `tickets/NN-*.md` exists in the unit folder named by `unit` (a name or path, as in
+    unit_folders), or in the checked work-unit `folder` when `unit` is empty. NN is padded to the ticket
+    number width."""
+    units = unit_folders(root, unit.strip()) if unit else [folder]
+    return any(ticket.find_blocker(path / 'tickets', number.zfill(TICKET_NUMBER_DIGITS)) for path in units)
+
+
 def owner_exists(owner, folder):
     """True when the owner value carries a `TODO(<owner>, revisit YYYY-MM-DD)` key, or names something in
     the checkout (no git lookup): a unit folder, the path of a ticket or ADR file, `ticket NN` or `ADR-NNNN`
-    (`docs/adr/`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md` of the backticked unit
-    the owner names, or of the checked work-unit folder when it names none; with a `ticket NN` the unit alone
-    is not enough. `<root>` is the grandparent of the work-unit folder. A bracketed text is a citation and
-    names nothing."""
+    (`docs/adr/`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md` of the unit named by
+    "of `unit`" or "in `unit`" right after it, else of the checked work-unit folder; a ticket never passes
+    on its unit alone, and a backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR
+    file. `<root>` is the grandparent of the work-unit folder. A bracketed text is a citation and names
+    nothing."""
     if TODO_KEY.search(owner):
         return True
     folder = Path(folder).resolve()
     root = folder.parent.parent
     plain = BRACKETED.sub('', owner)
-    backticked = [name.strip() for name in BACKTICKED.findall(plain)]
-    names = backticked + [plain.replace('`', '').strip().rstrip('.')]
-    numbers = TICKET_REF.findall(plain)
-    units = [unit for name in backticked for unit in unit_folders(root, name)] if backticked else [folder]
-    return ((any(ticket.find_blocker(unit / 'tickets', number) for unit in units for number in numbers)
-             if numbers else any(name_exists(root, name) for name in names))
+    names = [name.strip() for name in BACKTICKED.findall(plain)] + [plain.replace('`', '').strip().rstrip('.')]
+    refs = TICKET_REF.findall(plain)
+    return (any((owner_file_exists if refs else name_exists)(root, name) for name in names)
+            or any(ticket_exists(root, folder, number, unit) for number, unit in refs)
             or any(any(root.glob(pattern.format(number))) for number in ADR_REF.findall(plain)
                    for pattern in ADR_GLOBS))
 

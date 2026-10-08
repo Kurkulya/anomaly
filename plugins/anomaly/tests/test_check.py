@@ -447,6 +447,10 @@ class CheckStoriesTest(unittest.TestCase):
         owners = (
             'ticket 05',
             'ticket 03 of `workflow-conduct`',
+            'ticket 3 of `.scratch/workflow-conduct`',
+            'ticket 5',
+            'ticket 05, `.anomaly/unit/tickets/05-x.md`',
+            'the `export` part of ticket 05',
             'ADR-0003',
             'ADR-0005',
             '`unit`',
