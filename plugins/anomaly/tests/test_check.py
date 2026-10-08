@@ -83,7 +83,7 @@ class RegistryTest(CheckTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['check', '--help'], environ={})
-        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'stories'])
+        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'stories', 'slice'])
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
         assert_cli_error(self, self.check(ticket=self.repo.root / '.scratch' / '99-none.md'), '99-none.md')
@@ -435,8 +435,11 @@ class CheckStoriesTest(unittest.TestCase):
         from anomaly_loop import check
         from tests.fixtures import PLUGIN
         formats = (PLUGIN / 'docs' / 'formats.md').read_text(encoding='utf-8')
-        for shape in (check.AC_SHAPE, check.D_SHAPE, check.OWNER_SHAPE, check.SPECIFY_SHAPE):
-            self.assertIn(shape, formats)
+        shapes = {name: value for name, value in vars(check).items() if name.endswith('_SHAPE')}
+        self.assertGreaterEqual(len(shapes), 10)
+        for name, shape in shapes.items():
+            with self.subTest(name=name):
+                self.assertIn(shape, formats)
 
     def test_a_stories_file_of_exactly_6_kb_does_not_warn(self):
         size = len(GOOD_STORIES.encode('utf-8'))
