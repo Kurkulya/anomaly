@@ -841,15 +841,26 @@ DRAFT_LINES = {
     'Repro:': 'Repro: python3 -m unittest tests.test_parser',
 }
 DRAFT_BODY = '\n**What to build:** stop the parser test from failing at random.\n\n- [ ] AC-1: the parser test passes ten runs in a row\n'
+DRAFT_HYPOTHESES = (
+    'the parser reads a shared buffer: confirmed (probe: two runs interleave, exit 1)',
+    'the test clock drifts: refuted (probe: a fixed clock still fails)',
+    'the fixture file is stale: refuted (probe: a fresh fixture still fails)',
+)
 
 
-def draft_text(drop=(), replace=None, extra=''):
-    """A valid light-path draft (formats.md § Ticket); `drop` removes lines by key, `replace` swaps one."""
+def hypotheses_section(items=DRAFT_HYPOTHESES):
+    """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: a `## Hypotheses` section, one numbered line per item."""
+    return '\n## Hypotheses\n\n' + ''.join(f'{number}. {item}\n' for number, item in enumerate(items, 1))
+
+
+def draft_text(drop=(), replace=None, extra='', hypotheses=hypotheses_section()):
+    """A valid light-path draft (formats.md § Ticket); `drop` removes lines by key, `replace` swaps one,
+    `hypotheses` is the Hypotheses section text ('' leaves it out; a valid diagnose draft carries one)."""
     lines = [value for key, value in DRAFT_LINES.items() if key not in drop]
     for key, value in (replace or {}).items():
         lines = [value if line == DRAFT_LINES[key] else line for line in lines]
     head, rest = lines[0], lines[1:]
-    return head + '\n\n' + '\n'.join(rest) + '\n' + extra + DRAFT_BODY
+    return head + '\n\n' + '\n'.join(rest) + '\n' + extra + DRAFT_BODY + hypotheses
 
 
 class DraftCheckTest(unittest.TestCase):
@@ -897,6 +908,84 @@ class DraftCheckTest(unittest.TestCase):
         problems = self.check(draft_text(replace={'Tests:': 'Tests:'}))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn('Tests', problems[0])
+
+    def test_a_draft_needs_a_hypotheses_section_of_three_to_five_numbered_lines_each_with_its_probe_result(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: `ticket adhoc --from` refuses a draft with
+        no `## Hypotheses` section, with 2 or 6 items, or with an item that names neither confirmed nor refuted."""
+        item = DRAFT_HYPOTHESES[0]
+        cases = {
+            'no section': '',
+            'an empty section': hypotheses_section(()),
+            '2 items': hypotheses_section((item, item)),
+            '6 items': hypotheses_section((item,) * 6),
+            'an item with no result word': hypotheses_section(
+                (item, item, 'the clock drifts (probe: a fixed clock still fails)')),
+            'a bulleted list': '\n## Hypotheses\n\n' + ''.join(f'- {item}\n' for _ in range(3)),
+        }
+        for name, section in cases.items():
+            with self.subTest(case=name):
+                self.assertIn('Hypotheses', ' '.join(self.check(draft_text(hypotheses=section))))
+        for count in (3, 4, 5):
+            with self.subTest(valid=count):
+                self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((item,) * count))), [])
+
+    def test_the_hypotheses_section_ends_at_the_next_heading_and_skips_fenced_lines(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1 (review): numbered lines of a later section or
+        of a fenced block are not hypotheses."""
+        item = DRAFT_HYPOTHESES[0]
+        later = '\n## Root cause\n\n' + ''.join(f'{number}. {item}\n' for number in range(1, 4))
+        fenced_lines = '\n```\n' + ''.join(f'{number}. {item}\n' for number in range(1, 4)) + '```\n'
+        cases = {
+            'numbered lines under the next heading': (hypotheses_section() + later, []),
+            'a fenced numbered block inside a 3-item section': (hypotheses_section() + fenced_lines, []),
+            'a fenced block is the only numbered text': (
+                hypotheses_section(()) + fenced_lines, 'Hypotheses'),
+        }
+        for name, (section, expected) in cases.items():
+            with self.subTest(case=name):
+                problems = self.check(draft_text(hypotheses=section))
+                if expected:
+                    self.assertIn(expected, ' '.join(problems))
+                else:
+                    self.assertEqual(problems, [])
+
+    def test_a_hypothesis_line_needs_the_word_probe_and_a_result_word_in_any_case(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1 (review): formats.md says
+        `<hypothesis>: confirmed | refuted, probe <output>`."""
+        item = DRAFT_HYPOTHESES[0]
+        no_probe = 'the clock drifts: refuted (a fixed clock still fails)'
+        section = hypotheses_section((item, item, no_probe))
+        self.assertIn('Hypotheses', ' '.join(self.check(draft_text(hypotheses=section))))
+        capital = 'the parser reads a shared buffer: Confirmed, Probe: two runs interleave'
+        self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((capital,) * 3))), [])
+
+    def test_the_result_word_must_stand_right_after_a_colon(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: a result word in the hypothesis text does not
+        count; `confirmed` or `refuted` must stand right after a colon."""
+        passing = 'the health probe reports confirmed jobs: refuted, probe exit 0'
+        no_result_after_colon = 'the health probe reports confirmed jobs'
+        self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((passing,) * 3))), [])
+        section = hypotheses_section((passing, passing, no_result_after_colon))
+        self.assertIn('Hypotheses', ' '.join(self.check(draft_text(hypotheses=section))))
+
+    def test_the_hypotheses_heading_matches_in_any_case(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: `## hypotheses` is the section."""
+        section = hypotheses_section().replace('## Hypotheses', '## hypotheses')
+        self.assertEqual(self.check(draft_text(hypotheses=section)), [])
+
+    def test_the_hypotheses_section_ends_at_the_first_non_blank_line_that_is_not_a_numbered_item(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: numbered lines after a bold label or a plain
+        label (`**Fix:**`, `Root cause:`) are not hypotheses, so a valid 3-item section stays valid."""
+        steps = ''.join(f'{number}. {step}\n' for number, step in enumerate(
+            ('lock the shared buffer', 'add a test for two runs', 'rerun the loop ten times'), 1))
+        ruled_out = ''.join(f'{number}. {item}\n' for number, item in enumerate(DRAFT_HYPOTHESES, 1))
+        cases = {
+            'a bold label then 3 numbered fix steps': hypotheses_section() + '\n**Fix:**\n\n' + steps,
+            'a plain label then numbered ruled-out lines': hypotheses_section() + '\nRoot cause:\n\n' + ruled_out,
+        }
+        for name, section in cases.items():
+            with self.subTest(case=name):
+                self.assertEqual(self.check(draft_text(hypotheses=section)), [])
 
     def test_a_line_the_cli_writes_later_is_refused(self):
         for line in ('Result: a', 'Metrics: b', 'Reviewed: c', 'Verified: d', 'Red: e', 'Red-changed: f'):

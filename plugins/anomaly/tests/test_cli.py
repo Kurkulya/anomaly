@@ -795,6 +795,7 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*8\b')
         self.assertIn('Assumes:', text)
         self.assertIn('Recommend:', text)
+        self.assertIn('Conflicts: <D-n / ADR-n / none>', text)
         self.assertIn('defaults', lowered)
         self.assertRegex(lowered, r'low[- ]risk')
 
@@ -828,6 +829,26 @@ class InterviewSkillTest(unittest.TestCase):
                  if re.search(r'\bADR\b|D-n', line) and 'settled' in line.lower()
                  and 'even when' in line.lower() and 'conflict' in line.lower()]
         self.assertTrue(rules, 'no rule line holds ADR or D-n with settled, even when and conflict')
+        # Adhoc 2026-10-09-interview-settled-conflict-no-question, AC-1: a part of the idea that conflicts with a
+        # settled ADR or D-n becomes an out-of-scope D-n with an owner, written without a question; no option
+        # offers to reopen it, in every round and also when an owner is needed.
+        rule = [line for line in text.splitlines()
+                if re.search(r'(?i)conflict', line) and re.search(r'(?i)out of scope', line)
+                and re.search(r'(?i)owned by that ADR', line)
+                and re.search(r'(?i)without (a )?question|no question', line)]
+        with self.subTest('a conflicting part is an out-of-scope D-n owned by that ADR, written without a question'):
+            self.assertTrue(rule, 'no line ties conflict, out of scope, owned by that ADR and without a question')
+        with self.subTest('the rule holds in every round'):
+            self.assertTrue(any(re.search(r'(?i)(every|any|later) round', line) for line in rule),
+                            'the conflict line does not say every round')
+        with self.subTest('no question or option offers to reopen it'):
+            self.assertRegex(text, r'(?i)no (question or )?option[^\n]{0,40}reopen|'
+                                   r'never[^\n]{0,40}(offer|option)[^\n]{0,40}reopen')
+        with self.subTest('the conflict is named under Settled already and only the user reopens it'):
+            self.assertTrue(any(re.search(r'named (under|in) Settled already', line)
+                                and re.search(r'(?i)only the user reopens|user (may|can) reopen', line)
+                                for line in rule),
+                            'the conflict line drops Settled already or the user right to reopen')
 
     def test_a_gap_the_user_settles_as_out_of_scope_is_a_d_n_with_an_owner_and_open_is_only_for_the_unanswered(self):
         """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify. Adhoc
@@ -1174,25 +1195,33 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertLessEqual(self.SKILL.stat().st_size, 5120)
 
     def test_a_red_capable_command_runs_before_any_hypothesis(self):
-        """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order."""
+        """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order. Adhoc
+        2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: the chat-list assertion moved to the test below."""
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'hypothes')
         red = re.search(r'\bred\b|red-capable|repro', lowered)
         self.assertIsNotNone(red, 'no red-capable command or repro in the prose')
         self.assertLess(red.start(), lowered.index('hypothes'))
-        self.assertRegex(lowered, r'in chat as a numbered list')
 
-    def test_the_hypotheses_are_their_own_chat_message_before_any_probe_and_the_explore_brief_asks_facts_only(self):
-        """Adhoc 2026-10-08-diagnose-hypothesis-list-in-chat, AC-1: the ranked list is a message of its own, sent
-        before any probe file is written; the explore brief asks for facts only, with no question that points
-        at a cause. Loose regexes on the lowered prose, so a short wording passes (5 KB limit). Adhoc
-        2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: the prose says `before any probe file`."""
+    def test_the_ranked_hypotheses_go_into_the_draft_with_each_probe_result_and_the_explore_brief_asks_facts_only(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1 (replaces the chat-list rule of adhoc
+        2026-10-08-diagnose-hypothesis-list-in-chat): the ranked hypotheses are a `Hypotheses` section of the
+        ticket draft, each with its probe result (confirmed or refuted), and not a chat message; the explore
+        brief still asks for facts only, with no question that points at a cause. Loose regexes on the lowered
+        prose, so a short wording passes (5 KB limit)."""
         lowered = self.prose().lower()
-        self.assertRegex(lowered, r'own (chat )?message')
+        self.assertRegex(lowered, r'hypotheses[^\n]*\bdraft\b|\bdraft\b[^\n]*hypotheses')
+        self.assertRegex(lowered, r'confirmed|refuted')
+        self.assertNotRegex(lowered, r'in chat as a numbered list|own (chat )?message')
         self.assertRegex(lowered, r'before any probe file')
         self.assertRegex(lowered, r'brief[^.\n]{0,30}facts only')
-        self.assertRegex(lowered, r'never only as labels')
         self.assertRegex(lowered, r'(never|no) (a )?(question|ask)[^.\n]{0,40}cause|never[^.\n]{0,40}cause')
+
+    def test_the_probe_step_probes_each_listed_hypothesis_in_rank_order(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: step 6 probes each listed hypothesis, in rank
+        order, not only the first or the likely one. Loose regex on the lowered prose (5 KB limit)."""
+        lowered = self.prose().lower()
+        self.assertRegex(lowered, r'each (listed )?hypothes[^\n]{0,40}rank order|rank order[^\n]{0,40}each')
 
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
         """AC-27."""

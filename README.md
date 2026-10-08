@@ -904,7 +904,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
-  `Repro: <command>`, an AC). A draft with a line missing, or one that names a blocker,
+  `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
+  `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
   `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
@@ -1495,12 +1496,16 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   line (`worklog add --stage interview`) and offers `/anomaly:specify`.
 - The close table shows the counts of its recommendations accepted, rejected and revised.
   `/anomaly:specify` records them with `lens tally add --lens interview`.
-- No question reopens a settled ADR or `D-n`, even when the idea asks for it; the conflict is named
-  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner after `— owner:`
-  (another unit, ticket or ADR, never a `D-n`; it must exist or carry `TODO(<owner>, revisit
-  YYYY-MM-DD)`, never a placeholder; when none is known, it asks, then recommends the key; only if
-  the user declines does it write an `Open:` line and say that `/anomaly:specify` will stop on it).
-  `Open:` holds only unanswered items, because it stops `/anomaly:specify`.
+- No question or option offers to reopen a settled ADR or `D-n`, even when the idea asks for it; only
+  the user reopens it. A part of the idea in conflict with one is named under "Settled already" (in
+  round 1, or in the round where it shows) and written, without a question and in every round, as an
+  out-of-scope `D-n` owned by that ADR or by the other unit that holds that `D-n`; it never asks for
+  the owner, and when that `D-n` is in this unit it writes none. A gap the user settles as out of
+  scope is a `D-n` whose decision names an owner after `— owner:` (another unit, ticket or ADR,
+  never a `D-n`; it must exist or carry `TODO(<owner>, revisit YYYY-MM-DD)`, never a placeholder;
+  when none is known, it asks, then recommends the key; only if the user declines does it write an
+  `Open:` line and say that `/anomaly:specify` will stop on it). `Open:` holds only unanswered
+  items, because it stops `/anomaly:specify`.
 
 ## The specify skill
 
@@ -1547,7 +1552,8 @@ finds the root cause and changes no source.
   The ticket stem can differ from the `<key>` in the script name: `Repro:` holds the script's
   absolute path, so build still runs it.
 - It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
-  passes it to `ticket adhoc --from`, which checks it.
+  passes it to `ticket adhoc --from`, which checks it. Its 3 to 5 ranked hypotheses are a
+  `Hypotheses` section of the draft, each with its probe result (`confirmed` or `refuted`), not a chat list.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
   `/anomaly:build <adhoc ticket path>`.
 
