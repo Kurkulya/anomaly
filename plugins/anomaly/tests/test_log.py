@@ -120,16 +120,18 @@ class RefusalTest(LogCase):
                     self.log.symlink_to(target)
                 except (OSError, NotImplementedError) as error:
                     self.skipTest(f'symlinks are not available: {error}')
-                result = self.add()
-                assert_cli_error(self, result)
-                self.assertIn('symlink', result[2])
-                if content is None:
-                    self.assertFalse(target.exists())
-                else:
-                    self.assertEqual(target.read_bytes(), content)
-                self.assertTrue(self.log.is_symlink())
-                self.log.unlink()
-                target.unlink(missing_ok=True)
+                try:
+                    result = self.add()
+                    assert_cli_error(self, result)
+                    self.assertIn('symlink', result[2])
+                    if content is None:
+                        self.assertFalse(target.exists())
+                    else:
+                        self.assertEqual(target.read_bytes(), content)
+                    self.assertTrue(self.log.is_symlink())
+                finally:
+                    self.log.unlink(missing_ok=True)
+                    target.unlink(missing_ok=True)
 
     def test_a_stage_with_a_space_or_a_colon_or_empty_text_is_refused_and_nothing_is_written(self):
         self.control()
