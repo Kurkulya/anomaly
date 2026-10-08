@@ -959,9 +959,9 @@ class DraftCheckTest(unittest.TestCase):
         capital = 'the parser reads a shared buffer: Confirmed, Probe: two runs interleave'
         self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((capital,) * 3))), [])
 
-    def test_the_result_word_is_read_after_the_last_colon_of_the_line(self):
-        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: a result word in the hypothesis text before the
-        colon does not count; `confirmed` or `refuted` must stand after the last colon."""
+    def test_the_result_word_must_stand_right_after_a_colon(self):
+        """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: a result word in the hypothesis text does not
+        count; `confirmed` or `refuted` must stand right after a colon."""
         passing = 'the health probe reports confirmed jobs: refuted, probe exit 0'
         no_result_after_colon = 'the health probe reports confirmed jobs'
         self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((passing,) * 3))), [])

@@ -472,7 +472,7 @@ def hypotheses_errors(lines):
         items.append((index + 1, body))
     if not HYPOTHESES_MIN <= len(items) <= HYPOTHESES_MAX:
         return [f'Hypotheses: {len(items)} numbered lines, need {HYPOTHESES_MIN} to {HYPOTHESES_MAX}; the '
-                f'section ends at a heading or the first line that is not a numbered item ({HYPOTHESES_SHAPE})']
+                f'section ends at a heading or the first non-blank line that is not a numbered item ({HYPOTHESES_SHAPE})']
     return [f'Hypotheses: line {number} needs confirmed or refuted after a colon and the word probe '
             f'({HYPOTHESES_SHAPE})'
             for number, body in items if not (RESULT_WORD.search(body) and PROBE_WORD.search(body))]
