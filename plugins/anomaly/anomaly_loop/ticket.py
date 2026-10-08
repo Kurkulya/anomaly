@@ -13,7 +13,7 @@ the same way. Its state lives in header lines, each plain (`Status: x`) or bold
   verified    add or replace `Verified: <sha>`        (additive line)
   red         write `Red: <sha> · <test path>` (the first one, or a different sha, removes the earlier
               `Red-changed:` lines), or add `Red-changed: <reason>`  (additive lines)
-  adhoc       write `.anomaly/adhoc/<date>-<slug>.md` under the main checkout from a task text
+  adhoc       write `.anomaly/adhoc/<date>-<slug>.md` under the main checkout from a task text or --from a checked draft
 
 Writing is a text edit: only the named lines change, every other byte (line endings, a missing
 final newline) stays. A new line goes after the nearest line that comes before it in LINE_ORDER
@@ -36,8 +36,9 @@ from .records import require_one_line
 
 LINE_ORDER = ('Status', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed', 'Result')
 HEADER_KEYS = ('Jira', 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
-SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', 'Jira', 'Tests', 'Base', 'Reviewed', 'Verified', 'Red',
+SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', 'Jira', 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
               'Red-changed')   # Base: the work unit's integration branch, which build reads here
+REPRO_SHAPE = 'Repro: <command> (red now)'   # the light-path line of docs/formats.md § Ticket
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
 BOM = chr(0xFEFF)   # a byte order mark; written as a code point so the file holds no invisible character
@@ -417,6 +418,40 @@ def adhoc_ticket(task, slug, today):
     return f'{today.isoformat()}-{slug or slugify(task)}.md', text
 
 
+def draft_title(lines):
+    """The text after `# ` of the first heading outside fenced code blocks, or None."""
+    skip = fenced(lines)
+    return next((m.group(1) for i, (body, _) in enumerate(lines) if i not in skip and (m := HEADING.match(body))), None)
+
+
+def check_draft(text):
+    """The problems of a light-path draft (formats.md § Ticket), each naming the line and its shape;
+    an empty list when the draft is valid. The line shapes are check.py's (a lazy import: check
+    imports this module)."""
+    from . import check
+    lines, parsed = split_lines(text), parse(text)
+    problems = []
+    if not draft_title(lines):
+        problems.append('no title: the first line is "# <title>"')
+    for key, shape in (('Covers', check.COVERS_SHAPE), ('Blocked by', check.BLOCKED_SHAPE),
+                       ('Tests', check.TESTS_SHAPE), ('Repro', REPRO_SHAPE)):
+        if not find_lines(lines, key):
+            problems.append(f'no {key}: line ({shape})')
+        elif not value_of(lines, key).strip():
+            problems.append(f'{key}: is empty ({shape})')
+    if parsed.blockers_unreadable:
+        problems.append(f'Blocked by: "{parsed.blocked_by}" is not only two-digit ticket numbers (NN) ({check.BLOCKED_SHAPE})')
+    if not find_lines(lines, 'Status'):
+        problems.append(f'no Status: line (Status: {TICKET_STATUS_READY})')
+    elif parsed.status != TICKET_STATUS_READY:
+        problems.append(f'Status: "{value_of(lines, "Status")}" must be {TICKET_STATUS_READY}')
+    skip = fenced(lines)
+    if not any(i not in skip and CHECKBOX.match(body) for i, (body, _) in enumerate(lines)):
+        problems.append('no acceptance criterion: add a line like "- [ ] AC-1: <criterion>" '
+                        f'({check.AC_SHAPE})')
+    return problems
+
+
 # ---------- the command line ----------
 
 def register(commands, common):
@@ -463,8 +498,10 @@ def register(commands, common):
     red.add_argument('--changed', help='the reason the test file changed after its red commit')
     adhoc = actions.add_parser('adhoc', parents=[common],
                                help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text')
-    adhoc.add_argument('task', help='the task, in words')
-    adhoc.add_argument('--slug', help='file name part (default: made from the task)')
+    adhoc.add_argument('task', nargs='?', help='the task, in words (or give --from)')
+    adhoc.add_argument('--from', dest='draft', metavar='DRAFT',
+                       help='a checked light-path draft file, written unchanged (instead of the task text)')
+    adhoc.add_argument('--slug', help='file name part (default: made from the task, or the draft title)')
     adhoc.add_argument('--repo', help=gitrepo.REPO_HELP)
     adhoc.set_defaults(handler=run_adhoc)
 
@@ -554,8 +591,26 @@ def run_result(args, environ):
     return 0
 
 
+def draft_ticket(path, slug, today):
+    """(file name, text) of an adhoc ticket from a draft file; a refusal names every problem."""
+    text = read_text(path, 'draft')
+    problems = check_draft(text)
+    if problems:
+        raise RecordError(f'{path}: the draft is refused: ' + '; '.join(problems))
+    if slug is not None and not records.is_slug(slug):
+        raise RecordError(f'the slug is lowercase words joined by - (letters and digits), got: {slug}')
+    if slug is not None and len(slug) > TICKET_SLUG_MAX_CHARS:
+        raise RecordError(f'the slug is at most {TICKET_SLUG_MAX_CHARS} characters, got {len(slug)}')
+    return f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md', text
+
+
 def run_adhoc(args, environ):
-    name, text = adhoc_ticket(args.task, args.slug, args.today)
+    if args.draft is not None and args.task is not None:
+        raise RecordError('--from and the task text are exclusive: give one')
+    if args.draft is None and args.task is None:
+        raise RecordError('give the task text, or --from <draft file>')
+    name, text = draft_ticket(args.draft, args.slug, args.today) if args.draft is not None \
+        else adhoc_ticket(args.task, args.slug, args.today)
     # a folder named with --repo may be outside git; the working folder must be in a repository
     path = gitrepo.shared_root(gitrepo.repo_for(args.repo, outside_git=bool(args.repo))) / TICKET_ADHOC_DIR / name
     if path.exists():
