@@ -24,6 +24,7 @@ Amended <date>: <what changed> — <why>
 
 - A source criterion is kept word for word and tagged `(verbatim <source>)`.
 - A scenario is added only when an AC is unclear.
+- UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
 

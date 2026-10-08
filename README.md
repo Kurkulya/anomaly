@@ -1293,9 +1293,10 @@ and, after the session's last review, sums them with
   the file `a`); both commands refuse it before anything is written. The counts are whole
   numbers of 0 or more, and `accepted` and `rejected` are both required.
 - The lens names are fixed: `code`, `feature`, `security` (the core reviewers `anomaly:code`,
-  `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`) and each
-  org reviewer's adapter name from the `reviewers` port (see Ports and the repo layer). Any other
-  name is one `anomaly:` line that lists the allowed names, exit 2, and nothing is written.
+  `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`),
+  `interview` (the interview's recommendations) and each org reviewer's adapter name from the
+  `reviewers` port (see Ports and the repo layer). Any other name is one `anomaly:` line that lists
+  the allowed names, exit 2, and nothing is written.
 - `--revised <n>` counts the accepted findings whose fix differed from the one the reviewer
   proposed, so it is at most `--accepted` (more is one `anomaly:` line naming both counts, exit
   2). The tally line, the batch line and the home line gain `revised` only when it is passed;
@@ -1467,8 +1468,25 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   `.anomaly/<work unit>/decisions.md`. It edits no other file and makes no commit.
 - It closes with a table of the decisions and one confirm question, writes an `interview` work-unit
   line (`worklog add --stage interview`) and offers `/anomaly:specify`.
-- The close table shows the counts of its recommendations accepted, rejected and revised. Recording
-  them as a lens is a later ticket (09).
+- The close table shows the counts of its recommendations accepted, rejected and revised.
+  `/anomaly:specify` records them with `lens tally add --lens interview`.
+
+## The specify skill
+
+`/anomaly:specify <work unit>` is slash-only (`disable-model-invocation: true`). It turns the
+interview's `decisions.md` into the `stories.md` the owner reads.
+
+- It stops before it writes anything when `decisions.md` still holds `Open:` items, and sends the
+  user back to `/anomaly:interview`.
+- It writes `.anomaly/<work unit>/stories.md` (Sources with the Gathered date, Why, rules for all
+  stories, numbered stories with continuous `AC-n`, verbatim source criteria tagged, an Out of scope
+  list with owners) and appends `D-n` lines, each with a `Source:`. It writes no `T-n` line and no
+  `CONTEXT.md` row.
+- Agreed ADRs are drafted in `.anomaly/<work unit>/adr/` with a number free on every branch.
+- It runs `check stories`, then `anomaly:review` in `spec` mode, then shows a digest of at most 5
+  lines and waits for approval. A Blocker stops it before the digest.
+- It adds one `specify` line to `log.md` (the AC ids, ended by `;`), a `specify` work-unit line, and
+  offers `/anomaly:slice`.
 
 ## Development
 
