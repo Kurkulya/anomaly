@@ -83,7 +83,7 @@ class RegistryTest(CheckTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['check', '--help'], environ={})
-        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge'])
+        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'stories'])
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
         assert_cli_error(self, self.check(ticket=self.repo.root / '.scratch' / '99-none.md'), '99-none.md')
@@ -321,3 +321,125 @@ class AdhocTicketTest(CheckTestCase):
         self.assertTrue(self.problems(self.check())[0].startswith('Test:'))
         self.ticket_cmd('red', '--changed', 'why')
         self.assertEqual(self.check()[0], 0)
+
+
+GOOD_STORIES = """# A unit
+Sources: chat · Gathered: 2026-10-01
+Why: a reason
+Rules for all stories: none
+
+## 1. As a dev, I want a, so that b.
+- AC-1: first criterion
+- AC-2: second criterion (verbatim chat)
+Amended 2026-10-02: AC-3 withdrawn — not needed
+
+## 2. As a dev, I want c, so that d.
+- AC-3: third criterion
+
+## Out of scope
+- the thing — owner: ticket 05
+"""
+GOOD_DECISIONS = """- D-1: pick x. Why: simple. Source: user, 2026-10-01
+- D-2: pick y. Why: cheap. Source: docs/formats.md:30 ADR?
+- T-1: **term** — a meaning. Avoid: other.
+Amended 2026-10-02: reworded
+"""
+GOOD_LOG = '2026-10-01 10:00 specify: ACs: AC-1, AC-2, AC-3; claim check passed\n'
+
+
+class CheckStoriesTest(unittest.TestCase):
+    """AC-8, AC-9: `check stories <folder>`. Unit API assumed: `check.stories(folder)` takes a Path and
+    returns `(errors, warnings)`, two lists of one-line strings. Each error names the file and the line
+    (`stories.md:7: ...`) and the allowed shape."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.folder = Path(tmp.name).resolve() / 'unit'
+        self.folder.mkdir()
+        self.put(stories=GOOD_STORIES, decisions=GOOD_DECISIONS, log=GOOD_LOG)
+
+    def put(self, **texts):
+        for key, name in (('stories', 'stories.md'), ('decisions', 'decisions.md'), ('log', 'log.md')):
+            if key in texts:
+                write_text(self.folder / name, texts[key])
+
+    def stories(self):
+        from anomaly_loop import check
+        self.assertTrue(hasattr(check, 'stories'), 'check.stories(folder) -> (errors, warnings) is missing')
+        return check.stories(self.folder)
+
+    def assert_error(self, line_number, *fragments, file_name=None):
+        errors, _ = self.stories()
+        hits = [e for e in errors if re.search(rf':{line_number}\b', e) and (not file_name or file_name in e)]
+        self.assertTrue(hits, (line_number, errors))
+        for fragment in fragments:
+            self.assertTrue(any(fragment in e for e in hits), (fragment, hits))
+
+    def test_good_folder_has_no_errors_and_no_warnings(self):
+        self.assertEqual(self.stories(), ([], []))
+
+    def test_a_duplicate_ac_id_is_an_error_naming_the_line(self):
+        self.put(stories=GOOD_STORIES.replace('- AC-3: third', '- AC-2: third'))
+        self.assert_error(12, 'AC-2', file_name='stories.md')
+
+    def test_an_ac_named_by_an_earlier_specify_line_but_gone_is_an_error(self):
+        self.put(stories=GOOD_STORIES.replace('- AC-3: third', '- AC-4: third'))
+        errors, _ = self.stories()
+        self.assertTrue(any('AC-3' in e and e.startswith('log.md:1:') for e in errors), errors)
+
+    def test_a_decision_without_source_is_an_error_with_the_allowed_shape(self):
+        self.put(decisions=GOOD_DECISIONS.replace(' Source: user, 2026-10-01', ''))
+        self.assert_error(1, 'Source:', file_name='decisions.md')
+
+    def test_an_out_of_scope_line_without_owner_is_an_error_with_the_allowed_shape(self):
+        self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', ''))
+        self.assert_error(15, 'owner:', file_name='stories.md')
+
+    def test_oversize_files_only_warn(self):
+        self.put(stories=GOOD_STORIES + 'x' * (6 * 1024), decisions=GOOD_DECISIONS + 'x' * (8 * 1024))
+        errors, warnings = self.stories()
+        self.assertEqual(errors, [])
+        self.assertTrue(any('stories.md' in w for w in warnings), warnings)
+        self.assertTrue(any('decisions.md' in w for w in warnings), warnings)
+
+    def test_cli_exit_codes_and_output(self):
+        run = lambda: run_cli('check', 'stories', str(self.folder))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.put(decisions=GOOD_DECISIONS.replace(' Source: user, 2026-10-01', ''))
+        code, out, err = run()
+        self.assertEqual((code, err), (1, ''), out)
+        self.assertIn('decisions.md:1', out)
+        self.put(decisions=GOOD_DECISIONS + 'x' * (8 * 1024))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertIn('decisions.md', out)
+        assert_cli_error(self, run_cli('check', 'stories', str(self.folder / 'missing')), 'missing')
+
+    def test_a_specify_line_without_the_ids_shape_is_an_error_naming_the_shape(self):
+        self.put(log=GOOD_LOG + '2026-10-02 10:00 specify: ACs: AC-1, AC-2 claim check passed\n')
+        self.assert_error(2, 'ACs: AC-1, AC-2, …;', file_name='log.md')
+
+    def test_a_missing_stories_file_is_an_error_and_missing_decisions_and_log_are_empty(self):
+        (self.folder / 'stories.md').unlink()
+        errors, _ = self.stories()
+        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(errors[0].startswith('stories.md: '), errors)
+        self.put(stories=GOOD_STORIES)
+        (self.folder / 'decisions.md').unlink()
+        (self.folder / 'log.md').unlink()
+        self.assertEqual(self.stories(), ([], []))
+
+    def test_the_shapes_in_the_errors_are_the_text_of_formats_md(self):
+        from anomaly_loop import check
+        from tests.fixtures import PLUGIN
+        formats = (PLUGIN / 'docs' / 'formats.md').read_text(encoding='utf-8')
+        for shape in (check.AC_SHAPE, check.D_SHAPE, check.OWNER_SHAPE, check.SPECIFY_SHAPE):
+            self.assertIn(shape, formats)
+
+    def test_a_stories_file_of_exactly_6_kb_does_not_warn(self):
+        size = len(GOOD_STORIES.encode('utf-8'))
+        self.put(stories=GOOD_STORIES + 'x' * (6 * 1024 - size))
+        self.assertEqual((self.folder / 'stories.md').stat().st_size, 6 * 1024)
+        self.assertEqual(self.stories(), ([], []))
