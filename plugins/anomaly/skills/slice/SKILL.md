@@ -42,7 +42,7 @@ Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the
 - Every `Covers:` AC has a `Tests:` level; every story AC is in some `Covers:`. [N2, P5]
 - No line numbers: write no `path:NN` anchor outside a copied `- D-n:` line and fenced code. Use paths and symbols. A copied decision keeps its `Source:` word for word, `file:line` included. [N3, T17]
 - A prototype snippet that encodes a decision may go in fenced code. [T18]
-- `Status:` only `ready-for-agent`, or `ready-for-human` for work only a person can do. [Q1, Q4, Q10]
+- `Status:` only `ready-for-agent`, or `ready-for-human` with its reason, for work only a person can do. [Q1, Q4, Q10]
 - Add `Gate:` when a date or an outside step blocks the ticket. [N6]
 - A ticket that changes a rule gets `Restates:`, the files that repeat it, found by grep. [N4]
 - `Out of scope:` names the sibling ticket that owns the next thing. [Q13]
