@@ -18,7 +18,7 @@ from pathlib import Path
 from anomaly_loop import cli, constants, frontmatter
 from tests.fixtures import PLUGIN, plugin_files
 
-ALLOWED_TOOLS_SKILLS = ('build', 'interview', 'review')   # the pipeline skills whose tools are limited to the CLI
+ALLOWED_TOOLS_SKILLS = ('build', 'interview', 'review', 'specify')   # the pipeline skills whose tools are limited to the CLI
 PLACEHOLDER_FREE_SKILLS = ALLOWED_TOOLS_SKILLS   # the skills whose docs other than SKILL.md hold no `${…}`
 MANAGED_DIRS = {   # as the Claude Code documentation on managed settings gives them
     'win32': Path('C:/Program Files/ClaudeCode'),            # documented, and read on this machine

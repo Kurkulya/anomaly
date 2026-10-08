@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from anomaly_loop import cli, records
+from anomaly_loop import cli, lens, records
 from tests.fixtures import NOW, SID, assert_cli_error, run_cli, write_text
 
 OTHER_SID = '22222222-aaaa-bbbb-cccc-000000000002'
@@ -148,6 +148,12 @@ class AddTest(LensCase):
         self.assertEqual([row['lens'] for row in self.tally_lines()], ['plan'])
         _, batch = self.summed()
         self.assertEqual(batch, {'lenses': [dict(session=SID, lens='plan', accepted=3, rejected=1)]})
+
+    def test_the_interview_lens_is_accepted_without_a_profile_like_the_plan_lens(self):
+        """Workflow-plan ticket 09: the interview's recommendation counts go through `lens tally` under `interview`."""
+        self.assertEqual(lens.INTERVIEW_LENS, 'interview')
+        self.add_ok(lens.INTERVIEW_LENS, 2, 1)
+        self.assertEqual([row['lens'] for row in self.tally_lines()], ['interview'])
 
     def test_a_lens_name_outside_the_allowed_set_is_refused_with_the_allowed_names_and_nothing_is_written(self):
         """AC-97: on an empty profile the allowed lens names are the three core lenses and `plan`."""
