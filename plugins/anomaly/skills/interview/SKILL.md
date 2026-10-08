@@ -55,7 +55,7 @@ Write the settled items to `.anomaly/<work unit>/decisions.md`; no other file ch
 - `D-n` lines, each with a `Source:`; tag ` ADR?` when the decision is hard to reverse, surprising and a real trade-off. `specify` writes ADRs. [DM10, G4]
 - `T-n` lines for settled terms: one canonical term, others under Avoid, a meaning in 1-2 sentences, project-specific words only, no implementation detail. Write each when it settles, without asking, never into the glossary file itself. [GF1, GF2, GF3, GF4, DM8, DM9, DM1]
 - The shape of `D-n`, `T-n`, `Open:` and ` ADR?` lines, number reuse and amendments are in [formats.md](../../docs/formats.md). Unanswered items stay out.
-- A gap the user settles as out of scope is a `D-n` with an owner (`<item> — owner: <unit, ticket or ADR>`), never `Open:`. The owner is another unit, ticket or ADR, not that `D-n`; if none is known, ask who owns it. `Open:` is only for the unanswered: it blocks specify.
+- A gap the user settles as out of scope is a normal `D-n` with its `Source:` and an owner, never `Open:`. The owner is another unit, ticket or ADR, not that `D-n`; if none is known, ask who owns it. `Open:` is only for the unanswered: it blocks specify.
 
 ## The close
 

@@ -839,6 +839,14 @@ class InterviewSkillTest(unittest.TestCase):
         text = self.text()
         self.assertRegex(text, r'(?is)out of scope[^\n]*D-n[^\n]*owner|out of scope[^\n]*owner[^\n]*D-n|'
                                r'D-n[^\n]*owner[^\n]*out of scope|D-n[^\n]*out of scope[^\n]*owner')
+        rule = [line for line in text.splitlines()
+                if re.search(r'(?i)out of scope', line) and 'D-n' in line and re.search(r'(?i)owner', line)]
+        self.assertTrue(rule, 'no line ties out of scope, D-n and owner')
+        self.assertTrue(any('Source:' in line for line in rule), 'the out-of-scope D-n rule drops its Source:')
+        self.assertTrue(any(re.search(r'(?i)not (?:that|the deferring|its own) `?D-n', line) for line in rule),
+                        'the rule does not say the owner is not the D-n itself')
+        self.assertTrue(any(re.search(r'(?i)`?Open:`?[^\n]*\bonly\b[^\n]*unanswered', line)
+                            for line in text.splitlines()), 'Open: is not said to be only for the unanswered')
         self.assertRegex(text, r'(?is)`?Open:`?[^\n]*\b(?:block|blocks|stop|stops)\b[^\n]*specify|'
                                r'specify[^\n]*\b(?:block|blocks|blocked|stop|stops|stopped)\b[^\n]*`?Open:`?')
 
