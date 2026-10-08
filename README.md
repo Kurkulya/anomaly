@@ -1294,8 +1294,9 @@ and, after the session's last review, sums them with
   numbers of 0 or more, and `accepted` and `rejected` are both required.
 - The lens names are fixed: `code`, `feature`, `security` (the core reviewers `anomaly:code`,
   `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`),
-  `interview` (the interview's recommendations) and each org reviewer's adapter name from the `reviewers` port (see Ports and the repo layer). Any other
-  name is one `anomaly:` line that lists the allowed names, exit 2, and nothing is written.
+  `interview` (the interview's recommendations) and each org reviewer's adapter name from the
+  `reviewers` port (see Ports and the repo layer). Any other name is one `anomaly:` line that lists
+  the allowed names, exit 2, and nothing is written.
 - `--revised <n>` counts the accepted findings whose fix differed from the one the reviewer
   proposed, so it is at most `--accepted` (more is one `anomaly:` line naming both counts, exit
   2). The tally line, the batch line and the home line gain `revised` only when it is passed;

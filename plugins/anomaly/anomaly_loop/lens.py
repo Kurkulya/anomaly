@@ -68,7 +68,7 @@ def core_lenses():
 
 
 def allowed_names(home):
-    """The lens names the `reviewers` port gives for the profile in `home`, plus `plan`."""
+    """The lens names the `reviewers` port gives for the profile in `home`, plus `plan` and `interview`."""
     reviewers = ports.port(ports.resolve(home), REVIEWERS_PORT).values
     return tuple(dict.fromkeys((*(lens_name(reviewer) for reviewer in reviewers), PLAN_LENS, INTERVIEW_LENS)))
 
