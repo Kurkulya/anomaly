@@ -75,7 +75,7 @@ Decisions:
   the `Tests:` line, then `Repro: <command>` (runnable as written, red at hand-over). AC-1 is the exact symptom gone with the repro
   green. The body holds Symptom, Root cause, Fix, Risk, and the seam or a no-correct-seam finding, and a
   `## Hypotheses` section: 3 to 5 numbered lines, each `1. <hypothesis>: confirmed | refuted, probe <output>`.
-  `ticket adhoc --from` refuses a draft without it.
+  The section ends at the first line that is not a numbered item. `ticket adhoc --from` refuses a draft without it.
 
 ## log.md
 
