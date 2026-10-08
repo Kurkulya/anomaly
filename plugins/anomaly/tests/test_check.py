@@ -443,8 +443,10 @@ class CheckStoriesTest(unittest.TestCase):
         (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
         write_text(self.root / '.scratch' / 'workflow-conduct' / 'issues' / '01-a.md', '# 1\n')
         write_text(self.root / '.anomaly' / 'adhoc' / '2026-10-08-x.md', '# x\n')
+        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
         owners = (
             'ticket 05',
+            'ticket 03 of `workflow-conduct`',
             'ADR-0003',
             'ADR-0005',
             '`unit`',
@@ -470,6 +472,8 @@ class CheckStoriesTest(unittest.TestCase):
         """Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1: the error names the file and the line."""
         write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
         write_text(self.root / 'README.md', '# readme\n')
+        write_text(self.root / '.anomaly' / 'adhoc' / '2026-10-08-x.md', '# x\n')
+        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
         write_text(self.root / 'plugins' / 'anomaly' / 'skills' / 'calibrate' / 'SKILL.md', '# calibrate\n')
         owners = (
             'OWNER-NEEDED (D-3)',
@@ -480,6 +484,9 @@ class CheckStoriesTest(unittest.TestCase):
             'README.md',
             '`plugins/anomaly/skills/calibrate/SKILL.md`',
             'ticket 05 of `other-unit`',
+            'ticket 05 of `workflow-conduct`',
+            'adhoc',
+            '`.anomaly/adhoc`',
             '`.scratch/missing`',
             '`.anomaly/../docs/adr/0003-x.md`',
             str(self.root / 'docs' / 'adr' / '0003-x.md'),

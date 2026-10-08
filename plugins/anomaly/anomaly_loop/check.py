@@ -112,6 +112,7 @@ BACKTICKED = re.compile(r'`([^`]+)`')
 TICKET_REF = re.compile(r'\bticket (\d+)\b')
 ADR_REF = re.compile(r'\bADR-(\d{4})\b')
 OWNER_HOME_DIRS = ('.anomaly', '.scratch')   # a unit folder is `<root>/<one of these>/<name>/`
+ADHOC_DIR = 'adhoc'   # `<root>/.anomaly/adhoc/` stores adhoc tickets; it is no unit folder
 ADR_GLOBS = ('docs/adr/{}-*.md', '.anomaly/*/adr/{}-*.md', '.scratch/*/adr/{}-*.md')
 # A file path is an owner only when it is a ticket file or an ADR file, never any file of the checkout.
 OWNER_FILE = re.compile(r'(?:\.anomaly|\.scratch)/[^/]+/tickets/\d+-[^/]+\.md|\.scratch/[^/]+/issues/\d+-[^/]+\.md|'
@@ -133,31 +134,49 @@ def owner_names_decision(line):
     return owner is not None and D_TOKEN.search(BRACKETED.sub('', owner)) is not None
 
 
-def name_exists(root, name):
-    """True when `name` is a unit folder (a bare name under `<root>/.anomaly/` or `<root>/.scratch/`, or the
-    path `.anomaly/<name>`, `.scratch/<name>`), or the path of an existing ticket file or ADR file (OWNER_FILE).
-    Any other file, a name with `..` or no path part, an absolute path, or a name the file system refuses
-    (too long) names nothing."""
+def relative_parts(name):
+    """The path parts of `name`, or () when it has none, has `..` or is absolute."""
     path = Path(name)
-    parts = path.parts
-    if not parts or '..' in parts or path.is_absolute():
-        return False
+    return () if '..' in path.parts or path.is_absolute() else path.parts
+
+
+def unit_folders(root, name):
+    """The existing unit folders `name` names: a bare name under `<root>/.anomaly/` and `<root>/.scratch/`, or
+    the path `.anomaly/<name>`, `.scratch/<name>`. `.anomaly/adhoc/` only stores adhoc tickets and is no
+    unit. A name the file system refuses (too long) names none."""
+    parts = relative_parts(name)
+    if len(parts) == 1:
+        candidates = [root / home / name for home in OWNER_HOME_DIRS]
+    elif len(parts) == 2 and parts[0] in OWNER_HOME_DIRS:
+        candidates = [root / name]
+    else:
+        return []
     try:
-        if len(parts) == 1:
-            return any((root / home / path).is_dir() for home in OWNER_HOME_DIRS)
-        if len(parts) == 2 and parts[0] in OWNER_HOME_DIRS:
-            return (root / path).is_dir()
-        return OWNER_FILE.fullmatch(path.as_posix()) is not None and (root / path).is_file()
+        return [] if parts[-1] == ADHOC_DIR else [path for path in candidates if path.is_dir()]
+    except OSError:
+        return []
+
+
+def name_exists(root, name):
+    """True when `name` is a unit folder (see unit_folders), or the path of an existing ticket file or ADR
+    file (OWNER_FILE). Any other file, a name with `..` or no path part, an absolute path, or a name the
+    file system refuses (too long) names nothing."""
+    if unit_folders(root, name):
+        return True
+    try:
+        return bool(relative_parts(name)) and OWNER_FILE.fullmatch(Path(name).as_posix()) is not None \
+            and (root / name).is_file()
     except OSError:
         return False
 
 
 def owner_exists(owner, folder):
     """True when the owner value carries a `TODO(<owner>, revisit YYYY-MM-DD)` key, or names something in
-    the checkout (no git lookup): a unit folder, the path of a ticket or ADR file, `ticket NN`
-    (`<folder>/tickets/NN-*.md`, only when the owner names no backticked unit) or `ADR-NNNN` (`docs/adr/`, or
-    the `adr/` of any unit folder). `<root>` is the grandparent of the work-unit folder. A bracketed text is
-    a citation and names nothing."""
+    the checkout (no git lookup): a unit folder, the path of a ticket or ADR file, `ticket NN` or `ADR-NNNN`
+    (`docs/adr/`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md` of the backticked unit
+    the owner names, or of the checked work-unit folder when it names none; with a `ticket NN` the unit alone
+    is not enough. `<root>` is the grandparent of the work-unit folder. A bracketed text is a citation and
+    names nothing."""
     if TODO_KEY.search(owner):
         return True
     folder = Path(folder).resolve()
@@ -165,9 +184,10 @@ def owner_exists(owner, folder):
     plain = BRACKETED.sub('', owner)
     backticked = [name.strip() for name in BACKTICKED.findall(plain)]
     names = backticked + [plain.replace('`', '').strip().rstrip('.')]
-    return (any(name_exists(root, name) for name in names)
-            or (not backticked and any(ticket.find_blocker(folder / 'tickets', number)
-                                       for number in TICKET_REF.findall(plain)))
+    numbers = TICKET_REF.findall(plain)
+    units = [unit for name in backticked for unit in unit_folders(root, name)] if backticked else [folder]
+    return ((any(ticket.find_blocker(unit / 'tickets', number) for unit in units for number in numbers)
+             if numbers else any(name_exists(root, name) for name in names))
             or any(any(root.glob(pattern.format(number))) for number in ADR_REF.findall(plain)
                    for pattern in ADR_GLOBS))
 
