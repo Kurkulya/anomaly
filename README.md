@@ -904,7 +904,7 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
-  `Repro: <command> (red now)`, an AC). A draft with a line missing, or one that names a blocker,
+  `Repro: <command>`, an AC). A draft with a line missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
   `Jira:` line kept and none added. The slug comes from the title unless `--slug` gives it.
 
@@ -1519,7 +1519,8 @@ finds the root cause and changes no source.
 
 - It runs a red-capable command before any hypothesis, and cites the root cause as `file:line` or
   probe output, else marks it "unverified".
-- It removes every probe edit and leaves `git status` clean: no branch, commit or push.
+- It removes every probe edit and leaves `git status` clean: no branch, commit or push. The loop
+  script stays under the git-excluded `.anomaly/adhoc/` as `<key>-repro.<ext>`, so build can run it.
 - It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
   passes it to `ticket adhoc --from`, which checks it.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers

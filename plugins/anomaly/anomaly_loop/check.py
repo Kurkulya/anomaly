@@ -212,7 +212,7 @@ COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
 JIRA_SHAPE = 'Jira: <key> | no-ticket'
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
-REPRO_SHAPE = 'Repro: <command> (red now)'
+REPRO_SHAPE = 'Repro: <command>'
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
 
 
