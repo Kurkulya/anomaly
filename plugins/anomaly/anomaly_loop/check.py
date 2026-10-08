@@ -105,13 +105,14 @@ D_SHAPE = '- D-n: <decision>. Why: <one line>. Source: <where>'
 SPECIFY_SHAPE = 'ACs: AC-1, AC-2, …;'
 OWNER_SHAPE = '- <item> — owner: <unit, ticket or ADR>'
 D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
+OWNER_MARKER = '— owner:'
 
 
 def owner_names_decision(line):
     """True when the owner value holds a D-n token outside brackets. The value is the text after the
-    last `owner:`, ended at the first `. Why:` or `. Source:` (a decisions.md line goes on with them).
-    A D-n in round or square brackets is a citation, not the owner."""
-    _, marker, owner = line.rpartition('owner:')
+    first `— owner:`, ended at the first `. Why:` or `. Source:` (a decisions.md line goes on with them).
+    A plain `owner:` in other text is ignored. A D-n in round or square brackets is a citation, not the owner."""
+    _, marker, owner = line.partition(OWNER_MARKER)
     owner = re.split(r'\. (?:Why|Source):', owner, maxsplit=1)[0]
     return bool(marker) and D_TOKEN.search(BRACKETED.sub('', owner)) is not None
 
@@ -122,7 +123,7 @@ def read_optional(path):
 
 
 def stories_errors(text):
-    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner or an owner that names a D-n outside brackets.
+    """Errors for stories.md: duplicate AC ids and Out of scope lines with no `— owner:` or an owner that names a D-n outside brackets.
     Also the ids found."""
     errors, found, in_scope_out = [], {}, False
     for number, line in enumerate(text.splitlines(), 1):
@@ -136,7 +137,7 @@ def stories_errors(text):
                               f'each AC id is unique ({AC_SHAPE})')
             else:
                 found[ac] = number
-        elif in_scope_out and line.startswith('- ') and 'owner:' not in line:
+        elif in_scope_out and line.startswith('- ') and OWNER_MARKER not in line:
             errors.append(f'stories.md:{number}: an Out of scope line needs an owner ({OWNER_SHAPE})')
         elif in_scope_out and line.startswith('- ') and owner_names_decision(line):
             errors.append(f'stories.md:{number}: an owner is a unit, ticket or ADR, not a D-n ({OWNER_SHAPE})')
@@ -144,7 +145,7 @@ def stories_errors(text):
 
 
 def decisions_errors(text):
-    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `owner:` names a D-n outside brackets.
+    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `— owner:` names a D-n outside brackets.
     A `T-n` line needs no Source."""
     errors = []
     for number, line in enumerate(text.splitlines(), 1):
@@ -417,7 +418,7 @@ def register(commands, common):
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
         description=('Check a work-unit folder against the shapes in docs/formats.md. Errors: a duplicate AC id,\n'
                      'an AC id that a specify: line of log.md named and stories.md no longer holds, a D-n line\n'
-                     'with no Source:, an Out of scope line with no owner:, an owner: that names a D-n\n'
+                     'with no Source:, an Out of scope line with no — owner:, an — owner: that names a D-n\n'
                      'outside brackets.\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
                      'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
