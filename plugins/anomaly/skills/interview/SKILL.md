@@ -24,7 +24,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 1. Take the idea: the user's text, or a key read through the `issue_source` port (read-only). Ask the work unit name first, before round 1 (or take it from the idea's key); create `.anomaly/<work unit>/` at the first `D-n`, not before. [A10, DM3]
 2. `worklog start`, then `ports`. Run the `gather` port (repo code and docs; adapters add tracker, backend and org ADR lookups, named `Server:tool`). [CM5, CM8, G27]
 3. Scan what is already settled: the ADRs, both layouts' `decisions.md`, the glossary file from the profile's `glossary_file` (default `CONTEXT.md`) and the backlog. Look with Glob and Read in the checkout (tracked ADRs and the git-excluded `decisions.md` files alike), never recall. Read the repo layer's own domain doc; it wins on a clash. [A1, CM4, CM9, CX1, DM2]
-4. Open round 1 with "Settled already": one line per ADR or `D-n`. Never reopen one; a recommendation that conflicts names it. [A1]
+4. Open round 1 with "Settled already": one line per ADR or `D-n`. No question offers or reopens a settled ADR or `D-n`, even when the idea asks for it; name the conflict instead (in Settled already) and let the user reopen it. A recommendation that conflicts names it. [A1]
 
 ## A round
 
@@ -55,6 +55,7 @@ Write the settled items to `.anomaly/<work unit>/decisions.md`; no other file ch
 - `D-n` lines, each with a `Source:`; tag ` ADR?` when the decision is hard to reverse, surprising and a real trade-off. `specify` writes ADRs. [DM10, G4]
 - `T-n` lines for settled terms: one canonical term, others under Avoid, a meaning in 1-2 sentences, project-specific words only, no implementation detail. Write each when it settles, without asking, never into the glossary file itself. [GF1, GF2, GF3, GF4, DM8, DM9, DM1]
 - The shape of `D-n`, `T-n`, `Open:` and ` ADR?` lines, number reuse and amendments are in [formats.md](../../docs/formats.md). Unanswered items stay out.
+- A gap the user settles as out of scope is a normal `D-n` with its `Source:` and an owner after `— owner:`, never `Open:`. The owner is another unit, ticket or ADR, never a `D-n` (a bracketed `(D-n)` citation after the owner is allowed); if none is known, ask who owns it. `Open:` is only for the unanswered: it blocks specify.
 
 ## The close
 
@@ -62,6 +63,6 @@ Done when the frontier is empty and nothing is assumed silently. [GR8, CM1]
 
 1. Show a table, one line per `D-n` and `T-n`, with the counts of recommendations accepted, rejected and revised, shown here only. [A5, A6]
 2. Ask one confirm question with AskUserQuestion, the only use of it; text everywhere else. Act on nothing before the yes. [GR9, K3, CM11]
-3. On "stop", keep an `Open:` list in `decisions.md`.
+3. On "stop", keep an `Open:` list of the unanswered items only in `decisions.md`.
 4. `worklog add`, stage `interview`; leave out `--docs` when the work unit folder does not exist.
 5. Offer `/anomaly:specify <work unit>` as the next-step line; the stage end and the `/clear` rule are in [boundaries.md](../../docs/boundaries.md). [CM3, CM2]

@@ -97,11 +97,24 @@ AC_LINE = re.compile(r'^- (AC-\d+):')
 D_LINE = re.compile(r'^- D-\d+:')
 SPECIFY_LINE = re.compile(r'^\S+ \S+ specify:')
 SPECIFY_IDS = re.compile(r'^\S+ \S+ specify: ACs: ([^;]*);')
+D_TOKEN = re.compile(r'\bD-\d+')
+BRACKETED = re.compile(r'\([^()]*\)|\[[^\[\]]*\]')
 # The shapes below are the exact text of docs/formats.md; a test holds them to it.
 AC_SHAPE = '- AC-1: <criterion>'
 D_SHAPE = '- D-n: <decision>. Why: <one line>. Source: <where>'
 SPECIFY_SHAPE = 'ACs: AC-1, AC-2, …;'
 OWNER_SHAPE = '- <item> — owner: <unit, ticket or ADR>'
+D_OWNER_SHAPE = '— owner: <unit, ticket or ADR>'
+OWNER_MARKER = '— owner:'
+
+
+def owner_names_decision(line):
+    """True when the owner value holds a D-n token outside brackets. The value is the text after the
+    first `— owner:`, ended at the first `. Why:` or `. Source:` (a decisions.md line goes on with them).
+    A plain `owner:` in other text is ignored. A D-n in round or square brackets is a citation, not the owner."""
+    _, marker, owner = line.partition(OWNER_MARKER)
+    owner = re.split(r'\. (?:Why|Source):', owner, maxsplit=1)[0]
+    return bool(marker) and D_TOKEN.search(BRACKETED.sub('', owner)) is not None
 
 
 def read_optional(path):
@@ -110,7 +123,8 @@ def read_optional(path):
 
 
 def stories_errors(text):
-    """Errors for stories.md: duplicate AC ids and Out of scope lines with no owner. Also the ids found."""
+    """Errors for stories.md: duplicate AC ids and Out of scope lines with no `— owner:` or an owner that names a D-n outside brackets.
+    Also the ids found."""
     errors, found, in_scope_out = [], {}, False
     for number, line in enumerate(text.splitlines(), 1):
         if line.startswith('#'):
@@ -123,16 +137,26 @@ def stories_errors(text):
                               f'each AC id is unique ({AC_SHAPE})')
             else:
                 found[ac] = number
-        elif in_scope_out and line.startswith('- ') and 'owner:' not in line:
-            errors.append(f'stories.md:{number}: an Out of scope line needs an owner ({OWNER_SHAPE})')
+        elif in_scope_out and line.startswith('- ') and OWNER_MARKER not in line:
+            errors.append(f'stories.md:{number}: an Out of scope line needs the marker — owner: ({OWNER_SHAPE})')
+        elif in_scope_out and line.startswith('- ') and owner_names_decision(line):
+            errors.append(f'stories.md:{number}: an owner is a unit, ticket or ADR, not a D-n ({OWNER_SHAPE})')
     return errors, found
 
 
 def decisions_errors(text):
-    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`. A `T-n` line needs none."""
-    return [f'decisions.md:{number}: a decision needs a Source: ({D_SHAPE})'
-            for number, line in enumerate(text.splitlines(), 1)
-            if D_LINE.match(line) and 'Source:' not in line]
+    """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `— owner:` names a D-n outside brackets.
+    A `T-n` line needs no Source."""
+    errors = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not D_LINE.match(line):
+            continue
+        if 'Source:' not in line:
+            errors.append(f'decisions.md:{number}: a decision needs a Source: ({D_SHAPE})')
+        elif owner_names_decision(line):
+            errors.append(f'decisions.md:{number}: an owner is a unit, ticket or ADR, '
+                          f'not a D-n ({D_OWNER_SHAPE})')
+    return errors
 
 
 def logged_ac_ids(text):
@@ -193,14 +217,15 @@ TICKET_NUMBER = re.compile(rf'^(\d{{{TICKET_NUMBER_DIGITS}}})-')
 # A host:port right after `://` or `@` is not path:NN; a bare example.com:8080 is reported. The whole
 # match is dropped (finditer does not restart inside it), so no tail of the host is reported.
 # Known gap: `see @check.py:42` and a URL path `https://host/x/check.py:42` are skipped too.
-LINE_ANCHOR = re.compile(r'(?:[\w.-]+/)*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
+# A match starts only at a token head (no path char, or one `/` that itself starts a token, before it).
+LINE_ANCHOR = re.compile(r'(?<![\w.-])(?<![\w.-]/)(?:[\w.-]+/)*\.*[\w-][\w.-]*\.[A-Za-z]\w*:\d+\b')
 HOST_PREFIXES = ('://', '@')
 
 
 def line_anchor(body):
     """The first path:NN in a line that does not follow `://` or `@`, or None."""
     for match in LINE_ANCHOR.finditer(body):
-        if not body[:match.start()].endswith(HOST_PREFIXES):
+        if not body.endswith(HOST_PREFIXES, 0, match.start()):
             return match
     return None
 
@@ -212,7 +237,7 @@ COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
 JIRA_SHAPE = 'Jira: <key> | no-ticket'
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
-REPRO_SHAPE = 'Repro: <command> (red now)'
+REPRO_SHAPE = 'Repro: <command>'
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
 
 
@@ -324,6 +349,18 @@ def draft_errors(text):
     return problems
 
 
+REPRO_OPERATOR = re.compile(r'[;|<>]|&&')
+
+
+def draft_warnings(text):
+    """The warnings for a draft that passed draft_errors: a `Repro:` value with a shell operator is not one
+    plain command, and the test writer runs it as written."""
+    repro = ticket.value_of(ticket.split_lines(text), 'Repro') or ''
+    if REPRO_OPERATOR.search(repro):
+        return ['Repro: should be one plain command (no ; && || | > <), because the test writer runs it as written']
+    return []
+
+
 def slice(folder):
     """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
     stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or Jira:
@@ -381,9 +418,11 @@ def register(commands, common):
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
         description=('Check a work-unit folder against the shapes in docs/formats.md. Errors: a duplicate AC id,\n'
                      'an AC id that a specify: line of log.md named and stories.md no longer holds, a D-n line\n'
-                     'with no Source:, an Out of scope line with no owner:. Warnings: stories.md over 6 KB,\n'
-                     'decisions.md over 8 KB. Each is one line on stdout; exit 1 on any error, 0 otherwise;\n'
-                     'an error (a folder that is not there) is one anomaly: line and exit 2.'))
+                     'with no Source:, an Out of scope line with no — owner: marker, an owner after — owner:\n'
+                     'that names a D-n outside brackets.\n'
+                     'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
+                     'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
+                     'anomaly: line and exit 2.'))
     check_stories.add_argument('folder', help='the work-unit folder (holds stories.md)')
     check_stories.set_defaults(handler=run_stories)
     check_slice = actions.add_parser(

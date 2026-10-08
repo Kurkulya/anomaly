@@ -7,6 +7,7 @@ import io
 import os
 import re
 import tempfile
+import time
 import unittest
 from datetime import date
 from pathlib import Path
@@ -393,8 +394,63 @@ class CheckStoriesTest(unittest.TestCase):
         self.assert_error(1, 'Source:', file_name='decisions.md')
 
     def test_an_out_of_scope_line_without_owner_is_an_error_with_the_allowed_shape(self):
-        self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', ''))
-        self.assert_error(15, 'owner:', file_name='stories.md')
+        for owner in ('', ' owner: ticket 05'):
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', owner))
+                self.assert_error(15, 'needs the marker', 'owner:', file_name='stories.md')
+
+    def test_an_out_of_scope_line_whose_owner_is_a_d_n_is_an_error(self):
+        for owner in (' — owner: export D-3', ' — owner: D-3'):
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace(' — owner: ticket 05', owner))
+                self.assert_error(15, 'owner:', 'D-', file_name='stories.md')
+
+    def test_a_decision_that_leaves_an_item_out_of_scope_with_a_d_n_as_owner_is_an_error(self):
+        self.put(decisions=GOOD_DECISIONS + '- D-3: leave xlsx out. Why: later. Source: user, 2026-10-08 — owner: D-3\n')
+        self.assert_error(5, 'D-', file_name='decisions.md')
+
+    def test_a_d_n_outside_the_owner_value_of_a_decision_is_not_an_error(self):
+        self.put(decisions=GOOD_DECISIONS + '- D-3: the owner: field is required, see D-2. Why: x. '
+                 'Source: user, 2026-10-08 — owner: ticket 05\n')
+        self.assertEqual(self.stories(), ([], []))
+
+    def test_a_bracketed_d_n_after_an_out_of_scope_owner_is_a_citation_not_an_error(self):
+        owners = (
+            'owner: phase 2 `workflow-conduct` (D-11)',
+            'owner: `anomaly:calibrate` (D-10)',
+            'owner: a later work unit, TODO(VK, revisit 2026-11-05) (D-5)',
+            'owner: VK, after phase 2 ships (D-3)',
+            'owner: ticket 05 [D-3]',
+        )
+        for owner in owners:
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace('owner: ticket 05', owner))
+                self.assertEqual(self.stories(), ([], []))
+
+    def test_a_bracketed_d_n_after_a_decision_owner_is_a_citation_not_an_error(self):
+        self.put(decisions=GOOD_DECISIONS + '- D-3: leave xlsx out. Why: later. '
+                 'Source: user, 2026-10-08 — owner: ticket 05 (D-2)\n')
+        self.assertEqual(self.stories(), ([], []))
+
+    def test_the_owner_value_ends_at_the_first_why_or_source(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: a D-n in the Why or Source text
+        after the owner is not the owner."""
+        lines = (
+            '- D-4: Export is out of scope \u2014 owner: ticket 05. Why: D-2 covers export. Source: user\n',
+            '- D-4: Export is out of scope \u2014 owner: ticket 05. Source: D-2 follow-up. Why: cheap\n',
+            '- D-5: The owner: field stays free text. Why: D-2 set it. Source: user\n',
+            '- D-4: X out \u2014 owner: ticket 05. Why: its owner: D-2 said so. Source: user\n',
+        )
+        for line in lines:
+            with self.subTest(line=line):
+                self.put(decisions=GOOD_DECISIONS + line)
+                errors, _ = self.stories()
+                self.assertFalse([e for e in errors if 'owner' in e or 'D-' in e], errors)
+
+    def test_a_d_n_owner_followed_by_why_and_source_is_still_an_error(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1."""
+        self.put(decisions=GOOD_DECISIONS + '- D-4: leave xlsx out \u2014 owner: D-3. Why: x. Source: user\n')
+        self.assert_error(5, 'D-', file_name='decisions.md')
 
     def test_oversize_files_only_warn(self):
         self.put(stories=GOOD_STORIES + 'x' * (6 * 1024), decisions=GOOD_DECISIONS + 'x' * (8 * 1024))
@@ -542,6 +598,28 @@ class CheckSliceTest(unittest.TestCase):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
                                           body='\nSee notes.org:12 for it.\n'))
         self.assert_error('01-first.md:9:', 'notes.org:12', 'path')
+
+    def test_line_anchor_is_linear_on_a_very_long_line_and_keeps_its_anchors(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: the time grows about 4x for 4x the
+        input, on a run of `a.a/` and on a run of `-`."""
+        from anomaly_loop import check
+
+        def best(text):
+            times = []
+            for _ in range(3):
+                started = time.perf_counter()
+                check.line_anchor(text)
+                times.append(time.perf_counter() - started)
+            return min(times)
+
+        for unit in ('a.a/', '-'):
+            with self.subTest(unit=repr(unit)):
+                small, large = best(unit * 16000), best(unit * 64000)
+                self.assertLess(large / small, 8, (small, large))
+        self.assertIsNone(check.line_anchor('-' * 16000))
+        self.assertTrue(check.line_anchor('see .eslintrc.js:4').group(0).endswith('eslintrc.js:4'))
+        self.assertTrue(check.line_anchor('/abs/p.py:9').group(0).endswith('p.py:9'))
+        self.assertIsNone(check.line_anchor('https://example.com/x/check.py:42'))
 
     def test_an_oversize_ticket_only_warns(self):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='x' * (5 * 1024)))

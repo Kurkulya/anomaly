@@ -1,8 +1,10 @@
 """`log add <folder> --stage <stage> '<text>'` through the CLI, in-process: one line
 `<date time> <stage>: <text>` appended to `<folder>/log.md` (AC-6), and the refusals (AC-7)."""
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.fixtures import assert_cli_error, run_cli
 
@@ -106,6 +108,50 @@ class RefusalTest(LogCase):
         assert_cli_error(self, self.add(folder=missing))
         self.assertFalse(missing.exists())
         self.assertEqual(self.listing(), before)
+
+    def test_a_log_file_that_is_a_symlink_is_refused_and_its_target_is_not_written(self):
+        """Adhoc 2026-10-08-review-security-lows, AC-1: A01, no append through a symlinked log.md, also a
+        dangling one (a missing target must not be created)."""
+        self.control()
+        target = self.root / 'target.txt'
+        for case, content in (('existing target', b'secret\n'), ('missing target', None)):
+            with self.subTest(case=case):
+                if content is not None:
+                    target.write_bytes(content)
+                try:
+                    self.log.symlink_to(target)
+                except (OSError, NotImplementedError) as error:
+                    self.skipTest(f'symlinks are not available: {error}')
+                try:
+                    result = self.add()
+                    assert_cli_error(self, result)
+                    self.assertIn('symlink', result[2])
+                    if content is None:
+                        self.assertFalse(target.exists())
+                    else:
+                        self.assertEqual(target.read_bytes(), content)
+                    self.assertTrue(self.log.is_symlink())
+                finally:
+                    self.log.unlink(missing_ok=True)
+                    target.unlink(missing_ok=True)
+
+    def test_a_log_file_swapped_for_a_symlink_after_the_check_is_still_refused(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: the append itself must not follow
+        a symlink (O_NOFOLLOW), not only the check before it."""
+        if not hasattr(os, 'O_NOFOLLOW'):
+            self.skipTest('os.O_NOFOLLOW is not available')
+        self.control()
+        target = self.root / 'target.txt'
+        target.write_bytes(b'secret\n')
+        try:
+            self.log.symlink_to(target)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f'symlinks are not available: {error}')
+        with mock.patch.object(Path, 'is_symlink', return_value=False):
+            result = self.add()
+        assert_cli_error(self, result)
+        self.assertIn('symlink', result[2])
+        self.assertEqual(target.read_bytes(), b'secret\n')
 
     def test_a_stage_with_a_space_or_a_colon_or_empty_text_is_refused_and_nothing_is_written(self):
         self.control()

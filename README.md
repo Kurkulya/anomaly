@@ -904,9 +904,11 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   overwrites a file. Every other `ticket` action takes this file like any other ticket.
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
-  `Repro: <command> (red now)`, an AC). A draft with a line missing, or one that names a blocker,
+  `Repro: <command>`, an AC). A draft with a line missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
-  `Jira:` line kept and none added. The slug comes from the title unless `--slug` gives it.
+  `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
+  `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
+  the title unless `--slug` gives it.
 
 ## Benchmark
 
@@ -1143,10 +1145,13 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   allowed shape: a duplicate `AC-<n>` id; an AC id that an earlier `specify:` line of `log.md` named
   (its text starts `ACs: AC-1, AC-2, …;`) and `stories.md` no longer holds (the error is
   `log.md:<line>` of the first `specify:` line that named it; a `specify:` line without that
-  shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need none); a line
-  under `## Out of scope` with no `owner:`. Warnings, never a failure: `stories.md` over 6 KB,
-  `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a clean
-  run prints `stories check passed for <folder>`); a folder that is not there is one `anomaly:` line and exit 2.
+  shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need
+  none); a line under `## Out of scope` with no `— owner:`; an owner that names a `D-n` outside
+  brackets. Only the first `— owner:` starts the owner; it ends at the first `. Why:` or
+  `. Source:`; a plain `owner:` elsewhere is ignored. Warnings, never a failure: `stories.md` over
+  6 KB, `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a
+  clean run prints `stories check passed for <folder>`); a folder that is not there is one
+  `anomaly:` line and exit 2.
   A missing `stories.md` is an error line; a missing `decisions.md` or `log.md` is read as empty.
   Nothing is written.
 - `check slice` reads `stories.md` and `tickets/NN-slug.md` of a work-unit folder, so a ticket set
@@ -1403,9 +1408,9 @@ to, so its earlier bytes stay as they are; the new line takes the file's line en
 without one gets it first. The folder must exist (the command never creates it) but may be anywhere,
 inside `.anomaly/` or `.scratch/` or not. A folder that does not exist, a stage that is not one word
 (letters, digits and `.` `_` `-`; a `:` is refused because it would end the stage in the line), and
-text that is empty or has a line break stop the command with an `anomaly:` line and no write. Put `--`
-before a text that starts with `-`. Cost numbers do not belong in `log.md`; the command does not
-check this.
+text that is empty or has a line break, and a `log.md` that is a symlink stop the command with an
+`anomaly:` line and no write. Put `--` before a text that starts with `-`. Cost numbers do not belong
+in `log.md`; the command does not check this.
 
 ## Command line
 
@@ -1479,6 +1484,10 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   line (`worklog add --stage interview`) and offers `/anomaly:specify`.
 - The close table shows the counts of its recommendations accepted, rejected and revised.
   `/anomaly:specify` records them with `lens tally add --lens interview`.
+- No question reopens a settled ADR or `D-n`, even when the idea asks for it; the conflict is named
+  instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner after `— owner:`
+  (another unit, ticket or ADR, never a `D-n`; when none is known, it asks). `Open:` holds only
+  unanswered items, because it stops `/anomaly:specify`.
 
 ## The specify skill
 
@@ -1519,7 +1528,10 @@ finds the root cause and changes no source.
 
 - It runs a red-capable command before any hypothesis, and cites the root cause as `file:line` or
   probe output, else marks it "unverified".
-- It removes every probe edit and leaves `git status` clean: no branch, commit or push.
+- It removes every probe edit and leaves `git status` clean: no branch, commit or push. The loop
+  script stays under the git-excluded `.anomaly/adhoc/` as `<key>-repro.<ext>`, so build can run it.
+  The ticket stem can differ from the `<key>` in the script name: `Repro:` holds the script's
+  absolute path, so build still runs it.
 - It writes a light-path draft (the shape is in the formats doc) to the session scratchpad and
   passes it to `ticket adhoc --from`, which checks it.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers

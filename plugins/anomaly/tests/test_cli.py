@@ -141,6 +141,13 @@ class SkillFileTest(unittest.TestCase):
         self.assertTrue(self.BUILD_SKILL.is_file(), self.BUILD_SKILL.relative_to(PLUGIN).as_posix())
         return self.BUILD_SKILL.read_text(encoding='utf-8')
 
+    def test_the_build_skill_cli_only_anomaly_rule_names_the_diagnose_repro_script_as_its_one_exception(self):
+        """Adhoc 2026-10-08-durable-runnable-repro, AC-1."""
+        lines = [line for line in self.build_text().splitlines() if 'goes through the CLI' in line]
+        self.assertEqual(len(lines), 1)
+        self.assertRegex(lines[0].lower(), r'diagnose')
+        self.assertRegex(lines[0].lower(), r'repro')
+
     def test_the_build_skill_is_model_invocable_and_its_description_names_conduct_and_an_explicit_request(self):
         """AC-29 (the 250-character limit is the all-skills check above)."""
         fields = frontmatter.split(self.build_text())[0]
@@ -543,6 +550,12 @@ class PlanningDocsTest(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, text)
 
+    def test_the_formats_doc_repro_shape_is_the_runnable_command_without_a_red_now_suffix(self):
+        """Adhoc 2026-10-08-durable-runnable-repro, AC-1: `Repro: <command>` runs as written."""
+        text = self.doc_text(self.FORMATS)
+        self.assertIn('Repro: <command>', text)
+        self.assertNotIn('(red now)', text)
+
     def test_the_boundaries_doc_names_clear_the_three_stages_and_the_context_zone(self):
         """AC-4: /clear is never offered between interview, specify and slice; the ~150k zone."""
         text = self.doc_text(self.BOUNDARIES)
@@ -808,6 +821,30 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertIn('--feature', text)
         self.assertIn('/anomaly:specify', text)
 
+    def test_no_question_offers_or_reopens_a_settled_adr_or_d_n_even_when_the_idea_suggests_it(self):
+        """2026-10-08-interview-settled-trap-and-open-lines AC-1: the conflict is named, not asked."""
+        text = self.text()
+        rules = [line for line in text.splitlines()
+                 if re.search(r'\bADR\b|D-n', line) and 'settled' in line.lower()
+                 and 'even when' in line.lower() and 'conflict' in line.lower()]
+        self.assertTrue(rules, 'no rule line holds ADR or D-n with settled, even when and conflict')
+
+    def test_a_gap_the_user_settles_as_out_of_scope_is_a_d_n_with_an_owner_and_open_is_only_for_the_unanswered(self):
+        """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify."""
+        text = self.text()
+        self.assertRegex(text, r'(?is)out of scope[^\n]*D-n[^\n]*owner|out of scope[^\n]*owner[^\n]*D-n|'
+                               r'D-n[^\n]*owner[^\n]*out of scope|D-n[^\n]*out of scope[^\n]*owner')
+        rule = [line for line in text.splitlines()
+                if re.search(r'(?i)out of scope', line) and 'D-n' in line and re.search(r'(?i)owner', line)]
+        self.assertTrue(rule, 'no line ties out of scope, D-n and owner')
+        self.assertTrue(any('Source:' in line for line in rule), 'the out-of-scope D-n rule drops its Source:')
+        self.assertTrue(any(re.search(r'(?i)never a `?D-n', line) for line in rule),
+                        'the rule does not say the owner is not the D-n itself')
+        self.assertTrue(any(re.search(r'(?i)`?Open:`?[^\n]*\bonly\b[^\n]*unanswered', line)
+                            for line in text.splitlines()), 'Open: is not said to be only for the unanswered')
+        self.assertRegex(text, r'(?is)`?Open:`?[^\n]*\b(?:block|blocks|stop|stops)\b[^\n]*specify|'
+                               r'specify[^\n]*\b(?:block|blocks|blocked|stop|stops|stopped)\b[^\n]*`?Open:`?')
+
     def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
         text = self.text()
         for name in ('formats.md', 'boundaries.md'):
@@ -944,6 +981,15 @@ class SpecifySkillTest(unittest.TestCase):
         self.assertEqual(len(examples), 1, 'expected one fenced stories.md example holding AC-1')
         self.assertRegex(examples[0], r'(?m)^.*\bAC-2\b')
         self.assertIn('Out of scope', examples[0])
+
+    def test_an_out_of_scope_owner_is_a_unit_ticket_or_adr_never_the_deferring_d_n_and_the_user_is_asked(self):
+        """2026-10-08-out-of-scope-owner-check AC-1."""
+        text = self.text()
+        rule = [line for line in text.splitlines() if re.search(r'(?i)out of scope', line) and re.search(r'(?i)owner', line)]
+        self.assertTrue(rule, 'no line ties out of scope and owner')
+        self.assertTrue(any(re.search(r'(?i)never a `?D-n', line) for line in rule),
+                        'the rule does not say the owner is not the D-n itself')
+        self.assertRegex(text, r'(?i)\bask\b[^\n]*owner|owner[^\n]*\bask\b')
 
     def test_the_readme_has_a_specify_skill_section_naming_the_slash_command(self):
         readme = self.ROOT / 'README.md'
@@ -1106,6 +1152,7 @@ class DiagnoseSkillTest(unittest.TestCase):
         red = re.search(r'\bred\b|red-capable|repro', lowered)
         self.assertIsNotNone(red, 'no red-capable command or repro in the prose')
         self.assertLess(red.start(), lowered.index('hypothes'))
+        self.assertRegex(lowered, r'in chat as a numbered list')
 
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):
         """AC-27."""
@@ -1127,6 +1174,24 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertRegex(text, r'ticket adhoc\b[^\n]*--from')
         self.assertRegex(text, r'Write tool')
         self.assertRegex(text.lower(), r'scratchpad')
+
+    def test_the_loop_script_goes_to_adhoc_with_a_repro_name_and_the_repro_line_runs_it(self):
+        """Adhoc 2026-10-08-durable-runnable-repro, AC-1: the script outlives the session; the draft stays in the
+        scratchpad (the test above)."""
+        text = self.text()
+        self.assertRegex(text, r'\.anomaly/adhoc/\S*-repro')
+        self.assertTrue(any('`Repro:`' in line and 'script' in line.lower() for line in text.splitlines()),
+                        'no line says the Repro: line runs the loop script')
+
+    def test_the_redact_rule_covers_the_draft_and_the_ticket_not_only_shown_output(self):
+        """Adhoc 2026-10-08-review-security-lows, AC-1: A09, secrets stay out of the files too."""
+        match = re.search(r'Redact secrets[^.]*\.', self.text())
+        self.assertIsNotNone(match, 'the skill has no "Redact secrets" sentence')
+        sentence = match.group(0).lower()
+        self.assertIn('draft', sentence)
+        self.assertIn('ticket', sentence)
+        self.assertIn('script', sentence)
+        self.assertRegex(sentence, r'env(ironment)? var')
 
     def test_it_logs_a_diagnose_work_unit_line(self):
         """AC-27."""

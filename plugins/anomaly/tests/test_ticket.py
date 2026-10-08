@@ -160,7 +160,7 @@ class ShowTest(TicketTestCase):
 
     def test_prints_the_repro_line(self):
         """AC-26: a light-path ticket's `Repro:` line is shown, so `build` reads the command from `ticket show`."""
-        repro = 'Repro: python3 -m unittest tests.test_x (red now)'
+        repro = 'Repro: python3 -m unittest tests.test_x'
         path = self.ticket_path(TICKET_TEXT.replace('Tests: unit (CLI in-process)',
                                                     f'Tests: unit (CLI in-process)\n{repro}'))
         code, out, err = self.run_ticket('show', str(path))
@@ -838,7 +838,7 @@ DRAFT_LINES = {
     'Status:': 'Status: ready-for-agent',
     'Blocked by:': 'Blocked by: none',
     'Tests:': 'Tests: unit (CLI in-process)',
-    'Repro:': 'Repro: python3 -m unittest tests.test_parser (red now)',
+    'Repro:': 'Repro: python3 -m unittest tests.test_parser',
 }
 DRAFT_BODY = '\n**What to build:** stop the parser test from failing at random.\n\n- [ ] AC-1: the parser test passes ten runs in a row\n'
 
@@ -970,6 +970,20 @@ class AdhocFromTest(TicketTestCase):
         self.adhoc_from()
         text = self.read(self.adhoc_dir / '2026-10-04-fix-the-flaky-parser-test.md')
         self.assertNotIn('Jira', text)
+
+    def test_a_repro_that_is_not_one_plain_command_warns_and_the_ticket_is_still_written(self):
+        """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: a warning on stderr, the path alone
+        on stdout, the draft written unchanged."""
+        for number, operator in enumerate((';', '&&', '||', '|', '>', '<')):
+            with self.subTest(operator=operator):
+                repro = f'Repro: python3 -m unittest tests.test_a {operator} python3 -m unittest tests.test_b'
+                draft = draft_text(replace={'Repro:': repro})
+                code, out, err = self.adhoc_from(draft, '--slug', f'repro-{number}')
+                path = self.adhoc_dir / f'2026-10-04-repro-{number}.md'
+                self.assertEqual(code, 0, err)
+                self.assertTrue(err.startswith('warning:'), err)
+                self.assertEqual(out.strip(), str(path))
+                self.assertEqual(self.read(path), draft)
 
 
 LAYOUTS = (('.scratch', 'feature', 'issues'), ('.anomaly', 'unit', 'tickets'))   # the old layout, the new one

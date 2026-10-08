@@ -27,6 +27,7 @@ Amended <date>: <what changed> — <why>
 - UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
+- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored.
 
 ## decisions.md
 
@@ -39,6 +40,8 @@ One line per entry, written after each round, settled items only. Numbers are ne
 - A changed line gets a second line `Amended <date>: <what changed>`.
 - `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
   the glossary.
+- A decision that leaves an item out of scope ends its text with `— owner: <unit, ticket or ADR>`. Only the first `— owner:`
+  counts, up to the first `. Why:` or `. Source:`. The owner is never a `D-n` (a bracketed `(D-n)` is allowed).
 
 ## Ticket
 
@@ -68,7 +71,7 @@ Decisions:
 - `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
   CLI; `Amended` by a later stage or a person. `slice` writes none of them.
 - A light-path ticket from `diagnose` has `Blocked by: none` (`ticket show` warns without a `Blocked by:` line), `Covers: AC-1`, `Status: ready-for-agent`,
-  the `Tests:` line, then `Repro: <command> (red now)`. AC-1 is the exact symptom gone with the repro
+  the `Tests:` line, then `Repro: <command>` (runnable as written, red at hand-over). AC-1 is the exact symptom gone with the repro
   green. The body holds Symptom, Root cause, Fix, Risk, and the seam or a no-correct-seam finding.
 
 ## log.md
