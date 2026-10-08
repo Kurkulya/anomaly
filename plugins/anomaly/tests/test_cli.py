@@ -81,7 +81,7 @@ class SkillFileTest(unittest.TestCase):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
     def test_the_agents_are_the_core_reviewers_and_the_plan_reviewer_read_only_and_with_no_pinned_model(self):
-        self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), 'plan')))   # plan: the plan-gate reviewer, outside the core lenses
+        self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), lens.PLAN_LENS)))   # plan: the plan-gate reviewer, outside the core lenses
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
             with self.subTest(agent=path.stem):
@@ -676,7 +676,7 @@ class PlanGateReviewTest(unittest.TestCase):
 
     def test_the_lens_step_names_the_plan_lens(self):
         step = next(line for line in self.skill().splitlines() if line.startswith('9. '))
-        self.assertRegex(step, r'`plan`')
+        self.assertIn(f'`{lens.PLAN_LENS}`', step)
 
     def test_a_failed_read_of_the_plan_agents_mode_doc_is_answered_with_that_file_by_sendmessage(self):
         section = self.section('## When an agent\'s read fails')

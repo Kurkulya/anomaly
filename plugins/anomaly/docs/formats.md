@@ -63,7 +63,7 @@ Decisions:
 - D-3: <verbatim from decisions.md>
 ```
 
-- `Jira:` holds a tracker key or `no-ticket`, until the tracker port names the key line.
+- `Jira:` holds a tracker key or `no-ticket`, until the tracker port (phase 2, D-11) names the key line.
 - `Gate:` only when the ticket was gated. `Restates:` only on a ticket that changes a rule.
 - `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
   CLI; `Amended` by a later stage or a person. `slice` writes none of them.
