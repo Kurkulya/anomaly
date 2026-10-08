@@ -1174,24 +1174,25 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertLessEqual(self.SKILL.stat().st_size, 5120)
 
     def test_a_red_capable_command_runs_before_any_hypothesis(self):
-        """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order."""
+        """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order. Adhoc
+        2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: the chat-list assertion moved to the test below."""
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'hypothes')
         red = re.search(r'\bred\b|red-capable|repro', lowered)
         self.assertIsNotNone(red, 'no red-capable command or repro in the prose')
         self.assertLess(red.start(), lowered.index('hypothes'))
-        self.assertRegex(lowered, r'in chat as a numbered list')
 
-    def test_the_hypotheses_are_their_own_chat_message_before_any_probe_and_the_explore_brief_asks_facts_only(self):
-        """Adhoc 2026-10-08-diagnose-hypothesis-list-in-chat, AC-1: the ranked list is a message of its own, sent
-        before any probe file is written; the explore brief asks for facts only, with no question that points
-        at a cause. Loose regexes on the lowered prose, so a short wording passes (5 KB limit). Adhoc
-        2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: the prose says `before any probe file`."""
+    def test_the_ranked_hypotheses_go_into_the_draft_with_each_probe_result_and_the_explore_brief_asks_facts_only(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1 (replaces the chat-list rule of adhoc
+        2026-10-08-diagnose-hypothesis-list-in-chat): the ranked hypotheses are a `Hypotheses` section of the
+        ticket draft, each with its probe result (confirmed or refuted), and not a chat message; the explore
+        brief still asks for facts only, with no question that points at a cause. Loose regexes on the lowered
+        prose, so a short wording passes (5 KB limit)."""
         lowered = self.prose().lower()
-        self.assertRegex(lowered, r'own (chat )?message')
-        self.assertRegex(lowered, r'before any probe file')
+        self.assertRegex(lowered, r'hypotheses[^\n]*\bdraft\b|\bdraft\b[^\n]*hypotheses')
+        self.assertRegex(lowered, r'confirmed|refuted')
+        self.assertNotRegex(lowered, r'in chat as a numbered list|own (chat )?message')
         self.assertRegex(lowered, r'brief[^.\n]{0,30}facts only')
-        self.assertRegex(lowered, r'never only as labels')
         self.assertRegex(lowered, r'(never|no) (a )?(question|ask)[^.\n]{0,40}cause|never[^.\n]{0,40}cause')
 
     def test_the_root_cause_is_cited_as_file_line_or_probe_output_else_unverified(self):

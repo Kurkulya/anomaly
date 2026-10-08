@@ -841,15 +841,26 @@ DRAFT_LINES = {
     'Repro:': 'Repro: python3 -m unittest tests.test_parser',
 }
 DRAFT_BODY = '\n**What to build:** stop the parser test from failing at random.\n\n- [ ] AC-1: the parser test passes ten runs in a row\n'
+DRAFT_HYPOTHESES = (
+    'the parser reads a shared buffer: confirmed (probe: two runs interleave, exit 1)',
+    'the test clock drifts: refuted (probe: a fixed clock still fails)',
+    'the fixture file is stale: refuted (probe: a fresh fixture still fails)',
+)
 
 
-def draft_text(drop=(), replace=None, extra=''):
-    """A valid light-path draft (formats.md § Ticket); `drop` removes lines by key, `replace` swaps one."""
+def hypotheses_section(items=DRAFT_HYPOTHESES):
+    """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: a `## Hypotheses` section, one numbered line per item."""
+    return '\n## Hypotheses\n\n' + ''.join(f'{number}. {item}\n' for number, item in enumerate(items, 1))
+
+
+def draft_text(drop=(), replace=None, extra='', hypotheses=hypotheses_section()):
+    """A valid light-path draft (formats.md § Ticket); `drop` removes lines by key, `replace` swaps one,
+    `hypotheses` is the Hypotheses section text ('' leaves it out; a valid diagnose draft carries one)."""
     lines = [value for key, value in DRAFT_LINES.items() if key not in drop]
     for key, value in (replace or {}).items():
         lines = [value if line == DRAFT_LINES[key] else line for line in lines]
     head, rest = lines[0], lines[1:]
-    return head + '\n\n' + '\n'.join(rest) + '\n' + extra + DRAFT_BODY
+    return head + '\n\n' + '\n'.join(rest) + '\n' + extra + DRAFT_BODY + hypotheses
 
 
 class DraftCheckTest(unittest.TestCase):
@@ -897,6 +908,26 @@ class DraftCheckTest(unittest.TestCase):
         problems = self.check(draft_text(replace={'Tests:': 'Tests:'}))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn('Tests', problems[0])
+
+    def test_a_draft_needs_a_hypotheses_section_of_three_to_five_numbered_lines_each_with_its_probe_result(self):
+        """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: `ticket adhoc --from` refuses a draft with
+        no `## Hypotheses` section, with 2 or 6 items, or with an item that names neither confirmed nor refuted."""
+        item = DRAFT_HYPOTHESES[0]
+        cases = {
+            'no section': '',
+            'an empty section': hypotheses_section(()),
+            '2 items': hypotheses_section((item, item)),
+            '6 items': hypotheses_section((item,) * 6),
+            'an item with no result word': hypotheses_section(
+                (item, item, 'the clock drifts (probe: a fixed clock still fails)')),
+            'a bulleted list': '\n## Hypotheses\n\n' + ''.join(f'- {item}\n' for _ in range(3)),
+        }
+        for name, section in cases.items():
+            with self.subTest(case=name):
+                self.assertIn('Hypotheses', ' '.join(self.check(draft_text(hypotheses=section))))
+        for count in (3, 4, 5):
+            with self.subTest(valid=count):
+                self.assertEqual(self.check(draft_text(hypotheses=hypotheses_section((item,) * count))), [])
 
     def test_a_line_the_cli_writes_later_is_refused(self):
         for line in ('Result: a', 'Metrics: b', 'Reviewed: c', 'Verified: d', 'Red: e', 'Red-changed: f'):
