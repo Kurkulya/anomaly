@@ -23,6 +23,7 @@ block are examples: they are never read as state lines or checkboxes. A leading 
 is kept on write and does not hide the first line.
 """
 import re
+import sys
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -569,13 +570,16 @@ def run_result(args, environ):
 
 
 def draft_ticket(path, slug, today):
-    """(file name, text) of an adhoc ticket from a draft file; a refusal names every problem."""
+    """(file name, text) of an adhoc ticket from a draft file; a refusal names every problem. A warning
+    about a valid draft goes to stderr."""
     text = read_text(path, 'draft')
     from . import check   # a lazy import: check.py imports this module at its top
     problems = check.draft_errors(text)
     if problems:
         raise RecordError(f'{path}: the draft is refused: ' + '; '.join(problems))
     check_slug(slug)
+    for warning in check.draft_warnings(text):
+        print(f'warning: {warning}', file=sys.stderr)
     return f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md', text
 
 

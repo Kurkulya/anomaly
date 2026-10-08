@@ -348,6 +348,18 @@ def draft_errors(text):
     return problems
 
 
+REPRO_OPERATOR = re.compile(r'[;|<>]|&&')
+
+
+def draft_warnings(text):
+    """The warnings for a draft that passed draft_errors: a `Repro:` value with a shell operator is not one
+    plain command, and the test writer runs it as written."""
+    repro = ticket.value_of(ticket.split_lines(text), 'Repro') or ''
+    if REPRO_OPERATOR.search(repro):
+        return ['Repro: should be one plain command (no ; && || | > <), because the test writer runs it as written']
+    return []
+
+
 def slice(folder):
     """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
     stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or Jira:
