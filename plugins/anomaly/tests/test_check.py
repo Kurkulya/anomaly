@@ -447,15 +447,14 @@ class CheckStoriesTest(unittest.TestCase):
         owners = (
             'ticket 05',
             'ticket 03 of `workflow-conduct`',
+            'ticket 01 of `workflow-conduct`',
             'ticket 3 of `.scratch/workflow-conduct`',
             'ticket 5',
             'ticket 05, `.anomaly/unit/tickets/05-x.md`',
             'the `export` part of ticket 05',
             'ADR-0003',
             'ADR-0005',
-            '`unit`',
             'workflow-conduct',
-            '`.anomaly/unit`',
             '`.scratch/workflow-conduct`',
             '.anomaly/unit/tickets/05-x.md',
             '`.anomaly/adhoc/2026-10-08-x.md`',
@@ -503,6 +502,66 @@ class CheckStoriesTest(unittest.TestCase):
             with self.subTest(owner=owner, file='decisions.md'):
                 self.put(stories=GOOD_STORIES, decisions=GOOD_DECISIONS + self.DECISION_WITH_OWNER.format(owner))
                 self.assert_error(5, 'must exist', file_name='decisions.md')
+
+    def test_a_unit_is_never_its_own_owner_but_another_existing_unit_is(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `unit`, `.anomaly/unit` and a bare
+        unit name all name the checked unit and fail; `workflow-conduct` is another unit and passes."""
+        (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
+        for owner in ('`unit`', '`.anomaly/unit`', 'unit'):
+            with self.subTest(owner=owner, file='stories.md'):
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+                self.assert_error(15, 'must exist', file_name='stories.md')
+            with self.subTest(owner=owner, file='decisions.md'):
+                self.put(stories=GOOD_STORIES, decisions=GOOD_DECISIONS + self.DECISION_WITH_OWNER.format(owner))
+                self.assert_error(5, 'must exist', file_name='decisions.md')
+        self.put(stories=GOOD_STORIES.replace('ticket 05', '`workflow-conduct`'), decisions=GOOD_DECISIONS)
+        self.assertEqual(self.stories(), ([], []))
+
+    def test_the_ticket_nn_in_unit_form_is_dropped(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: only "ticket NN of `unit`" names a
+        ticket of another unit; "in `unit`" fails even when that unit has the ticket."""
+        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
+        for owner in ('ticket 03 in `workflow-conduct`', 'ticket 03 in `.scratch/workflow-conduct`'):
+            with self.subTest(owner=owner):
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+                self.assert_error(15, 'must exist', file_name='stories.md')
+
+    def test_an_owner_with_a_path_anchor_is_refused_even_when_a_folder_of_that_name_exists(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: a Windows root or drive anchor is no
+        owner on any platform. On POSIX the anchor text is one path part, so a folder with that exact name is
+        made to prove the code refuses it by its text, not by a missing folder."""
+        for owner in ('\\', 'C:', 'C:\\x'):
+            with self.subTest(owner=owner):
+                try:
+                    (self.root / '.anomaly' / owner).mkdir()
+                except OSError:
+                    self.skipTest('the file system cannot hold a folder named ' + owner)
+                self.put(stories=GOOD_STORIES.replace('ticket 05', f'`{owner}`'), decisions=GOOD_DECISIONS)
+                self.assert_error(15, 'must exist', file_name='stories.md')
+
+    def test_a_todo_key_needs_a_real_date(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: month 13 and day 45 are no date. The
+        real date `2026-11-08` already passes (see the pass test above); it is repeated here as the guard."""
+        for date, passes in (('2026-13-45', False), ('2026-02-30', False), ('2026-11-08', True)):
+            with self.subTest(date=date):
+                owner = f'tags-edit, TODO(VK, revisit {date})'
+                self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+                if passes:
+                    self.assertEqual(self.stories(), ([], []))
+                else:
+                    self.assert_error(15, 'must exist', file_name='stories.md')
+
+    def test_a_work_unit_folder_outside_the_known_layout_gets_one_layout_error(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: a folder not at `<root>/.anomaly/<unit>`
+        or `<root>/.scratch/<unit>` gets one error that names both homes, not an error per owner."""
+        import shutil
+        from anomaly_loop import check
+        stray = self.root / 'unit'
+        shutil.copytree(self.folder, stray)
+        errors, _ = check.stories(stray)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn('.anomaly', errors[0])
+        self.assertIn('.scratch', errors[0])
 
     def test_the_owner_value_ends_at_the_first_why_or_source(self):
         """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: a D-n in the Why or Source text
