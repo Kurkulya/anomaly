@@ -1147,7 +1147,18 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `log.md:<line>` of the first `specify:` line that named it; a `specify:` line without that
   shape is an error too); a `- D-<n>:` line in `decisions.md` with no `Source:` (`T-n` lines need
   none); a line under `## Out of scope` with no `— owner:`; an owner that names a `D-n` outside
-  brackets. Only the first `— owner:` starts the owner; it ends at the first `. Why:` or
+  brackets; an owner (on an Out of scope line or a `- D-<n>:` line) that is not in the checkout
+  and carries no `TODO(<owner>, revisit YYYY-MM-DD)` key (the date must be a real one). The owner
+  exists when it names a unit folder under `.anomaly/` or `.scratch/` other than the checked one
+  (a bare name or a path; a unit is never the owner of its own item, also by its bare name),
+  `ticket NN` (`tickets/NN-*.md` of the unit, or `issues/` in a `.scratch` unit) or
+  ``ticket NN of `<unit>` `` (that unit's `tickets/`, or its `issues/` in the old `.scratch` layout;
+  the form "in `<unit>`" fails), the path of a ticket file or an ADR file, or `ADR-NNNN`
+  (`docs/adr/` or the `adr/` of a unit folder); only the checkout
+  counts, so an ADR on another branch fails, and any other file (a README, a skill) is no owner. A
+  path with a root or a drive is no owner. A person or a skill needs the key. A work-unit folder
+  that is not `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no
+  owner lookup. Only the first `— owner:` starts the owner; it ends at the first `. Why:` or
   `. Source:`; a plain `owner:` elsewhere is ignored. Warnings, never a failure: `stories.md` over
   6 KB, `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a
   clean run prints `stories check passed for <folder>`); a folder that is not there is one
@@ -1486,8 +1497,10 @@ turns an idea into settled decisions and terms by asking the user in rounds.
   `/anomaly:specify` records them with `lens tally add --lens interview`.
 - No question reopens a settled ADR or `D-n`, even when the idea asks for it; the conflict is named
   instead. A gap the user settles as out of scope is a `D-n` whose decision names an owner after `— owner:`
-  (another unit, ticket or ADR, never a `D-n`; when none is known, it asks). `Open:` holds only
-  unanswered items, because it stops `/anomaly:specify`.
+  (another unit, ticket or ADR, never a `D-n`; it must exist or carry `TODO(<owner>, revisit
+  YYYY-MM-DD)`, never a placeholder; when none is known, it asks, then recommends the key; only if
+  the user declines does it write an `Open:` line and say that `/anomaly:specify` will stop on it).
+  `Open:` holds only unanswered items, because it stops `/anomaly:specify`.
 
 ## The specify skill
 
@@ -1499,7 +1512,8 @@ interview's `decisions.md` into the `stories.md` the owner reads.
 - It writes `.anomaly/<work unit>/stories.md` (Sources with the Gathered date, Why, rules for all
   stories, numbered stories with continuous `AC-n`, verbatim source criteria tagged, an Out of scope
   list with owners) and appends `D-n` lines, each with a `Source:`. It writes no `T-n` line and no
-  `CONTEXT.md` row.
+  `CONTEXT.md` row. When no owner is known and the user declines the `TODO` key, the line keeps an
+  empty owner, `check stories` fails on it and specify stops before the gate.
 - Agreed ADRs are drafted in `.anomaly/<work unit>/adr/` with a number free on every branch.
 - It runs `check stories`, then `anomaly:review` in `spec` mode, then shows a digest of at most 5
   lines and waits for approval. A Blocker stops it before the digest.
