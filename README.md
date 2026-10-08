@@ -907,7 +907,8 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `Repro: <command>`, an AC). A draft with a line missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
   `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
-  `warning:` on stderr (it should be one plain command) and is still written. The slug comes from the title unless `--slug` gives it.
+  `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
+  the title unless `--slug` gives it.
 
 ## Benchmark
 
