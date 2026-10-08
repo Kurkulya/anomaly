@@ -1035,7 +1035,8 @@ class SliceSkillTest(unittest.TestCase):
         self.assertIn('check slice', text)
         self.assertRegex(text, r'anomaly:review')
         self.assertRegex(lowered, r'`?tickets`? mode|mode `?tickets`?')
-        self.assertLess(text.index('check slice'), text.index('anomaly:review'))
+        gate = text.split('\n## The checks and the gate', 1)[1].split('\n## ', 1)[0]
+        self.assertLess(gate.index('check slice'), gate.index('anomaly:review'))
         self.assertRegex(lowered, r'exit 1|exits 1')
         self.assertIn('warning:', text)
         self.assertIn('Blocker', text)
@@ -1055,11 +1056,10 @@ class SliceSkillTest(unittest.TestCase):
 
     def test_it_offers_the_build_of_the_first_unblocked_ticket_through_ticket_gate(self):
         """AC-24."""
-        text = self.text()
-        self.assertIn('anomaly:build', text)
-        self.assertIn('ticket gate', text)
-        self.assertRegex(text.lower(), r'first ticket')
-        self.assertRegex(text.lower(), r'blocker|blocked')
+        section = self.text().split('\n## After the gate', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('/anomaly:build <work unit>', section)
+        self.assertIn('ticket gate', section)
+        self.assertRegex(section.lower(), r'first ticket with no open blocker')
 
     def test_the_readme_has_a_slice_skill_section_naming_the_slash_command(self):
         readme = self.ROOT / 'README.md'
