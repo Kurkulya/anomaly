@@ -570,17 +570,15 @@ def run_result(args, environ):
 
 
 def draft_ticket(path, slug, today):
-    """(file name, text) of an adhoc ticket from a draft file; a refusal names every problem. A warning
-    about a valid draft goes to stderr."""
+    """(file name, text, warnings) of an adhoc ticket from a draft file; a refusal names every problem."""
     text = read_text(path, 'draft')
     from . import check   # a lazy import: check.py imports this module at its top
     problems = check.draft_errors(text)
     if problems:
         raise RecordError(f'{path}: the draft is refused: ' + '; '.join(problems))
     check_slug(slug)
-    for warning in check.draft_warnings(text):
-        print(f'warning: {warning}', file=sys.stderr)
-    return f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md', text
+    name = f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md'
+    return name, text, check.draft_warnings(text)
 
 
 def run_adhoc(args, environ):
@@ -588,12 +586,14 @@ def run_adhoc(args, environ):
         raise RecordError('--from and the task text are exclusive: give one')
     if args.draft is None and args.task is None:
         raise RecordError('give the task text, or --from <draft file>')
-    name, text = draft_ticket(args.draft, args.slug, args.today) if args.draft is not None \
-        else adhoc_ticket(args.task, args.slug, args.today)
+    name, text, warnings = draft_ticket(args.draft, args.slug, args.today) if args.draft is not None \
+        else (*adhoc_ticket(args.task, args.slug, args.today), [])
     # a folder named with --repo may be outside git; the working folder must be in a repository
     path = gitrepo.shared_root(gitrepo.repo_for(args.repo, outside_git=bool(args.repo))) / TICKET_ADHOC_DIR / name
     if path.exists():
         raise RecordError(f'{path} already exists')
     files.write_text(path, text)
+    for warning in warnings:
+        print(f'warning: {warning}', file=sys.stderr)
     print(path)
     return 0
