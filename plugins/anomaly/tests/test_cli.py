@@ -831,17 +831,23 @@ class InterviewSkillTest(unittest.TestCase):
         # Adhoc 2026-10-09-interview-settled-conflict-no-question, AC-1: a part of the idea that conflicts with a
         # settled ADR or D-n becomes an out-of-scope D-n with an owner, written without a question; no option
         # offers to reopen it, in every round and also when an owner is needed.
-        with self.subTest('a conflicting part is an out-of-scope D-n with an owner, written without a question'):
-            self.assertTrue(any(re.search(r'(?i)conflict', line) and re.search(r'(?i)out of scope', line)
-                                and re.search(r'(?i)owner', line)
-                                and re.search(r'(?i)without (a )?question|no question', line)
-                                for line in text.splitlines()),
-                            'no line ties conflict, out of scope, owner and without a question')
+        rule = [line for line in text.splitlines()
+                if re.search(r'(?i)conflict', line) and re.search(r'(?i)out of scope', line)
+                and re.search(r'(?i)owned by that ADR', line)
+                and re.search(r'(?i)without (a )?question|no question', line)]
+        with self.subTest('a conflicting part is an out-of-scope D-n owned by that ADR, written without a question'):
+            self.assertTrue(rule, 'no line ties conflict, out of scope, owned by that ADR and without a question')
         with self.subTest('the rule holds in every round'):
-            self.assertRegex(text, r'(?i)(every|any|later) round')
+            self.assertTrue(any(re.search(r'(?i)(every|any|later) round', line) for line in rule),
+                            'the conflict line does not say every round')
         with self.subTest('no question or option offers to reopen it'):
             self.assertRegex(text, r'(?i)no (question or )?option[^\n]{0,40}reopen|'
                                    r'never[^\n]{0,40}(offer|option)[^\n]{0,40}reopen')
+        with self.subTest('the conflict is named under Settled already and only the user reopens it'):
+            self.assertTrue(any('Settled already' in line
+                                and re.search(r'(?i)only the user reopens|user (may|can) reopen', line)
+                                for line in rule),
+                            'the conflict line drops Settled already or the user right to reopen')
 
     def test_a_gap_the_user_settles_as_out_of_scope_is_a_d_n_with_an_owner_and_open_is_only_for_the_unanswered(self):
         """2026-10-08-interview-settled-trap-and-open-lines AC-1: `Open:` blocks specify. Adhoc
