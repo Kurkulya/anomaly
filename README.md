@@ -1157,7 +1157,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   the key is not checked until the tracker port names the key line, phase 2, D-11); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
-  (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines. Warning: a ticket over 5 KB.
+  (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
+  or `@` is not one; a bare one such as `example.com:8080` is). Warning: a ticket over 5 KB.
   Exit codes and the `warning:` prefix as for `check stories` (a clean run prints
   `slice check passed for <folder>`). Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first

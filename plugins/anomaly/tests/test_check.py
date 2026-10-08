@@ -526,10 +526,22 @@ class CheckSliceTest(unittest.TestCase):
                                           body='\nSee app.module.ts:5 for it.\n'))
         self.assert_error('01-first.md:9:', 'app.module.ts:5', 'path')
 
-    def test_a_host_and_port_in_the_body_is_not_a_path_with_a_line_number(self):
+    def test_a_host_and_port_after_a_scheme_or_an_at_sign_is_not_a_path_with_a_line_number(self):
+        for host in ('https://example.com:8080', 'postgres://db.internal:5432', 'user@example.co.uk:443'):
+            with self.subTest(host=host):
+                self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
+                                                  body=f'\nServe it on {host} for the demo.\n'))
+                self.assertEqual(self.slice(), ([], []))
+
+    def test_a_path_with_a_line_number_after_a_host_and_port_on_the_same_line_is_reported(self):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
-                                          body='\nServe it on example.com:8080 for the demo.\n'))
-        self.assertEqual(self.slice(), ([], []))
+                                          body='\nServe it on https://example.com:8080, see check.py:42.\n'))
+        self.assert_error('01-first.md:9:', 'check.py:42', 'path')
+
+    def test_a_bare_name_with_a_known_host_suffix_and_a_line_number_is_reported(self):
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2',
+                                          body='\nSee notes.org:12 for it.\n'))
+        self.assert_error('01-first.md:9:', 'notes.org:12', 'path')
 
     def test_an_oversize_ticket_only_warns(self):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='x' * (5 * 1024)))
