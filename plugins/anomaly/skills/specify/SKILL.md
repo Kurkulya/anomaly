@@ -27,7 +27,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 1. The argument is the work unit key. Read `.anomaly/<work unit>/decisions.md`; with none, step 4 runs the `gather` port for every fact. [G27]
 2. Any `Open:` item in `decisions.md`: stop before it writes anything. Name each item, send the user back to `/anomaly:interview`, and write no `stories.md`, no `log.md` line, no ADR, and run no review. No open question reaches the gate.
 3. `worklog start`, then `ports`. Read the glossary file (default `CONTEXT.md`) and the ADRs of every branch with Glob and Read, never from memory. [C20, C21] Make sure `.anomaly/` is in `.git/info/exclude`. [C17]
-4. A fact a story needs and `decisions.md` lacks: run the `gather` port (repo code and docs; adapters add tracker and backend lookups). A failed lookup is reported, never guessed. [JC2] Tracker lookups happen here only, none after. [C11] A long source page is summarized with a link; source ACs are kept verbatim or marked `not specified`. [JC4, JC5] A tracker or wiki page the user wants is handed over as markdown. [C15]
+4. A fact a story needs and `decisions.md` lacks: run the `gather` port (repo code and docs; adapters add tracker and backend lookups). A failed lookup is reported, never guessed. [JC2] Tracker lookups happen here only, none after. [C11] A long source page is summarized with a link; source ACs are kept verbatim or marked `not specified`. [JC4, JC5]
 5. A re-run reads the existing `stories.md` and extends it. [US2] A gap is one question to the user, not a round. [TS1]
 
 ## Stories
@@ -76,7 +76,7 @@ Append `D-n` lines to `decisions.md`, each citing its `Source:` (shape in format
 ## The checks and the gate
 
 1. `check stories`. Exit 1 stops the skill before the review: fix each error line. Exit 0 with `warning:` lines carries them into the handoff.
-2. `lens tally add` with `--lens interview`, using the counts of the interview's close table (accepted, rejected, revised) from this window; skip it when they are not known. It runs before the review, so a last-review `lens tally sum` includes it.
+2. `lens tally add` with `--lens interview`, using the counts of the interview's close table (accepted, rejected, revised) from this window; skip it when they are not known, and run it once per window: a re-run in the same window skips it. It runs before the review, so a last-review `lens tally sum` includes it.
 3. Run `anomaly:review` in mode `spec` with the work unit folder, in the background; say how long it may take. [N7]
 4. A Blocker stops the skill before the digest. List every other finding in the handoff. After a fix, ask `anomaly:review` for a delta round with the work unit folder, and say when this is the session's last review so `lens tally sum` runs.
 5. Show a digest of at most 5 lines: stories and ACs, test seams, warnings, defects found in code with their `file:line`, next step. Then wait for approval of `stories.md`. [TS5]
