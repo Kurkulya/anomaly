@@ -24,14 +24,14 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 1. Take the idea: the user's text, or a key read through the `issue_source` port (read-only). Ask the work unit name before round 1 (or take it from the idea's key); create `.anomaly/<work unit>/` at the first `D-n`, not before. [A10, DM3]
 2. `worklog start`, then `ports`. Run the `gather` port (repo code and docs; adapters add tracker, backend and org ADR lookups, named `Server:tool`). [CM5, CM8, G27]
 3. Scan what is already settled: the ADRs, both layouts' `decisions.md`, the glossary file from the profile's `glossary_file` (default `CONTEXT.md`) and the backlog. Look with Glob and Read in the checkout (tracked ADRs and the git-excluded `decisions.md` files), never recall. Read the repo layer's own domain doc; it wins on a clash. [A1, CM4, CM9, CX1, DM2]
-4. Open round 1 with "Settled already": one line per ADR or `D-n`. Even when the idea asks for it, no question or option offers to reopen a settled ADR or `D-n`; only the user reopens it. A part in conflict with one is named under Settled already (round 1 or later) as a `D-n` out of scope owned by that ADR or the other unit with that `D-n`, written without a question in every round; it never asks for an owner; a `D-n` of this unit already decides it. [A1]
+4. Open round 1 with "Settled already": one line per ADR or `D-n`. Even when the idea asks for it, no question or option offers to reopen a settled ADR or `D-n`; only the user reopens it. A part in conflict with one is named under Settled already as a `D-n` out of scope owned by that ADR or the other unit with that `D-n`, written without a question in every round; it never asks for an owner; when that `D-n` is in this unit, write none. [A1]
 
 ## A round
 
 Plain text, no emoji. Ask the whole frontier at once: at most 8 numbered questions, hard-to-reverse first (blast radius high, medium, low). [GR2, GR3, A8, CD1, CD2]
 
 ```
-Settled already: <D-n / ADR-n, one line each>          (round 1 only)
+Settled already: <D-n / ADR-n, one line each>          (round 1; later, a new conflict)
 Facts pending: <lookup> → blocks Q<n>
 Taking these defaults unless you object: 1. … 2. …
 Q<n> — <title> (blast radius: high | medium | low)
