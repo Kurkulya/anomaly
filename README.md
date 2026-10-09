@@ -1025,9 +1025,10 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   with `## <Section>` headings. A work unit folder gives `<folder>/mr-body.md`; an ad-hoc ticket gives
   the sibling file `.anomaly/adhoc/<date>-<slug>.mr-body.md`. A ticket file outside `.anomaly/adhoc/`
   (for example a ticket of a unit) is refused, so a unit never gets a body file beside its tickets.
-- **Title.** `<type>` is `feat` for a work unit. For an ad-hoc ticket it is the part of the current
+- **Title.** `<type>` is, for a work unit and an ad-hoc ticket alike, the part of the current
   branch name before the first `/` when that is an Angular type (`fix/widget` gives `fix`), else
-  `feat`. `<key>` of a unit is the key line (the line the `key_line` port names;
+  `feat`. The branch is read from the repository of `--repo`, so `mr body` needs a git repository for
+  both kinds of target. `<key>` of a unit is the key line (the line the `key_line` port names;
   `ticket.load(path, ports.key_line(home))`) that every keyed ticket shares; when the keyed tickets
   have different keys it is the unit folder name. A key of `no-ticket` counts as no key, and a unit
   with no key at all gets `no-ticket`. `<summary>` is the first heading of
@@ -1058,7 +1059,7 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
 - **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's
   `What to build:`, with the same capital first letter) and What changed (the subjects of the commits
   on the current branch of `--repo` that are not on the repo base, oldest first, merge commits left
-  out). The repo base is the one `ports` prints (`repo base`). Git is read only here; `--docs-gate` is
+  out). The repo base is the one `ports` prints (`repo base`). `--docs-gate` is
   refused, since the body has no Tested section.
 - The body holds no commit id, no table row and no attribution line: a hex word (the id shapes of
   `privacy.COMMIT_ID`) that has a digit and a letter a-f loses that word, a `|` becomes `/`, and a
@@ -1093,7 +1094,9 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [
   project that is not exactly `owner/name` (a group path such as `a/b/c` is a GitLab shape), before
   any call. `gh` is called only through
   `anomaly_loop/gh.py` and `glab` through `anomaly_loop/glab.py`, with argument lists and no shell.
-  The body reaches `gh` on its standard input (`--body-file -`) and `glab api` as one argument; a write
+  The body reaches `gh` on its standard input (`--body-file -` for `gh pr create`, `-F body=@-` for the
+  REST call `gh api -X PATCH repos/<project>/pulls/<number>` that replaces a body, since `gh pr edit`
+  fails on gh 2.46 with the deprecated Projects classic query) and `glab api` as one argument; a write
   is tried once, and a failed call prints the tool's message (exit 2).
   TODO(VK, revisit 2026-12-01): verify mr put, ready and show against a live gitlab.com project
 - **put.** Reads the title from the first `Title:` line of the body file (`mr-body.md`, or the sibling

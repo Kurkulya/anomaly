@@ -8,11 +8,11 @@ ad-hoc ticket gives the sibling file `<ticket name>.mr-body.md` in `.anomaly/adh
 folder is refused. Facts come only from the ticket files, the AC file (`spec.md` when the unit has one, else
 `stories.md`, ADR-0011), `decisions.md` and, for an ad-hoc ticket, the commit subjects of its branch; never the diff.
 
-The title: the type is `feat` (an ad-hoc ticket: the type before the first `/` of the branch name, when it is an
-Angular type); the key of a unit is the key every keyed ticket shares, the unit folder name when the keyed tickets
-have different keys, and `no-ticket` when no ticket has a key (a key equal to `no-ticket` counts as no key); the
-summary is the first heading of the AC file, or the title of the ad-hoc ticket, cut at a word so the title is under 70
-characters.
+The title: the type is the part of the current branch name before the first `/` when it is an Angular type, else
+`feat` (for a work unit and an ad-hoc ticket alike); the key of a unit is the key every keyed ticket shares, the unit
+folder name when the keyed tickets have different keys, and `no-ticket` when no ticket has a key (a key equal to
+`no-ticket` counts as no key); the summary is the first heading of the AC file, or the title of the ad-hoc ticket, cut
+at a word so the title is under 70 characters.
 
 A work unit body has these sections, each left out when it has no facts: Why (the `Why:` line of the AC file, its
 first letter a capital), What changed (the title of each ticket that is `done`), Acceptance criteria (`n of m covered`
@@ -172,8 +172,9 @@ def tested_lines(merged, docs_gate, resolution):
     return facts(lines)
 
 
-def unit_parts(folder, resolution, key_line, docs_gate):
-    """(title, why, sections) of a work unit folder; sections is [(name, lines)] after the Why, in body order."""
+def unit_parts(folder, repo, resolution, key_line, docs_gate):
+    """(title, why, sections) of a work unit folder; sections is [(name, lines)] after the Why, in body order. The
+    title type is the one of the current branch of `repo` (`branch_type`), as for an ad-hoc ticket."""
     tickets = frontier.load_tickets(frontier.tickets_folder(folder), key_line)
     if not tickets:
         raise RecordError(f'{folder}: no ticket files NN-*.md')
@@ -202,7 +203,7 @@ def unit_parts(folder, resolution, key_line, docs_gate):
     key = (next(iter(keys)) if len(keys) == 1 else folder.resolve().name) if keys else NO_KEY
     summary = ticket.draft_title(ticket.split_lines(text)) or folder.resolve().name
     why = plain(ticket.value_of(ticket.split_lines(text), WHY_KEY) or '')
-    return title_line(DEFAULT_TYPE, key, summary), why, sections
+    return title_line(branch_type(repo), key, summary), why, sections
 
 
 def current_branch(repo):
@@ -292,12 +293,12 @@ def run_body(args, environ):
         docs_gate = records.require_one_line('--docs-gate', args.docs_gate)
         privacy.check_text('mr body', '--docs-gate', docs_gate)
     found = locate(target)
+    repo = gitrepo.repo_for(args.repo)
     if found.unit:
-        parts = unit_parts(target, ports.resolve(home), key_line, docs_gate)
+        parts = unit_parts(target, repo, ports.resolve(home), key_line, docs_gate)
     else:
         if docs_gate is not None:
             raise RecordError('--docs-gate is for a work unit: the light-path body has no Tested section')
-        repo = gitrepo.repo_for(args.repo)
         parts = adhoc_parts(target, repo, ports.resolve(home, repo), key_line)
     text, body = render(*parts, args.draft)
     check_privacy('mr body', parts[0], body)

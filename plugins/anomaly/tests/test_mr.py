@@ -333,6 +333,19 @@ class BodyTest(UnitCase):
         title, _ = self.body_of(self.unit(keys=keys))
         self.assertTrue(title.startswith(f'feat({expected}): '), title)
 
+    def title_on_branch(self, branch):
+        """The title of a unit body made on `branch`, checked out after the unit is built (the build leaves main)."""
+        folder = self.unit()
+        self.repo.git('checkout', '-q', '-b', branch)
+        title, _ = self.body_of(folder)
+        return title
+
+    def test_the_title_type_is_the_angular_type_before_the_first_slash_of_the_branch(self):
+        self.assertTrue(self.title_on_branch('fix/widget-list').startswith(f'fix({KEY}): '))
+
+    def test_the_title_type_is_feat_when_the_branch_prefix_is_no_angular_type(self):
+        self.assertTrue(self.title_on_branch('widget/list').startswith(f'feat({KEY}): '))
+
     def test_the_title_key_is_the_key_every_keyed_ticket_shares(self):
         """Ticket 01 has no key line: a ticket without a key is skipped, the other two share the key."""
         self.assert_title_key((None, KEY, KEY), KEY)

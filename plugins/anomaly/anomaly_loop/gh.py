@@ -2,9 +2,10 @@
 same style: every call is a subprocess with an argument list (never a shell string), and a failure raises a
 GhError with the tool's own message, which `mr` turns into one `anomaly: <message>` line (exit 2).
 
-The MR calls are `gh pr create --draft`, `gh pr edit`, `gh pr ready` and `gh pr view --json`. The body goes to the
-tool on its standard input (`--body-file -`), so it is never an argument and never a file left behind. A write is
-tried once: a repeat after a network error could make a second pull request.
+The MR calls are `gh pr create --draft`, `gh api -X PATCH repos/<project>/pulls/<number>`, `gh pr ready` and
+`gh pr view --json`. The body goes to the tool on its standard input (`--body-file -`, or `-F body=@-` for the REST
+call), so it is never an argument and never a file left behind. A write is tried once: a repeat after a network error
+could make a second pull request.
 """
 import json
 import re
@@ -63,9 +64,12 @@ def create_mr(project, title, body, source, target, environ=None):
 
 
 def update_mr(project, number, body, environ=None):
-    """Replace the body of pull request `number`."""
+    """Replace the body of pull request `number`, through the REST API. `gh pr edit` is not used: on gh 2.46 it fails
+    on the deprecated Projects classic GraphQL query, which the REST call does not make. `-F body=@-` reads the body
+    from standard input."""
     check_project(project)
-    call('pr', 'edit', str(number), '--repo', project, '--body-file', '-', environ=environ, input=body)
+    call('api', '--hostname', HOST, '-X', 'PATCH', f'repos/{project}/pulls/{number}', '-F', 'body=@-',
+         environ=environ, input=body)
 
 
 def ready_mr(project, number, environ=None):
