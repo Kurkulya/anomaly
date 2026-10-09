@@ -348,3 +348,9 @@ def changed_files(repo, range_spec):
             changes.append(Change(status, tokens[index + 1]))
             index += 2
     return changes
+
+
+def tracked_files(repo):
+    """The repository-relative paths (forward slashes) git tracks, in git's order. This is the index, so a
+    tracked file that is deleted from the working folder is still listed, and one that is untracked is not."""
+    return [name for name in run(repo, 'ls-files', '-z').stdout.split('\0') if name]

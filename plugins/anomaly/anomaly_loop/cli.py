@@ -44,6 +44,7 @@ COMMANDS = (
     'frontier',
     'conduct',
     'mr',
+    'docscan',
 )
 
 
