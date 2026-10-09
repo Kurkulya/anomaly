@@ -999,6 +999,53 @@ cost: weighted tokens 3,000, weighted tokens per merged ticket 1,000, minutes pe
   or names a blocker with no ticket file, is an error. One `anomaly:` line names each such ticket,
   nothing else is printed, and the exit code is 2.
 
+## MR body
+
+`mr body` writes the body of a merge request to a file, from the files of the work, so the `ship` skill
+never writes it by hand (bodies go through files, ADR-0007). It writes the file and prints its path; it
+does not create or update the MR.
+
+```
+python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
+```
+
+- The file starts with `Title: <type>(<key>): <summary>` and a blank line, then the body in markdown
+  with `## <Section>` headings. A work unit folder gives `<folder>/mr-body.md`; an ad-hoc ticket gives
+  the sibling file `.anomaly/adhoc/<date>-<slug>.mr-body.md`.
+- **Title.** `<type>` is `feat` for a work unit. For an ad-hoc ticket it is the part of the current
+  branch name before the first `/` when that is an Angular type (`fix/widget` gives `fix`), else
+  `feat`. `<key>` is the first key line a ticket of the unit has (the line the `key_line` port names;
+  `ticket.load(path, ports.key_line(home))`), else `no-ticket`. `<summary>` is the first heading of
+  `stories.md` (else `spec.md`) or the title of the ad-hoc ticket. The summary is cut at a word so the
+  whole title is under 70 characters.
+- **Work unit sections.** Each is left out when it has no facts, and they come in this order. Only the
+  tickets with `Status: done` count as merged.
+  - Why: the `Why:` line of `stories.md` (else `spec.md`).
+  - What changed: one line per merged ticket, from its title (the merge subjects hold only
+    `merge <NN-slug>`, so they add nothing).
+  - Acceptance criteria: `n of m covered`, where m is the AC lines of the AC file and n those that a
+    merged ticket's `Covers:` names (`check.uncovered_acs`, the rule `frontier` uses); the missing ids
+    follow as `missing: AC-4`.
+  - Still open: the `Open:` text of each merged ticket's `Result:` line, except `none`, with the ticket
+    number.
+  - Breaking changes: the `- Breaking:` lines of `decisions.md` (see `docs/formats.md`).
+  - Tested: the `full suites`, `reviewer passes` and `High` counts of the merged tickets' `Metrics:`
+    lines, summed; `Docs gate: <text>` when `--docs-gate '<text>'` is given (one line, checked for
+    private content); and `no CI ran` when the `ci` port is on its core default.
+  - How to review: one line that names the merged tickets, in order, to review one merge commit at a
+    time. No commit id is printed. It is left out when no ticket is merged.
+- `--draft` writes a two-line body: the Why, then `Work in progress`. It works for an ad-hoc ticket too.
+- **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's `What to build:`) and What
+  changed (the subjects of the commits on the current branch of `--repo` that are not on the repo base,
+  oldest first, merge commits left out). The repo base is the one `ports` prints (`repo base`). Git is
+  read only here; `--docs-gate` is refused, since the body has no Tested section.
+- The body holds no commit id, no table row and no attribution line: a fact with a hex word that has a
+  digit loses that word, a `|` becomes `/`, and a fact with `Co-Authored-By` or `Generated with` is
+  dropped. A body over 2.5 KB (2560 bytes, not counting the Title line) prints one `warning:` line on
+  standard error and is still written.
+- Facts come only from the ticket files, `stories.md` (else `spec.md`), `decisions.md` and, for an
+  ad-hoc ticket, commit subjects; the diff is never read.
+
 ## Benchmark
 
 Each reviewer agent has one small seeded-defect fixture under `plugins/anomaly/tests/bench/`
@@ -1540,6 +1587,7 @@ python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
 python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
 python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1567,6 +1615,7 @@ python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [-
 - `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
 - `frontier` takes a work-unit folder and prints the tickets that can start now; see Frontier.
 - `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
+- `mr` takes the action `body`, which writes the MR body of a work unit or an ad-hoc ticket to a file; see MR body.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
