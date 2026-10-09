@@ -54,3 +54,4 @@
 | **plan gate** | The `spec` or `tickets` review mode that ends `specify` or `slice`; it stops only on a Blocker. | plan-sanity, claim check (for the whole gate) |
 | **frontier** | The tickets of a work unit whose blockers are all done and that are neither done nor in progress. | queue, backlog (that is the anomaly list) |
 | **wave** | One round of frontier tickets run together, one after another or in parallel. | batch, round (that is a review round) |
+| **wave report** | The 5-line chat summary `conduct` prints after a wave: done, failed, open, next, cost. | digest (that is the backlog digest command and an Avoid word for **log**) |

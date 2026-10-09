@@ -21,6 +21,7 @@ uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; t
 `check.TICKET_FOLDERS`.
 """
 from pathlib import Path
+from typing import NamedTuple
 
 from . import check, files, ticket
 from .constants import TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
@@ -59,8 +60,14 @@ def blocked_text(parsed, unfinished):
     return '; '.join(reasons)
 
 
+class Entry(NamedTuple):
+    kind: str   # START, RUNNING or BLOCKED
+    line: str   # the line `frontier` prints for the ticket
+    path: Path  # the ticket file
+
+
 def classify(tickets_dir, tickets):
-    """(entries, errors): entries is [(kind, line)] in ticket order for each ticket that is not done; errors is
+    """(entries, errors): entries is [Entry] in ticket order for each ticket that is not done; errors is
     one text per ticket that has no `Blocked by:` line or a blocker with no ticket file (such a ticket has no entry)."""
     entries, errors = [], []
     for path, parsed in tickets:
@@ -74,11 +81,11 @@ def classify(tickets_dir, tickets):
         if missing:
             errors.append(f'{path.name}: no ticket file for blocker {", ".join(missing)}')
         elif parsed.status == TICKET_STATUS_IN_PROGRESS:
-            entries.append((RUNNING, f'{path.stem}: in progress'))
+            entries.append(Entry(RUNNING, f'{path.stem}: in progress', path))
         elif ticket.is_blocked(parsed, unfinished):
-            entries.append((BLOCKED, f'{path.stem}: {blocked_text(parsed, unfinished)}'))
+            entries.append(Entry(BLOCKED, f'{path.stem}: {blocked_text(parsed, unfinished)}', path))
         else:
-            entries.append((START, f'{path.stem}: {parsed.status}'))
+            entries.append(Entry(START, f'{path.stem}: {parsed.status}', path))
     return entries, errors
 
 
@@ -93,8 +100,9 @@ def ac_warnings(folder, tickets):
             for ac, number in check.uncovered_acs(text, (parsed for _, parsed in tickets))]
 
 
-def look(folder):
-    """(lines, exit code) for a work-unit folder; an error raises RecordError."""
+def read(folder):
+    """(tickets, entries) of a work-unit folder: every ticket as load_tickets gives it, and the classify entries
+    of the tickets that are not done. An error of the unit or of a ticket (see classify) raises RecordError."""
     folder = Path(folder)
     if not folder.is_dir():
         raise RecordError(f'{folder}: not a folder')
@@ -105,14 +113,21 @@ def look(folder):
     entries, errors = classify(tickets_dir, tickets)
     if errors:
         raise RecordError('; '.join(errors))
-    kinds = {kind for kind, _ in entries}
+    return tickets, entries
+
+
+def look(folder):
+    """(lines, exit code) for a work-unit folder; an error raises RecordError."""
+    folder = Path(folder)
+    tickets, entries = read(folder)
+    kinds = {entry.kind for entry in entries}
     if START in kinds:
         shown, code = (START, RUNNING), 0
     elif BLOCKED in kinds:
         shown, code = (RUNNING, BLOCKED), 0 if RUNNING in kinds else 1
     else:
         shown, code = (RUNNING,), 0
-    lines = [line for kind, line in entries if kind in shown]
+    lines = [entry.line for entry in entries if entry.kind in shown]
     if not entries:
         lines = [f'{folder.resolve().name}: finished, every ticket is done']
     return lines + ac_warnings(folder, tickets), code

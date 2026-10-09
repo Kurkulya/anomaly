@@ -42,6 +42,7 @@ COMMANDS = (
     'worklog',
     'log',
     'frontier',
+    'conduct',
 )
 
 
