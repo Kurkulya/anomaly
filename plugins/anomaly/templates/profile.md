@@ -53,6 +53,10 @@ reviewers: <agent id>
 gather: <skill>
 # The tool the CI step watches and reads logs with.
 ci: <ci tool>
+# The line that holds the ticket key. Core default: Key.
+key_line: <line name>
+# The repo folder ADR drafts are moved to. Core default: docs/adr/.
+adr_folder: <repo-relative folder>
 # The model per dispatch role. One role per indented line.
 models:
   explore: <model>
