@@ -27,6 +27,13 @@ def marks_in_progress(line):
     return 'in progress' in line.lower() or 'in-progress' in line.lower()
 
 
+def waits_for_person(line):
+    return 'person' in line.lower()
+
+
+WAITS_FOR_PERSON = ('ready-for-human', 'needs-info', 'wontfix')   # the statuses that only a person moves on
+
+
 class FrontierTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -70,6 +77,44 @@ class FrontierTest(unittest.TestCase):
                     self.assertEqual(self.lines_naming(output, slug), [], (slug, output))
                 self.assertLess(output.index('bravo'), output.index('delta'))
                 self.assertLess(output.index('delta'), output.index('echo'))
+
+    def test_a_ticket_that_waits_for_a_person_gets_a_line_that_says_so_and_a_ready_for_agent_one_stays_startable(self):
+        """AC-1 (Amended, cumulative review): a ready-for-human, needs-info or wontfix ticket whose blockers are done
+        is not startable; it gets one line naming it that says it waits for a person. A ready-for-agent ticket
+        beside them is a plain startable line."""
+        tickets = {
+            '01-alpha': slice_ticket('01', status='done'),
+            '02-bravo': slice_ticket('02', blocked='01', status='ready-for-human'),
+            '03-charlie': slice_ticket('03', blocked='01', status='needs-info'),
+            '04-delta': slice_ticket('04', blocked='01', status='wontfix'),
+            '05-echo': slice_ticket('05', blocked='01', status='ready-for-agent'),
+        }
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root):
+                code, output = self.frontier(self.unit(layout, tickets))
+                self.assertEqual(code, 0, output)
+                for slug in ('bravo', 'charlie', 'delta'):
+                    lines = self.lines_naming(output, slug)
+                    self.assertEqual(len(lines), 1, (slug, output))
+                    self.assertTrue(waits_for_person(lines[0]), lines)
+                startable = self.lines_naming(output, 'echo')
+                self.assertEqual(len(startable), 1, output)
+                self.assertFalse(waits_for_person(startable[0]), startable)
+
+    def test_with_only_tickets_that_wait_for_a_person_left_nothing_is_startable_and_it_exits_0(self):
+        """AC-1 (Amended, cumulative review): every other ticket is done; the one left waits for a person, so it is
+        named with that and not printed as startable, and the unit is not stuck (exit 0)."""
+        for status in WAITS_FOR_PERSON:
+            for layout in LAYOUTS:
+                with self.subTest(status=status, layout=layout.root):
+                    tickets = {'01-alpha': slice_ticket('01', status='done'),
+                               '02-bravo': slice_ticket('02', blocked='01', status=status)}
+                    code, output = self.frontier(self.unit(layout, tickets))
+                    self.assertEqual(code, 0, output)
+                    lines = self.lines_naming(output, 'bravo')
+                    self.assertEqual(len(lines), 1, output)
+                    self.assertTrue(waits_for_person(lines[0]), lines)
+                    self.assertEqual(self.lines_naming(output, 'alpha'), [], output)
 
     def test_blocked_by_none_in_lower_case_is_no_blocker(self):
         """Notes of the ticket: `Blocked by: none` means no blocker (the `None` case is in the first test)."""

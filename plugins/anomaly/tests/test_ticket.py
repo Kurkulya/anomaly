@@ -198,6 +198,18 @@ class GateTest(TicketTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertNotIn('blocked by', out)
 
+    def test_a_ticket_that_waits_for_a_person_exits_1_and_says_so_when_it_has_no_open_blocker(self):
+        """AC-26 (Amended, cumulative review): conduct never builds a ready-for-human, needs-info or wontfix ticket;
+        a ready-for-agent one with no open blocker passes."""
+        for status in ('ready-for-human', 'needs-info', 'wontfix'):
+            with self.subTest(status=status):
+                path = self.ticket_path(TICKET_TEXT.replace('Status: ready-for-agent', f'Status: {status}'))
+                code, out, err = self.run_ticket('gate', str(path))
+                self.assertEqual((code, err), (1, ''))
+                self.assertIn('person', out.lower())
+        path = self.ticket_path(TICKET_TEXT)
+        self.assertEqual(self.run_ticket('gate', str(path))[:2], (0, ''))
+
     def test_names_each_blocker_that_is_not_done_and_exits_1(self):
         self.write_blockers(b01='done', b03='in-progress', b04='ready-for-agent')
         path = self.ticket_path(blocked_ticket('**Blocked by:** 01, 03, 04'))
