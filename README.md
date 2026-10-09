@@ -931,6 +931,35 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   fails a check is an error (exit 2) and the file is left byte for byte as it was. This action does
   not need a `Status:` line.
 
+## Frontier
+
+`frontier` reads the tickets of one work unit and says which of them can start now. It needs no home
+and no profile; the work unit is named by its folder.
+
+```
+python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
+```
+
+- It reads the numbered ticket files (`NN-*.md`) of `tickets/`, or of `issues/` in an old `.scratch`
+  unit, and decides "every blocker is done" with the rule `ticket gate` uses (`ticket.unfinished_blockers`
+  and `ticket.is_blocked`), so a missing blocker file and an unreadable `Blocked by:` value count as
+  not done in both commands.
+- A **startable** ticket is not `done`, not `in-progress`, and has every blocker `done`. It is one
+  line, `<ticket>: <status>`, in ticket order. An `in-progress` ticket is one line too, `<ticket>: in
+  progress`; it is neither startable nor blocked, so a ticket that waits for it is not printed. A
+  `Blocked by:` of `none` or `None` is no blocker.
+- With no startable ticket and at least one open ticket that is neither `done` nor `in-progress`,
+  `frontier` prints each in-progress ticket and each waiting ticket with its unfinished blockers
+  (`<ticket>: blocked by <NN> (<status>)`), and exits 1. With only in-progress tickets left it lists
+  them and exits 0. With every ticket `done` it prints one line that says the unit is finished and
+  exits 0. A work unit with no ticket file is an error.
+- A ticket that is not `done` and has no `Blocked by:` line, or names a blocker number with no
+  ticket file, is an error: one `anomaly:` line names each such ticket, nothing else is printed, and
+  the exit code is 2.
+- After the ticket lines, one `warning:` line names each AC of the unit's `stories.md` (`spec.md` in
+  an old `.scratch` unit) that no ticket's `Covers:` names. The AC lines are read as `check stories`
+  reads them (`- AC-n:`). A missing stories file is one `warning:` line, not an error.
+
 ## Benchmark
 
 Each reviewer agent has one small seeded-defect fixture under `plugins/anomaly/tests/bench/`
@@ -1470,6 +1499,7 @@ python plugins/anomaly/scripts/anomaly.py risk      <range> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py lens      tally add|sum ...
 python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
+python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1495,6 +1525,7 @@ python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage>
 - `worklog` takes `start`, `add` or `report`; `add` appends one work-unit line to home and `report`
   prints what one work unit cost; the options are in the same section.
 - `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
+- `frontier` takes a work-unit folder and prints the tickets that can start now; see Frontier.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.

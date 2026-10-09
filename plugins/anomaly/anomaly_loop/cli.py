@@ -5,7 +5,7 @@
 Each area module that offers a subcommand exposes `register(commands, common)` and is named
 once in COMMANDS; it adds its parser (with `parents=[common]`) and sets `handler`. A handler is `handler(args, environ) -> int`:
 0 for success, or 1 for a negative result that is not an error (`ticket gate` with an open or unreadable
-blocker, `check pre-merge` with a failed rule, `ci` with a red job); `ci` also returns its own 3 (still running), 4 (the CI tool never answered:
+blocker, `check pre-merge` with a failed rule, `frontier` with no startable ticket, `ci` with a red job); `ci` also returns its own 3 (still running), 4 (the CI tool never answered:
 it prints one `anomaly:` line itself) and 5 (no pipeline yet: a plain message, not an error),
 documented in its help. 2 is only the error below, with one `anomaly:` line;
 errors raise paths.PathError, records.RecordError, gitrepo.GitError, glab.CiError or OSError and are printed as
@@ -41,6 +41,7 @@ COMMANDS = (
     'lens',
     'worklog',
     'log',
+    'frontier',
 )
 
 
