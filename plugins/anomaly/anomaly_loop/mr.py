@@ -227,13 +227,27 @@ def adhoc_parts(path, repo, resolution, key_line):
 
 
 def render(title, why, sections, draft):
-    """The file text: the Title line, a blank line, then the body."""
+    """(file text, body): the file is the Title line, a blank line, then the body."""
     if draft:
         body = '\n'.join(([why] if why else []) + [WIP_LINE])
     else:
         blocks = ([('Why', [why])] if why else []) + sections
         body = '\n\n'.join('\n'.join([f'## {name}', '', *lines]) for name, lines in blocks if lines)
-    return f'Title: {title}\n\n{body}\n', len(body.encode('utf-8'))
+    return f'Title: {title}\n\n{body}\n', body
+
+
+def check_privacy(label, body):
+    """Refuse a body line that `privacy.privacy_problems` names (ADR-0003), naming the section it is in (the last
+    `## ` heading before it; a draft body has none). It is the one check `mr body` runs before it writes the file
+    and `mr put` runs on the file before it sends the body, which may have been edited by hand."""
+    section = 'body'
+    for line in body.splitlines():
+        if line.startswith('## '):
+            section = line[3:].strip()
+        problems = privacy.privacy_problems(line)
+        if problems:
+            raise RecordError(f'{label}: the {section} section holds {" and ".join(problems)}; '
+                              'describe it in your own words')
 
 
 class Target(NamedTuple):
@@ -276,7 +290,9 @@ def run_body(args, environ):
             raise RecordError('--docs-gate is for a work unit: the light-path body has no Tested section')
         repo = gitrepo.repo_for(args.repo)
         parts = adhoc_parts(target, repo, ports.resolve(home, repo), key_line)
-    text, size = render(*parts, args.draft)
+    text, body = render(*parts, args.draft)
+    check_privacy('mr body', body)
+    size = len(body.encode('utf-8'))
     files.write_text(found.body, text)
     print(found.body)
     if size > BODY_WARN_BYTES:
@@ -363,6 +379,7 @@ def run_put(args, environ):
     resolution = ports.resolve(home, repo)
     name = adapter_name(resolution)
     title, body = read_title_and_body(found.body, args.target)
+    check_privacy('mr put', body)
     if name is None:
         print_only(title, body, 'the mr port is on its core default')
         return 0
