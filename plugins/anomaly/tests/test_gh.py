@@ -31,7 +31,8 @@ class GhTest(unittest.TestCase):
         with mock.patch('subprocess.run', return_value=done('{}')) as run:
             gh.update_mr('owner/repo', 7, 'line one\nline two')
         command = run.call_args.args[0]
-        self.assertEqual(command, ['gh', 'api', '-X', 'PATCH', 'repos/owner/repo/pulls/7', '-F', 'body=@-'])
+        self.assertEqual(command, ['gh', 'api', '--hostname', 'github.com', '-X', 'PATCH', 'repos/owner/repo/pulls/7',
+                                   '-F', 'body=@-'])
         self.assertNotIn('line one\nline two', command)
         self.assertEqual(run.call_args.kwargs['input'], 'line one\nline two')
         self.assertFalse(run.call_args.kwargs.get('shell'))

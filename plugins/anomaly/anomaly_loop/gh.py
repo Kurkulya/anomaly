@@ -68,7 +68,8 @@ def update_mr(project, number, body, environ=None):
     on the deprecated Projects classic GraphQL query, which the REST call does not make. `-F body=@-` reads the body
     from standard input."""
     check_project(project)
-    call('api', '-X', 'PATCH', f'repos/{project}/pulls/{number}', '-F', 'body=@-', environ=environ, input=body)
+    call('api', '--hostname', HOST, '-X', 'PATCH', f'repos/{project}/pulls/{number}', '-F', 'body=@-',
+         environ=environ, input=body)
 
 
 def ready_mr(project, number, environ=None):

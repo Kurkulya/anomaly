@@ -1027,7 +1027,8 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   (for example a ticket of a unit) is refused, so a unit never gets a body file beside its tickets.
 - **Title.** `<type>` is, for a work unit and an ad-hoc ticket alike, the part of the current
   branch name before the first `/` when that is an Angular type (`fix/widget` gives `fix`), else
-  `feat`. `<key>` of a unit is the key line (the line the `key_line` port names;
+  `feat`. The branch is read from the repository of `--repo`, so `mr body` needs a git repository for
+  both kinds of target. `<key>` of a unit is the key line (the line the `key_line` port names;
   `ticket.load(path, ports.key_line(home))`) that every keyed ticket shares; when the keyed tickets
   have different keys it is the unit folder name. A key of `no-ticket` counts as no key, and a unit
   with no key at all gets `no-ticket`. `<summary>` is the first heading of
@@ -1058,7 +1059,7 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
 - **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's
   `What to build:`, with the same capital first letter) and What changed (the subjects of the commits
   on the current branch of `--repo` that are not on the repo base, oldest first, merge commits left
-  out). The repo base is the one `ports` prints (`repo base`). Git is read only here; `--docs-gate` is
+  out). The repo base is the one `ports` prints (`repo base`). `--docs-gate` is
   refused, since the body has no Tested section.
 - The body holds no commit id, no table row and no attribution line: a hex word (the id shapes of
   `privacy.COMMIT_ID`) that has a digit and a letter a-f loses that word, a `|` becomes `/`, and a

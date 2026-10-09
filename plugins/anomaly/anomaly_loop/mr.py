@@ -9,10 +9,10 @@ folder is refused. Facts come only from the ticket files, the AC file (`spec.md`
 `stories.md`, ADR-0011), `decisions.md` and, for an ad-hoc ticket, the commit subjects of its branch; never the diff.
 
 The title: the type is the part of the current branch name before the first `/` when it is an Angular type, else
-`feat` (for a work unit and an ad-hoc ticket alike); the key of a unit is the key every keyed ticket shares, the unit folder name when the keyed tickets
-have different keys, and `no-ticket` when no ticket has a key (a key equal to `no-ticket` counts as no key); the
-summary is the first heading of the AC file, or the title of the ad-hoc ticket, cut at a word so the title is under 70
-characters.
+`feat` (for a work unit and an ad-hoc ticket alike); the key of a unit is the key every keyed ticket shares, the unit
+folder name when the keyed tickets have different keys, and `no-ticket` when no ticket has a key (a key equal to
+`no-ticket` counts as no key); the summary is the first heading of the AC file, or the title of the ad-hoc ticket, cut
+at a word so the title is under 70 characters.
 
 A work unit body has these sections, each left out when it has no facts: Why (the `Why:` line of the AC file, its
 first letter a capital), What changed (the title of each ticket that is `done`), Acceptance criteria (`n of m covered`
