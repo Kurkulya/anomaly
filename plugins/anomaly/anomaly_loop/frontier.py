@@ -8,19 +8,21 @@ one line each, in ticket order:
   <ticket>: <status>                 a startable ticket: `ready-for-agent`, every blocker done
   <ticket>: in progress              a ticket that is in progress; it is neither startable nor blocked
   <ticket>: <status>, waits for a person   a ticket that is `ready-for-human`, `needs-info` or `wontfix`, whatever
-                                     its blockers are (ticket.waits_for_person); it is neither startable nor blocked
+                                     its blockers are; any other status (a typo, no `Status:` line) is the line
+                                     `<ticket>: status <x> is not ready-for-agent`; both are ticket.waits: they are
+                                     neither startable nor blocked
   <ticket>: blocked by <NN> (<status>), ...   only when no ticket is startable: each open ticket that waits
 
 Exit 0 when a ticket is startable, or a ticket is in progress (the unit is not stuck; the blocked lines are
-printed when nothing is startable), or every ticket left waits for a person, or every ticket is done (one
+printed when nothing is startable), or every ticket left waits (for a person, or on a status that is not ready-for-agent), or every ticket is done (one
 `finished` line). Exit 1 when no ticket is startable, none is in progress and one is blocked by a ticket that is
 not done. Exit 2 (one `anomaly:` line naming each ticket)
 when a ticket that is not done has no `Blocked by:` line or names a blocker with no ticket file. A `warning:`
 line follows for each AC of the unit's AC file (`spec.md` when the unit has one, else `stories.md`) that no
 ticket's `Covers:` names.
 
-The rule "every blocker is done" is `ticket.unfinished_blockers` and `ticket.is_blocked`, and the rule "waits for a
-person" is `ticket.waits_for_person`, the ones `ticket gate` uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; the ticket folders are
+The rule "every blocker is done" is `ticket.unfinished_blockers` and `ticket.is_blocked`, and the rule "waits" is
+`ticket.waits`, the ones `ticket gate` uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; the ticket folders are
 `check.TICKET_FOLDERS`.
 """
 from pathlib import Path
@@ -87,8 +89,8 @@ def classify(tickets_dir, tickets):
             errors.append(f'{path.name}: no ticket file for blocker {", ".join(missing)}')
         elif parsed.status == TICKET_STATUS_IN_PROGRESS:
             entries.append(Entry(RUNNING, f'{path.stem}: in progress', path))
-        elif ticket.waits_for_person(parsed):
-            entries.append(Entry(WAITING, f'{path.stem}: {ticket.person_text(parsed)}', path))
+        elif ticket.waits(parsed):
+            entries.append(Entry(WAITING, f'{path.stem}: {ticket.wait_text(parsed)}', path))
         elif ticket.is_blocked(parsed, unfinished):
             entries.append(Entry(BLOCKED, f'{path.stem}: {blocked_text(parsed, unfinished)}', path))
         else:

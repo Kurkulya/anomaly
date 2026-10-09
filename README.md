@@ -859,9 +859,10 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
   the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
   `ticket gate`).
-- `ticket gate` exits 1 for a ticket that waits for a person (`Status: ready-for-human`,
-  `needs-info` or `wontfix`, whatever its blockers are) and prints `<status>, waits for a person`:
-  only a `ready-for-agent` ticket starts (`ticket.waits_for_person`, the rule `frontier` uses).
+- `ticket gate` exits 1 for a ticket that waits (`ticket.waits`, the rule `frontier` uses): only a
+  `ready-for-agent` ticket starts, an `in-progress` one (a resume) passes, and any other status waits,
+  whatever its blockers are. It prints `<status>, waits for a person` for `ready-for-human`,
+  `needs-info` and `wontfix`, and `status <x> is not ready-for-agent` for any other (a typo, no `Status:` line).
   It looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
   each blocker that is not done (a missing file counts as not done) and exits 1. `None` and
@@ -949,16 +950,17 @@ python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
   and `ticket.is_blocked`), so a blocker that is not `done` and an unreadable `Blocked by:` value (for
   example `TBD`) make a ticket blocked in both commands. A blocker with no ticket file is also not
   done, but `frontier` reports it as an error (see below).
-- A **startable** ticket is not `done`, not `in-progress`, does not wait for a person (next item),
-  and has every blocker `done`. It is one
+- A **startable** ticket has `Status: ready-for-agent` (an allow list: nothing else starts) and
+  every blocker `done`. It is one
   line, `<ticket>: <status>`, in ticket order. An `in-progress` ticket is one line too, `<ticket>: in
   progress`; it is neither startable nor blocked, so a ticket that waits for it is not printed while
   another ticket is startable. A `Blocked by:` of `none` or `None` is no blocker.
-- A ticket that is `ready-for-human`, `needs-info` or `wontfix` **waits for a person**, whatever its
-  blockers are (`ticket.waits_for_person`, the rule `ticket gate` uses). It always gets one line,
-  `<ticket>: <status>, waits for a person`; it is neither startable nor blocked. A unit whose open
-  tickets all wait for a person prints those lines and exits 0 with nothing startable. `conduct
-  status` counts such a ticket as open.
+- A ticket that is not `done`, not `in-progress` and not `ready-for-agent` **waits**, whatever its
+  blockers are (`ticket.waits`, the rule `ticket gate` uses). It always gets one line:
+  `<ticket>: <status>, waits for a person` for `ready-for-human`, `needs-info` and `wontfix`, and
+  `<ticket>: status <x> is not ready-for-agent` for any other status (a typo, no `Status:` line). It is
+  neither startable nor blocked. A unit whose open tickets all wait prints those lines and exits 0
+  with nothing startable. `conduct status` counts such a ticket as open.
 - With no startable ticket, `frontier` prints each in-progress ticket and each blocked ticket with
   its unfinished blockers (`<ticket>: blocked by <NN> (<status>)`). It exits 1 only when nothing is
   in progress and at least one open ticket is blocked; while a ticket is in progress it exits 0, so
