@@ -991,7 +991,10 @@ cost: weighted tokens 3,000, weighted tokens per merged ticket 1,000, minutes pe
 - `cost` is the cost line of `worklog report` for the unit, built by the one function both commands
   call (`worklog.cost_line`). The work-unit key is the name of the folder, as in `worklog add`,
   and `--home` is read as in `worklog report`. A unit with no work-unit line is an error of
-  `worklog report`, so it is one here too.
+  `worklog report`, so it is one here too. Its merged tickets come from the `build` lines of the
+  work log, not from `Status:`, so `done` and the merged tickets of the cost line can differ.
+- When `--home` is an unfilled placeholder, the CLI prints one `home:` notice line before the five
+  lines (the same notice every command prints). Read the lines by their label, not by position.
 - The rule for tickets is `frontier`'s: a ticket that is not `done` and has no `Blocked by:` line,
   or names a blocker with no ticket file, is an error. One `anomaly:` line names each such ticket,
   nothing else is printed, and the exit code is 2.
