@@ -55,7 +55,7 @@ def blocked_text(parsed, unfinished):
     if unfinished:
         reasons.append('blocked by ' + ', '.join(f'{number} ({status})' for number, status, _ in unfinished))
     if parsed.blockers_unreadable:
-        reasons.append(f'Blocked by: "{parsed.blocked_by}" is not only two-digit ticket numbers (NN)')
+        reasons.append(f'Blocked by: "{parsed.blocked_by}" {ticket.BLOCKED_UNREADABLE}')
     return '; '.join(reasons)
 
 

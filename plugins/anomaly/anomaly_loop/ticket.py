@@ -59,6 +59,7 @@ STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
 OPEN_ITEMS = re.compile(r'\bOpen(?:\s*\([^)]*\))?:\s*(.+)$')
 BLOCKER_NUMBER = re.compile(rf'\b([0-9]{{{TICKET_NUMBER_DIGITS}}})\b')
+BLOCKED_UNREADABLE = 'is not only two-digit ticket numbers (NN)'   # the end of every message about an unreadable Blocked by: value
 
 
 # ---------- lines ----------
@@ -560,7 +561,7 @@ def print_blocker_warnings(path, parsed):
     if not parsed.has_blocked_line:
         print(f'warning: no Blocked by: line in {name}; it is not known whether it is blocked')
     if parsed.blockers_unreadable:
-        print(f'warning: Blocked by: "{parsed.blocked_by}" in {name} is not only two-digit ticket numbers (NN)')
+        print(f'warning: Blocked by: "{parsed.blocked_by}" in {name} {BLOCKED_UNREADABLE}')
 
 
 def run_show(args, environ):

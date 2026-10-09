@@ -448,8 +448,8 @@ def blocked_errors(lines, parsed, empty_is_error=False):
     if empty_is_error and not parsed.blocked_by.strip():
         return [(where(lines, 'Blocked by'), f'Blocked by: is empty ({BLOCKED_SHAPE})')]
     if parsed.blockers_unreadable:
-        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" is not only two-digit '
-                                             f'ticket numbers (NN) ({BLOCKED_SHAPE})')]
+        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" {ticket.BLOCKED_UNREADABLE} '
+                                             f'({BLOCKED_SHAPE})')]
     return []
 
 
