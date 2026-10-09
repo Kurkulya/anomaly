@@ -41,7 +41,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 5. One agent on `model explore` checks the wave's code claims and returns only the claims that are false or moved, one line each, nothing else. [O14, L3, AC-16] A long check: say it takes minutes first; a stated tool limit cites its source and a workaround. [N7]
 6. Each such claim: `ticket amend`, no `--after`. A claim whose fix changes the scope goes to the user; the wave waits. [O14, AC-17]
 7. Research the wave needs: an agent writes `<unit>/research/NN-slug.md`; `ticket amend <ticket> 'research notes: <path>'` puts the path, not the text, on the ticket build reads. [O13, D-6, AC-20]
-8. Show the plan: one line per ticket, `<NN-slug> | touches: <paths of its Touches: line>`. [N7, AC-18] A sequential wave starts without a question. [N1]
+8. Show the plan: one line per ticket, `<NN-slug> | touches: <paths of its Touches: line>`. [N7, AC-18] Two or more tickets with disjoint touches: ask once, parallel or sequential; only a parallel pick reads PARALLEL.md. [O44, AC-19, C1] Any other wave is sequential and starts without a question. [N1]
 
 ## Run
 
