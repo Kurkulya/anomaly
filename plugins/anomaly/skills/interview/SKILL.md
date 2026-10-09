@@ -28,16 +28,25 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 
 ## A round
 
-Plain text, no emoji. Ask the whole frontier at once: at most 8 numbered questions, hard-to-reverse first (blast radius high, medium, low). [GR2, GR3, A8, CD1, CD2]
+Markdown, no emoji: bold labels, one blank line between blocks, options as a list. Ask the whole frontier at once: at most 8 numbered questions, hard-to-reverse first (blast radius high, medium, low). [GR2, GR3, A8, CD1, CD2]
 
 ```
-Settled already: <D-n / ADR-n, one line each>          (round 1; later, a new conflict)
-Facts pending: <lookup> → blocks Q<n>
-Taking these defaults unless you object: 1. … 2. …
-Q<n> — <title> (blast radius: high | medium | low)
-<body, options>
-Assumes: <premise> (<source>)
-Recommend: <answer>. Risk: <one line>. Conflicts: <D-n / ADR-n / none>
+**Settled already:** <D-n / ADR-n, one line each>          (round 1; later, a new conflict)
+
+**Facts pending:** <lookup> → blocks Q<n>
+
+**Taking these defaults unless you object:**
+1. …
+2. …
+
+**Q<n> — <title>** (blast radius: high | medium | low)
+<body>
+- a) …
+- b) …
+
+**Assumes:** <premise> (<source>)
+
+**Recommend:** <answer>. **Risk:** <one line>. **Conflicts:** <D-n / ADR-n / none>
 ```
 
 - Every question has `Assumes:` with its source and `Recommend:` with a real flaw in `Risk:`. A tool or library limit says whether a documented way around exists. [A2, CM12]
