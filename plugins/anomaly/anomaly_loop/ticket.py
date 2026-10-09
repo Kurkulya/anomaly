@@ -1,4 +1,5 @@
-"""ticket: the one owner of every ticket line shape, and the only writer of ticket lines.
+"""ticket: the one owner of every ticket line shape, and the only writer of ticket lines. It is also the
+writer of the dated `Amended` lines of planning files (stories.md, decisions.md).
 
 A ticket is a markdown file `.anomaly/<work-unit>/tickets/NN-<slug>.md` (or one file in
 `.anomaly/adhoc/`); until the switch-over the old `.scratch/<feature>/issues/NN-<slug>.md` is read
@@ -52,7 +53,7 @@ HEADING = re.compile(r'#\s+(\S.*?)\s*$')
 STATUS_WORD = re.compile(r'[\w-]+')
 AC_ID = re.compile(r'AC-\d+')
 AMEND_TARGET = re.compile(r'(?:AC|D)-\d+')
-AMENDED_LINE = re.compile(r'(\s*)Amended\b')
+AMENDED_LINE = re.compile(r'(\s*)Amended \d{4}-\d{2}-\d{2}\b')
 CHECKBOX = re.compile(r'(\s*[-*+]\s+\[)([ xX])(\]\s*\**AC-(\d+)(?!\d))')
 STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
@@ -417,9 +418,7 @@ def amend(text, today, note, after=None):
     it, indented like them (else two spaces under a D-n, none under an AC-n, as in the planning files).
     The note and the id are checked before anything is changed."""
     note = require_one_line('the amend text', note)
-    problems = privacy.privacy_problems(note)
-    if problems:
-        raise RecordError(f'the amend text holds {" and ".join(problems)}; describe it in your own words')
+    privacy.check_text('ticket amend', 'the text', note)
     line = f'Amended {today.isoformat()}: {note}'
     lines = split_lines(text)
     if after is None:
@@ -479,9 +478,9 @@ def register(commands, common):
     command = commands.add_parser('ticket', help='read and edit .anomaly tickets (and old .scratch ones): the one writer of ticket lines')
     actions = command.add_subparsers(dest='action', required=True, metavar='action')
 
-    def action(name, handler, help_text):
+    def action(name, handler, help_text, file_help='path of the ticket file'):
         parser = actions.add_parser(name, parents=[common], help=help_text)
-        parser.add_argument('ticket', help='path of the ticket file')
+        parser.add_argument('ticket', help=file_help)
         parser.set_defaults(handler=handler)
         return parser
 
@@ -517,7 +516,8 @@ def register(commands, common):
     red.add_argument('path', nargs='?', help='the acceptance test file')
     red.add_argument('--repo', help=gitrepo.REPO_HELP)
     red.add_argument('--changed', help='the reason the test file changed after its red commit')
-    amended = action('amend', run_amend, 'add Amended <date>: <text> at the end of the file, or below an AC-n / D-n line')
+    amended = action('amend', run_amend, 'add Amended <date>: <text> at the end of the file, or below an AC-n / D-n line',
+                     'path of the ticket, stories.md or decisions.md')
     amended.add_argument('text', help='the note, one line (checked for private content)')
     amended.add_argument('--after', metavar='ID', help='an AC-n of stories.md or a D-n of decisions.md; the line goes '
                                                        'below it and below the Amended lines already under it')
