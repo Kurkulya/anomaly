@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Takes one MR from a clean tree to ready: docs gate, body, push, CI, tracker re-check. Model-invocable; acts only on an explicit request from the user or conduct, which calls it at draft and ready.
+description: Takes one MR from a clean tree to ready: docs gate, body, push, CI, tracker re-check. Model-invocable; acts only on an explicit request from the user or conduct (draft and ready).
 allowed-tools: Bash(python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" *)
 ---
 
@@ -33,10 +33,10 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <key> --
 
 ## Steps
 
-1. `worklog start` (key: the unit folder name, or the ticket file name without `.md`). `ports`: `repo base` is the base. `git -C <checkout> status --short` not empty: stop, ask nothing. [PR1, OM11, PR14, PR4, AC-54]
-2. `check pre-push`, before every push. [N3, AC-49] 0: go on. 2 with no `mr.md` at a draft's first push: go on; other 2: stop. 1 with `no Reviewed: line` or `no Verified: line`: stop, ask nothing. [AC-54, OM14] 1 with `is not the head being pushed`: `anomaly:review` delta since the last reviewed sha and one verify (`command verify`); with no open Blocker or High and a green verify, record `<head>` (unit: `mr reviewed`, `mr verified`; light path: `ticket reviewed`, `ticket verified`) and check again, else stop. Any other 1: stop.
-   Light path: build's `--no-ff` merge makes the head a merge commit, so the first run exits 1, both stale: do the same, delta `<ticket tip>...<head>`.
-3. Draft: `mr body <target> --draft`. [OM1] Ready gate: follow [DOCS-GATE.md](DOCS-GATE.md) (docs gate, CI, tracker re-check); it gives `<result>`. [CL4, AC-51] Then `mr body <target> --docs-gate '<result>'` once (light path: no `--docs-gate`). [OM3] (pending verdict, 2026-11-05) Show a `warning:` line (body over 2.5 KB); never hand-edit the body file. [PR11, D-23, OM4, CL2]
+1. `worklog start` (key: the unit folder name, or the ticket file name without `.md`). `ports`: `repo base` is the base. `git -C <checkout> status --short` not empty: stop, no question. [PR1, OM11, PR14, PR4, AC-54]
+2. `check pre-push`, before every push. [N3, AC-49] 0: go on. 2 with no `mr.md` at a draft's first push: go on; other 2: stop. 1 with `no Reviewed: line` or `no Verified: line`: stop, no question. [AC-54, OM14] 1 with `is not the head being pushed`: `anomaly:review` delta since the last reviewed sha and one verify (`command verify`); with no open Blocker or High and a green verify, record `<head>` (unit: `mr reviewed`, `mr verified`; light path: `ticket reviewed`, `ticket verified`) and check again, else stop. Any other 1: stop.
+   Light path: build's `--no-ff` merge makes the head a merge commit: the first run exits 1, both stale. Do the same, delta `<ticket tip>...<head>`.
+3. Draft: `mr body <target> --draft`. [OM1] Ready gate: follow [DOCS-GATE.md](DOCS-GATE.md) (docs gate, CI, tracker); it gives `<result>`. [CL4, AC-51] Then `mr body <target> --docs-gate '<result>'` (light path: no `--docs-gate`). [OM3] (pending verdict, 2026-11-05) Show a `warning:` line (body over 2.5 KB); never edit the body file. [PR11, D-23, OM4, CL2]
 4. Push: a plain `git -C <checkout> push -u origin <branch>`, never the base or the default branch, never forced; a refused push is printed, not retried. No `origin`: no push. [PR13, PR15, CL1]
 5. `mr put <target>` with the integration branch checked out: opens a draft MR, or replaces only the body. [N5]
 6. Draft: `worklog add` (light path: no `--docs`), stop.
