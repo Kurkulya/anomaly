@@ -34,7 +34,6 @@ ACTIVE = frozenset({'created', 'pending', 'running', 'preparing', 'waiting_for_r
 WORKING = frozenset({'pending', 'running', 'preparing', 'waiting_for_resource'})   # a runner has or wants the job
 SETTLED_OK = frozenset({'success', 'skipped'})   # a settled job that does not block, with allow_failure aside
 PIPELINE_NUMBER = re.compile(r'[0-9]+')
-REMOTE = re.compile(r'gitlab\.com[:/](.+?)(?:\.git)?/?$')
 COLOUR = re.compile(r'\x1b\[[0-9;]*m')
 RUNNER_STAMP = re.compile(r'^\S+Z \d+[OE] ?')     # the runner's timestamp and stream prefix on a trace line
 FAILURE_LINE = re.compile(r' FAIL |Failed Tests|Test Files |Tests {2}|✘|\d+\) \[|ERROR: Job failed')
@@ -94,11 +93,15 @@ def failure_lines(trace):
 
 
 def remote_project(repo):
-    """The `group/project` path of the repository's `origin` remote (never printed with the URL)."""
-    match = REMOTE.search(gitrepo.origin_url(repo))
-    if match is None:
+    """The `group/project` path of the repository's `origin` remote when it is on gitlab.com (never printed with
+    the URL); no origin, another host or a URL with no host is the error that asks for `--project`."""
+    try:
+        found = gitrepo.origin_host_project(repo)
+    except gitrepo.GitError:
+        found = None
+    if found is None or found[0] != glab.HOST:
         raise gitrepo.GitError('cannot read the project from the origin remote: pass --project <group/project>')
-    return match[1]
+    return found[1]
 
 
 def locate(args, environ):
