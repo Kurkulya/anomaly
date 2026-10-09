@@ -119,6 +119,25 @@ class FrontierTest(unittest.TestCase):
                     self.assertTrue(marks_in_progress(lines[0]), lines)
                 self.assertEqual(self.lines_naming(output, 'alpha'), [], output)
 
+    def test_with_an_in_progress_ticket_and_a_blocked_one_and_none_startable_it_lists_both_and_exits_0(self):
+        """AC-3 (Amended): the unit is not stuck while a ticket runs, so the waiting ticket is named with its
+        unfinished blocker and the exit code is 0."""
+        tickets = {
+            '01-alpha': slice_ticket('01', status='done'),
+            '02-bravo': slice_ticket('02', blocked='01', status='in-progress'),
+            '03-charlie': slice_ticket('03', blocked='02'),
+        }
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root):
+                code, output = self.frontier(self.unit(layout, tickets))
+                self.assertEqual(code, 0, output)
+                running = self.lines_naming(output, 'bravo')
+                self.assertEqual(len(running), 1, output)
+                self.assertTrue(marks_in_progress(running[0]), running)
+                waiting = self.lines_naming(output, 'charlie')
+                self.assertEqual(len(waiting), 1, output)
+                self.assertIn('02', waiting[0])
+
     def test_warns_once_for_each_story_ac_that_no_ticket_covers_and_names_it(self):
         """AC-2: stories.md (spec.md in the old layout) holds AC-1 to AC-4; a done ticket covers AC-1, an open one
         covers AC-3 and AC-1 again, one covers none; AC-2 and AC-4 are named, the covered ones are not."""

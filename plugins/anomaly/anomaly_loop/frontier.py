@@ -9,9 +9,9 @@ one line each, in ticket order:
   <ticket>: in progress              a ticket that is in progress; it is neither startable nor blocked
   <ticket>: blocked by <NN> (<status>), ...   only when no ticket is startable: each open ticket that waits
 
-Exit 0 when a ticket is startable, or only in-progress tickets are left, or every ticket is done (one
-`finished` line). Exit 1 when no ticket is startable and one waits for a blocker (the blocked lines and the
-in-progress lines are printed). Exit 2 (one `anomaly:` line naming each ticket) when a ticket that is not done has
+Exit 0 when a ticket is startable, or a ticket is in progress (the unit is not stuck; the blocked lines are
+printed when nothing is startable), or every ticket is done (one `finished` line). Exit 1 when no ticket is
+startable, none is in progress and one waits for a blocker. Exit 2 (one `anomaly:` line naming each ticket) when a ticket that is not done has
 no `Blocked by:` line or names a blocker with no ticket file. A `warning:` line follows for each AC of the unit's
 stories file (`stories.md`; `spec.md` in an old `.scratch` unit) that no ticket's `Covers:` names.
 
@@ -108,7 +108,7 @@ def look(folder):
     if START in kinds:
         shown, code = (START, RUNNING), 0
     elif BLOCKED in kinds:
-        shown, code = (RUNNING, BLOCKED), 1
+        shown, code = (RUNNING, BLOCKED), 0 if RUNNING in kinds else 1
     else:
         shown, code = (RUNNING,), 0
     lines = [line for kind, line in entries if kind in shown]
