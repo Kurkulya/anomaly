@@ -1,6 +1,6 @@
 # ADR-0011: A work unit lives under `.anomaly/<work-unit>/`, and both layouts are read until the switch-over
 
-Status: Accepted; partly superseded by ADR-0012 (the work-unit line is no longer only `{feature, stage, session, date}`) and by ADR-0014 (`worklog report` now reads `work-units.jsonl`, not `measure`) and by ADR-0015 (the `log.md` writer, `anomaly log add`) and by ADR-0016 (diagnose writes its loop script under `.anomaly/adhoc/` with Write) and by ADR-0017 (the work unit's file list gains `research/`, `mr-body.md` and `mr.md`) · Date: 2026-10-06 · Owner: VK · Revisit-by: 2026-11-05
+Status: Accepted; partly superseded by ADR-0012 (the work-unit line is no longer only `{feature, stage, session, date}`) and by ADR-0014 (`worklog report` now reads `work-units.jsonl`, not `measure`) and by ADR-0015 (the `log.md` writer, `anomaly log add`) and by ADR-0016 (diagnose writes its loop script under `.anomaly/adhoc/` with Write) and by ADR-0017 (the work unit's file list gains `research/`, `mr-body.md` and `mr.md`); the old layout is no longer read (2026-10-09, see Consequences) · Date: 2026-10-06 · Owner: VK · Revisit-by: 2026-11-05
 
 ## Context
 
@@ -83,11 +83,12 @@ stopped a merge that the check had passed (G33 E3).
 
 ## Accepted risks
 
-- [ ] The `log.md` writer (a CLI subcommand) is not built. Until it exists, `log.md` has no
+- [x] The `log.md` writer (a CLI subcommand) is not built. Until it exists, `log.md` has no
   writer and a session cannot append events to it. Owner: VK · Revisit: 2026-11-05
-  (phase 3 or `conduct`).
-- [ ] Two layouts are read until the old skills are deleted, so a ticket path can name either
+  (phase 3 or `conduct`). Closed: `anomaly log add` (ADR-0015, `anomaly_loop/log.py`).
+- [x] Two layouts are read until the old skills are deleted, so a ticket path can name either
   and a skill text has to name both. Owner: VK · Revisit: at the switch-over verdict (AC-78), or 2026-11-05.
+  Closed 2026-10-09 without a verdict: see Consequences.
 
 ## Revisit
 
@@ -102,3 +103,12 @@ of § Formats and environment); `.scratch/anomaly-workflow/decisions.md` § Form
 environment; `workflow-build` spec (`.scratch/workflow-build/spec.md`, § Work-unit layout, § Ticket
 line shapes; ACs 87 to 90, 98, 99 and 102); ticket 13 (`.scratch/workflow-build/issues/13-work-unit-layout.md`);
 the acceptance tests of ticket 13, commit 58bae8b, and the code, commit a427a6f; ADR-0001, ADR-0008, ADR-0009.
+
+## Consequences
+
+- 2026-10-09: the owner found no old build skill left to switch over from (ADR-0008, Consequences), so the
+  old layout is no longer read: the CLI, the skills and the docs know only `.anomaly/<work-unit>/` with
+  `stories.md` and `tickets/`. A `.scratch/<feature>/` folder, its `issues/` and its `spec.md` are not a work
+  unit, an owner or an ADR location any more: `frontier` and `conduct status` find no `tickets/` in such a
+  folder, `mr` refuses it as no work-unit folder, and `check stories` gives it the layout error. A ticket file is still named by its path,
+  so the `ticket` commands and `check pre-merge` work on any ticket file wherever it is.

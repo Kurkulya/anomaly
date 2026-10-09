@@ -38,7 +38,7 @@ This section stands on its own: `anomaly:code` reads it in combined mode. [F9]
 
 - ticket: the checklist above.
 - delta: the explicit range only, tip merges ignored: is each earlier finding fixed, are the new asks met, is there new scope.
-- cumulative: the whole branch against `spec.md` as the spec (none: `stories.md` + `decisions.md`) [AC-85]: every AC covered somewhere, gaps between tickets, every deferral (item 8), docs drift over the whole branch. [O36] Then one verdict per characterization test file (a test that pins today's behaviour for a refactor), with its reason [O37]:
+- cumulative: the whole branch against `stories.md` + `decisions.md` as the spec [AC-85]: every AC covered somewhere, gaps between tickets, every deferral (item 8), docs drift over the whole branch. [O36] Then one verdict per characterization test file (a test that pins today's behaviour for a refactor), with its reason [O37]:
   - keep: it pins visible behaviour through the public surface and mocks no internals; write a `fine:` line.
   - rewrite: it pins visible behaviour but mocks internals, even when another test proves the same; a Medium finding at the mock.
   - delete: it pins internals only; a Low finding.

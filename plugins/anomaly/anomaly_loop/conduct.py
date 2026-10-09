@@ -31,7 +31,7 @@ def register(commands, common):
     status = actions.add_parser('status', parents=[common],
                                 help='print the five-line wave report of a work unit: done, failed, open, next, '
                                      'cost (writes nothing)')
-    status.add_argument('folder', help='the work-unit folder (holds tickets/, or issues/ in an old .scratch unit)')
+    status.add_argument('folder', help='the work-unit folder (holds tickets/)')
     status.set_defaults(handler=run_status)
 
 

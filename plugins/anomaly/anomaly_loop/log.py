@@ -7,8 +7,7 @@ file is made when it is missing and is only appended to, so earlier bytes (a byt
 never rewritten. The new line takes the line ending the file already uses (ticket.line_ending: the first
 one found, else LF); a last line without an ending gets one first. A folder that does not exist, a stage
 that is not one word, text that is empty or breaks the line, and a log.md that is a symlink are refused
-with no write; the folder is never created. Any existing folder is allowed, inside `.anomaly/` or
-`.scratch/` or not.
+with no write; the folder is never created. Any existing folder is allowed, inside `.anomaly/` or not.
 """
 import errno
 

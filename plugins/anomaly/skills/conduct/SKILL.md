@@ -8,7 +8,7 @@ allowed-tools: Bash(python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" *)
 
 Explicit request only. [AC-15] One work unit = one branch = one MR. [O2] State lives in ticket files and git: resume from them. [O1] The tracker is read-only. [O46] A user change to a ticket that is not done is a `ticket amend`; a changed AC or decision: `ticket amend` with `--after` on `<unit>/stories.md` or `<unit>/decisions.md`, no hand edit. [O51, N5]
 
-`<unit>`: the unit folder by absolute path in the main checkout (`.anomaly/<unit>/`, or `.scratch/<feature>/`); it is not in the worktree. `<main>`: the main checkout. `<wt>`: the integration worktree.
+`<unit>`: the unit folder by absolute path in the main checkout (`.anomaly/<unit>/`); it is not in the worktree. `<main>`: the main checkout. `<wt>`: the integration worktree.
 
 ## The CLI calls
 

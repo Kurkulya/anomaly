@@ -253,7 +253,7 @@ class AdrPathsTest(unittest.TestCase):
             write_text(self.root / relative, 'x\n')
 
     def test_the_adr_folder_and_the_unit_adr_folders_are_read_and_nothing_else(self):
-        units = {'.anomaly/u/adr/0002-b.md', '.scratch/u/adr/0003-c.md'}
+        units = {'.anomaly/u/adr/0002-b.md'}   # not `.scratch/u/adr/0003-c.md`: the old layout is not read
         for adr_folder, expected in (('docs/adr/', {'docs/adr/0001-a.md'}), ('decisions/', {'decisions/0005-e.md'}),
                                      ('https://wiki.example.invalid/adr', {'docs/adr/0001-a.md'})):
             with self.subTest(adr_folder=adr_folder):
@@ -312,9 +312,10 @@ class PathLivenessTest(unittest.TestCase):
                          ['NOPE.md does not exist'])
 
     def test_a_path_under_a_unit_home_folder_is_live_when_it_is_neither_on_disk_nor_ignored(self):
-        """`.anomaly/` and `.scratch/` hold local work units: a clone has neither, and does not ignore them."""
+        """`.anomaly/` holds local work units: a clone has none, and does not ignore it. The dropped `.scratch/`
+        is no unit home any more."""
         self.assertEqual(self.dead('CLAUDE.md', 'Units: `.anomaly/`, `.scratch/x.md`, `.anomaly/u/tickets/`, `.other/`.'),
-                         ['.other/ does not exist'])
+                         ['.scratch/x.md does not exist', '.other/ does not exist'])
 
     def test_a_claim_outside_the_repository_is_not_checked(self):
         """A path that climbs out of the repo cannot be checked against it, so it is no finding; a dead claim in

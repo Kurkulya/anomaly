@@ -10,7 +10,7 @@ Explicit request only (user or `conduct`). [I35] Read only the ticket and `seams
 
 ## The CLI calls
 
-One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes; write a ' as ’. No `python`: try `python3`. `<checkout>` is the integration branch's checkout. Every `.scratch` or `.anomaly` edit goes through the CLI, never Write, Edit or the shell, except the `<key>-repro` script `diagnose` writes. [N12, I39]
+One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes; write a ' as ’. No `python`: try `python3`. `<checkout>` is the integration branch's checkout. Every `.anomaly` edit goes through the CLI, never Write, Edit or the shell, except the `<key>-repro` script `diagnose` writes. [N12, I39]
 
 ```
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog start <work-unit key> build --ticket <NN> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
@@ -30,7 +30,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work-un
 
 ## Start
 
-1. Resolve "build 01" to `tickets/01-*.md` in `.anomaly/<work unit>/`, or `issues/01-*.md` in `.scratch/<feature>/`; or a path. Work-unit key = that folder's name. `worklog start`. [I1]
+1. Resolve "build 01" to `tickets/01-*.md` in `.anomaly/<work unit>/`, or a path. Work-unit key = that folder's name. `worklog start`. [I1]
 2. `ports`. If its `commit` or `branch` value holds `<key>`, use the ticket key (key line of `ticket show`); stop if missing or a placeholder. [I2] Unresolved `command verify`: stop here and ask the user for the command, naming the `repo override` path and its `verify:` key; never guess.
 3. `ticket gate`: exit 1 blocked, 2 error: stop. Already `Status: done`: stop. Resume: `git log --first-parent --format=%H%x20%s <integration>` (step 6) lists `merge <NN-slug>`: skip to the Close with that sha, after Merge step 5 if the branch exists. Skip a step whose ticket line exists (`Red:`; `Reviewed:`, `Verified:` only if it names the current ticket tip). [I5, I6]
 4. Under-specified ticket: stop and ask; never widen scope. [I37] Stack and size come from the ticket, else ask. [K2]

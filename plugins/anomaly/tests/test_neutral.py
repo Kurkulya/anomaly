@@ -135,9 +135,9 @@ class EmptyProfileTest(unittest.TestCase):
         self.home, self.data, self.projects = root / 'home', root / 'data', root / 'projects'
         for folder in (self.home, self.data, self.projects):
             folder.mkdir()
-        self.ticket = root / '.scratch' / 'feature' / 'issues' / '01-a-ticket.md'
+        self.ticket = root / '.anomaly' / 'unit' / 'tickets' / '01-a-ticket.md'
         self.ticket.parent.mkdir(parents=True)
-        self.ticket.write_text('# 01: A ticket\n\nJira: none\nCovers: AC-1\nBlocked by: None\n'
+        self.ticket.write_text('# 01: A ticket\n\nKey: none\nCovers: AC-1\nBlocked by: None\n'
                                'Status: ready-for-agent\n\n- [ ] AC-1: a criterion\n', encoding='utf-8', newline='\n')
         self.repo = root / 'repo'
         self.repo.mkdir()

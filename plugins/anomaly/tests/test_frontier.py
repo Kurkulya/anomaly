@@ -1,5 +1,5 @@
-"""Tests for the `frontier <work unit folder>` command (ticket 04), CLI in-process over fixture units in both
-layouts: `.anomaly/<unit>/tickets/` with `stories.md`, and `.scratch/<unit>/issues/` with `spec.md`.
+"""Tests for the `frontier <work unit folder>` command (ticket 04), CLI in-process over fixture units in the
+layout `.anomaly/<unit>/tickets/` with `stories.md`; the old `.scratch/<unit>/issues/` with `spec.md` is not read.
 AC-1 to AC-4 of the ticket, with the dated Amended line that makes an in-progress ticket a line of its own.
 Output is checked by ticket names (the file-name slug), AC ids, blocker numbers and exit codes, never by wording;
 stdout and stderr are read together, because the ACs fix no stream."""
@@ -12,7 +12,7 @@ from tests.fixtures import run_cli, write_text
 from tests.test_check import slice_ticket
 
 Layout = namedtuple('Layout', 'root tickets stories')
-LAYOUTS = (Layout('.anomaly', 'tickets', 'stories.md'), Layout('.scratch', 'issues', 'spec.md'))
+LAYOUTS = (Layout('.anomaly', 'tickets', 'stories.md'),)
 
 
 def stories_text(count):
@@ -283,8 +283,8 @@ class FrontierTest(unittest.TestCase):
                     self.assertEqual(self.lines_naming(output, slug), [], (slug, output))
 
     def test_a_missing_stories_file_is_one_warning_naming_it_and_the_tickets_are_still_listed(self):
-        """A unit with no AC file (stories.md, or spec.md in the old layout): the tickets are read, one `warning:` line
-        names the files that are missing (spec.md or stories.md), and the exit code is the one the tickets give."""
+        """A unit with no AC file (stories.md): the tickets are read, one `warning:` line names the missing
+        stories.md, and the exit code is the one the tickets give."""
         for layout in LAYOUTS:
             with self.subTest(layout=layout.root):
                 folder = self.unit(layout, {'01-alpha': slice_ticket('01')})
@@ -296,9 +296,9 @@ class FrontierTest(unittest.TestCase):
                 self.assertEqual(len(warnings), 1, output)
                 self.assertTrue(warnings[0].startswith('warning:'), warnings)
 
-    def test_a_unit_with_both_spec_and_stories_reads_the_acs_of_spec_md(self):
-        """ADR-0011: spec.md is read when the unit has one, else stories.md. Here spec.md holds AC-2, which no ticket
-        covers, and stories.md holds only AC-1; the warning names spec.md and AC-2."""
+    def test_a_spec_md_of_the_old_layout_is_not_read(self):
+        """ADR-0011, old layout dropped: only stories.md holds the ACs. Here spec.md holds AC-2, which no ticket
+        covers, and stories.md holds only AC-1, which a ticket covers; no warning names AC-2 or spec.md."""
         for layout in LAYOUTS:
             with self.subTest(layout=layout.root):
                 folder = self.unit(layout, {'01-alpha': slice_ticket('01', covers='AC-1')})
@@ -306,9 +306,17 @@ class FrontierTest(unittest.TestCase):
                 write_text(folder / 'stories.md', stories_text(1))
                 code, output = self.frontier(folder)
                 self.assertEqual(code, 0, output)
-                warnings = self.lines_naming(output, 'AC-2')
-                self.assertEqual(len(warnings), 1, output)
-                self.assertIn('spec.md', warnings[0])
+                self.assertEqual(self.lines_naming(output, 'AC-2'), [], output)
+                self.assertEqual(self.lines_naming(output, 'spec.md'), [], output)
+
+    def test_an_issues_folder_of_the_old_layout_is_not_read(self):
+        """ADR-0011, old layout dropped: a `.scratch/<unit>/issues/` unit has no tickets folder, an error naming
+        the folder, exit 2."""
+        folder = self.unit(Layout('.scratch', 'issues', 'spec.md'), {'01-alpha': slice_ticket('01')})
+        code, output = self.frontier(folder)
+        self.assertEqual(code, 2, output)
+        self.assertIn(str(folder), output)
+        self.assertEqual(self.lines_naming(output, 'alpha'), [], output)
 
     def test_a_unit_with_no_ticket_file_is_an_error_naming_the_folder_and_exits_2(self):
         """A unit with no tickets folder, or an empty one, has nothing to list: not "finished"."""

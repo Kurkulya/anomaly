@@ -1,6 +1,6 @@
 # ADR-0013: A switch-over compares old-skill sessions with new-skill sessions
 
-Status: Accepted · Date: 2026-10-07 · Owner: VK · Revisit-by: 2026-11-25
+Status: Accepted; not yet used: the first rewrite ran no switch-over (ADR-0008, Consequences) · Date: 2026-10-07 · Owner: VK · Revisit-by: 2026-11-25
 
 ## Context
 

@@ -147,21 +147,17 @@ class PruneTest(SeamsTestCase):
         return run_cli('seams', 'prune', str(self.ledger), '--repo', str(self.repo.root), '--home', str(self.home),
                        *argv)
 
-    def test_a_ledger_in_either_work_unit_layout_is_pruned_and_added_to_the_same_way(self):
-        """AC-88: `.scratch/<feature>/seams.md` and `.anomaly/<work-unit>/seams.md` give the same result."""
+    def test_a_ledger_in_a_work_unit_folder_is_pruned_and_added_to(self):
+        """`.anomaly/<work-unit>/seams.md`, the ledger of a work unit."""
         self.repo.git('rm', '-q', '--', 'plugins/x/old.py')
         self.change()
-        outcomes = []
-        for folder in ('.scratch/feature', '.anomaly/unit'):
-            ledger = self.repo.root / folder / 'seams.md'
-            write_text(ledger, LEDGER)
-            pruned = self.seams('prune', '--repo', str(self.repo.root), ledger=ledger)
-            added = self.seams('add', '--name', 'n', '--owner', 'o.py', '--replaces', 'r', '--ticket', '06',
-                               ledger=ledger)
-            outcomes.append((pruned, added, ledger.read_bytes()))
-        self.assertEqual(outcomes[0][0][0], 0, outcomes[0])
-        self.assertIn('gone helper', outcomes[0][0][1])
-        self.assertEqual(outcomes[1], outcomes[0])
+        ledger = self.repo.root / '.anomaly' / 'unit' / 'seams.md'
+        write_text(ledger, LEDGER)
+        pruned = self.seams('prune', '--repo', str(self.repo.root), ledger=ledger)
+        added = self.seams('add', '--name', 'n', '--owner', 'o.py', '--replaces', 'r', '--ticket', '06', ledger=ledger)
+        self.assertEqual(pruned[0], 0, pruned)
+        self.assertIn('gone helper', pruned[1])
+        self.assertEqual(added[0], 0, added)
 
     def test_a_deleted_owner_file_removes_its_line_and_lists_it(self):
         self.repo.git('rm', '-q', '--', 'plugins/x/old.py')

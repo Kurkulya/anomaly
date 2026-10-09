@@ -34,7 +34,7 @@ A port keeps the org fact in the profile and leaves one owner for the line name.
 
 ## Accepted risks
 
-- [ ] Two key-line names are read until the switch-over, so a ticket text may hold either. Owner: VK · Revisit: at the switch-over, or 2026-12-01.
+- [x] Two key-line names are read until the switch-over, so a ticket text may hold either. Owner: VK · Revisit: at the switch-over, or 2026-12-01. Closed 2026-10-09: see Consequences.
 - [ ] An org that keeps its ADRs outside the repo (a wiki) gets the core folder; reading such ADRs stays with the `gather` port. Owner: VK · Revisit: 2026-12-01.
 
 ## Revisit
@@ -48,3 +48,6 @@ ADR-0001, ADR-0007, ADR-0011; main at 914b3b8 (`plugins/anomaly/anomaly_loop/con
 ## Consequences
 
 - The merged-ticket rule that ADR-0014 names as `worklog.run_report` now lives in `worklog.read_report`, which `conduct status` shares with `worklog report`.
+- 2026-10-09: no switch-over ran (ADR-0008, Consequences), so the `Jira:` line is no longer read in place of
+  the key line: the key is read only from the line the `key_line` port names. An org whose tickets keep a
+  `Jira:` line sets `key_line: Jira` in its profile.

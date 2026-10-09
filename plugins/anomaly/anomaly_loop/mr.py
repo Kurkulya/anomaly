@@ -5,8 +5,8 @@
 Writes the MR body to a file (bodies go through files, ADR-0007). The file starts with `Title: <type>(<key>): <summary>`
 and a blank line; the body follows, in markdown (`## <Section>`). A work unit folder gives `<folder>/mr-body.md`; an
 ad-hoc ticket gives the sibling file `<ticket name>.mr-body.md` in `.anomaly/adhoc/`; a file target outside that
-folder is refused. Facts come only from the ticket files, the AC file (`spec.md` when the unit has one, else
-`stories.md`, ADR-0011), `decisions.md` and, for an ad-hoc ticket, the commit subjects of its branch; never the diff.
+folder is refused. Facts come only from the ticket files, the AC file (`stories.md`, ADR-0011), `decisions.md`
+and, for an ad-hoc ticket, the commit subjects of its branch; never the diff.
 
 The title: the type is the part of the current branch name before the first `/` when it is an Angular type, else
 `feat` (for a work unit and an ad-hoc ticket alike); the key of a unit is the key every keyed ticket shares, the unit
@@ -48,7 +48,7 @@ through git), and each leaves the other lines as they were. A work unit folder k
 ad-hoc ticket as the sibling `<ticket name>.mr.md` in `.anomaly/adhoc/`, which holds only the `MR:` line: the gate
 lines of an ad-hoc ticket are its own `Reviewed:` and `Verified:` lines (`ticket reviewed`, `ticket verified`), so
 `reviewed` and `verified` refuse an ad-hoc ticket. A folder target must be a work unit folder (a folder in
-`.anomaly/` or `.scratch/`, not `adhoc`).
+`.anomaly/`, not `adhoc`).
 """
 import re
 import sys
@@ -180,7 +180,7 @@ def unit_parts(folder, repo, resolution, key_line, docs_gate):
         raise RecordError(f'{folder}: no ticket files NN-*.md')
     ac_path = frontier.ac_file(folder)
     if ac_path is None:
-        raise RecordError(f'{folder}: no {" or ".join(frontier.AC_FILES)}')
+        raise RecordError(f'{folder}: no {frontier.AC_FILE}')
     text = files.read_input(ac_path)
     merged = [(path, parsed) for path, parsed in tickets if parsed.status == TICKET_STATUS_DONE]
     ids, _ = check.ac_ids(text)

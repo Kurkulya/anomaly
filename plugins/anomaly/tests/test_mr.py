@@ -105,7 +105,7 @@ class UnitCase(MrCase):
         return merge
 
     def ticket(self, number, slug, covers, ac_ids, status='ready-for-agent', title=None, key=KEY):
-        text = slice_ticket(number, covers=covers, status=status, jira=key, key_line='Key',
+        text = slice_ticket(number, covers=covers, status=status, key=key,
                             body='\n' + ''.join(f'- [ ] {ac}: criterion {ac}\n' for ac in ac_ids))
         if key is None:   # a ticket with no key line at all
             text = text.replace('Key: None\n', '', 1)

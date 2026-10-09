@@ -61,7 +61,7 @@ class AddTest(LogCase):
         self.assertEqual(self.log.read_bytes(),
                          b'2026-10-03 09:00 build: old\n' + f'{STAMP} build: new\n'.encode())
 
-    def test_a_folder_outside_anomaly_and_scratch_is_still_allowed(self):
+    def test_a_folder_outside_anomaly_is_still_allowed(self):
         other = self.root / 'old-layout' / 'docs'
         other.mkdir(parents=True)
         self.add_ok('ok', 'build', folder=other)
