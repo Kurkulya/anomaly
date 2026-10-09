@@ -263,7 +263,7 @@ def cost_line(report):
 
 def run_report(args, environ):
     report = read_report(paths.resolve_home(args.home, environ), args.unit)
-    print(f'work unit: {args.unit}, merged tickets {report.merged}, sessions {len(report.held)}')
+    print(f'work unit: {report.unit}, merged tickets {report.merged}, sessions {len(report.held)}')
     for line in stage_lines(report.rows, report.adhoc):
         print(line)
     print(f'sessions with more than one ticket: {sum(len(tickets) > 1 for tickets in report.held.values())}')
