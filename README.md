@@ -139,7 +139,7 @@ python plugins/anomaly/scripts/anomaly.py ports --home <dir> [--repo <dir>]
 | `mr` | replace | `mr_tool` | print the MR body to paste |
 | `commit`, `branch` | replace | `commit_style`, `branch_pattern` | `type(scope): summary`, `feat/<slug>` |
 | `ui_check` | replace | `verify_ui` | built-in browser walkthrough of the ticket's UI ACs; its app facts come from the repo layer |
-| `key_line` | replace | `key_line` | `Key`: the name of the ticket line that holds the key; a `Jira:` line is still read when a ticket has no such line |
+| `key_line` | replace | `key_line` | `Key`: the name of the ticket line that holds the key |
 | `adr_folder` | replace | `adr_folder` | `docs/adr/`: the repo folder ADR drafts are moved to; `check stories` looks up `ADR-NNNN` owners there |
 
 Replace: the adapter takes the core default's place. Add: the adapter's names (separated by
@@ -828,9 +828,7 @@ python plugins/anomaly/scripts/anomaly.py assess record --home <dir> --slug <slu
 
 The `ticket` commands read and edit the ticket files of a work unit
 (`.anomaly/<work-unit>/tickets/NN-<slug>.md`, or one file in `.anomaly/adhoc/`; see ADR-0011).
-Until the switch-over the old layout, `.scratch/<feature>/issues/NN-<slug>.md`, is read the same way:
-`ticket`, `check pre-merge` and `seams` give the same result for a ticket or a ledger in either
-layout. They are the only writer of ticket lines, so a session that cannot write under the main checkout can still record
+They are the only writer of ticket lines, so a session that cannot write under the main checkout can still record
 state. They need no home and no profile, and a ticket is always named by its file path.
 
 ```
@@ -945,8 +943,7 @@ and no profile; the work unit is named by its folder.
 python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
 ```
 
-- It reads the numbered ticket files (`NN-*.md`) of `tickets/`, or of `issues/` in an old `.scratch`
-  unit, and decides "every blocker is done" with the rule `ticket gate` uses (`ticket.unfinished_blockers`
+- It reads the numbered ticket files (`NN-*.md`) of `tickets/` and decides "every blocker is done" with the rule `ticket gate` uses (`ticket.unfinished_blockers`
   and `ticket.is_blocked`), so a blocker that is not `done` and an unreadable `Blocked by:` value (for
   example `TBD`) make a ticket blocked in both commands. A blocker with no ticket file is also not
   done, but `frontier` reports it as an error (see below).
@@ -970,9 +967,9 @@ python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
   ticket file, is an error: one `anomaly:` line names each such ticket, nothing else is printed, and
   the exit code is 2.
 - After the ticket lines, one `warning:` line names each AC of the unit's AC file that no ticket's
-  `Covers:` names. The file is `spec.md` when the unit has one, else `stories.md` (ADR-0011); the AC
-  lines are read as `check stories` reads them (`- AC-n:`), and the uncovered ACs are found by the
-  same function as in `check slice`. A unit with neither file gets one `warning:` line, not an error.
+  `Covers:` names. The file is `stories.md` (ADR-0011); the AC lines are read as `check stories`
+  reads them (`- AC-n:`), and the uncovered ACs are found by the same function as in `check slice`.
+  A unit with no `stories.md` gets one `warning:` line, not an error.
 
 ## Wave report
 
@@ -1033,8 +1030,8 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   have different keys it is the unit folder name. A key of `no-ticket` counts as no key, and a unit
   with no key at all gets `no-ticket`. `<summary>` is the first heading of
   the AC file or the title of the ad-hoc ticket. The summary is cut at a word so the whole title is
-  under 70 characters; a summary with no word left after the cut is an error. The AC file is `spec.md`
-  when the unit has one, else `stories.md` (ADR-0011), as in `frontier`.
+  under 70 characters; a summary with no word left after the cut is an error. The AC file is
+  `stories.md` (ADR-0011), as in `frontier`.
 - **Work unit sections.** Each is left out when it has no facts, and they come in this order. Only the
   tickets with `Status: done` count as merged.
   - Why: the `Why:` line of the AC file, its first letter a capital (the rest as written).
@@ -1121,7 +1118,7 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [
   `put` sets the first line, `reviewed` and `verified` set the other two, and each action keeps the
   others. `<ref>` is a commit id, branch or tag; the file holds the full commit id, and a ref that
   names no commit is an error that writes nothing.
-- **Targets.** A folder target must be a work unit folder: a folder in `.anomaly/` or `.scratch/`, not
+- **Targets.** A folder target must be a work unit folder: a folder in `.anomaly/`, not
   `.anomaly/adhoc/`; any other folder is refused. `reviewed` and `verified` take a work unit folder
   only: an ad-hoc ticket keeps its own `Reviewed:` and `Verified:` lines (`ticket reviewed`,
   `ticket verified`), so its `<name>.mr.md` holds only the `MR:` line, and the two actions refuse it
@@ -1263,9 +1260,9 @@ The modes, in one line each (the full dispatch table is in
 - The agents come from the `reviewers` port: an org reviewer gets the same range, its own heading
   and its own lens. Org conventions sections for the touched areas go to `anomaly:code` only. The
   model is the `review` model role. The first round goes out in one message, in the background.
-- Cumulative mode reads `spec.md` as the spec when it exists, else `stories.md` + `decisions.md`,
-  passes every `.scratch/*/seams.md` and `.anomaly/*/seams.md` ledger, and asks for a keep,
-  rewrite or delete verdict per characterization test file.
+- Cumulative mode reads `stories.md` + `decisions.md` as the spec, passes every
+  `.anomaly/*/seams.md` ledger, and asks for a keep, rewrite or delete verdict per
+  characterization test file.
 - A mutation probe that a reviewer proposes (one plain command) is shown to you first and run by
   the skill only after you say yes, on a scratchpad copy, never in the worktree; the agents stay
   read-only.
@@ -1360,8 +1357,7 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   and exit 2. Nothing is written except the index's file stats: `git update-index --refresh`
   runs first, so a file that is dirty by its stat only (a line-ending change, a touched file)
   cannot make the merge that follows refuse; run it in the checkout that will merge. A lock on
-  the index is an error (`anomaly:` line, exit 2). It takes an adhoc ticket like any other, and a
-  ticket in either layout (`.anomaly/<work-unit>/tickets/` or the old `.scratch/<feature>/issues/`).
+  the index is an error (`anomaly:` line, exit 2). It takes an adhoc ticket like any other.
 - Commit ids in the ticket are normalised with git first, so a 7 to 12 digit id equals the full
   one. The test file is read from git at both commits, never from the working folder.
 - A `Red-changed:` line (`ticket red <ticket> --changed <reason>`) excuses a change to the test
@@ -1389,17 +1385,16 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   none); a line under `## Out of scope` with no `— owner:`; an owner that names a `D-n` outside
   brackets; an owner (on an Out of scope line or a `- D-<n>:` line) that is not in the checkout
   and carries no `TODO(<owner>, revisit YYYY-MM-DD)` key (the date must be a real one). The owner
-  exists when it names a unit folder under `.anomaly/` or `.scratch/` other than the checked one
+  exists when it names a unit folder under `.anomaly/` other than the checked one
   (a bare name or a path; a unit is never the owner of its own item, also by its bare name),
-  `ticket NN` (`tickets/NN-*.md` of the unit, or `issues/` in a `.scratch` unit) or
-  ``ticket NN of `<unit>` `` (that unit's `tickets/`, or its `issues/` in the old `.scratch` layout;
-  the form "in `<unit>`" fails), the path of a ticket file or an ADR file, or `ADR-NNNN`
+  `ticket NN` (`tickets/NN-*.md` of the unit) or ``ticket NN of `<unit>` `` (that unit's
+  `tickets/`; the form "in `<unit>`" fails), the path of a ticket file or an ADR file, or `ADR-NNNN`
   (in the folder the `adr_folder` port names, core `docs/adr/`, read from the profile in `--home`, or in the
   `adr/` of a unit folder; an `adr_folder` that is absolute, has `..`, is `.` or is a URL falls back to
   `docs/adr/`); only the checkout
   counts, so an ADR on another branch fails, and any other file (a README, a skill) is no owner. A
   path with a root or a drive is no owner. A person or a skill needs the key. A work-unit folder
-  that is not `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no
+  that is not `<root>/.anomaly/<unit>` gets one layout error and no
   owner lookup. Only the first `— owner:` starts the owner; it ends at the first `. Why:` or
   `. Source:`; a plain `owner:` elsewhere is ignored. Warnings, never a failure: `stories.md` over
   6 KB, `decisions.md` over 8 KB, printed as `warning:` lines. Exit 1 on any error, 0 otherwise (a
@@ -1412,8 +1407,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
   `Covers:`, `Tests:` or key line, or one with an empty value (the key line is the line the
-  `key_line` port names, core `Key:`, read from the profile in `--home`; a `Jira:` line is read
-  when the ticket has no such line; it accepts any word for now, see ADR-0017, Revisit); a `Status:`
+  `key_line` port names, core `Key:`, read from the profile in `--home`; it accepts any word for
+  now, see ADR-0017, Revisit); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
   (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
@@ -1660,7 +1655,7 @@ python plugins/anomaly/scripts/anomaly.py log add <folder> --stage <stage> [--] 
 as `worklog start`; the model passes none. The file is made when it is missing and is only appended
 to, so its earlier bytes stay as they are; the new line takes the file's line ending, and a last line
 without one gets it first. The folder must exist (the command never creates it) but may be anywhere,
-inside `.anomaly/` or `.scratch/` or not. A folder that does not exist, a stage that is not one word
+inside `.anomaly/` or not. A folder that does not exist, a stage that is not one word
 (letters, digits and `.` `_` `-`; a `:` is refused because it would end the stage in the line), and
 text that is empty or has a line break, and a `log.md` that is a symlink stop the command with an
 `anomaly:` line and no write. Put `--` before a text that starts with `-`. Cost numbers do not belong
@@ -1770,8 +1765,8 @@ decision.
 - `todo-overdue`: a keyed deferral whose revisit date is before today. It is read wherever the
   key with a real date stands in the line, in a comment or not.
 - `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
-  it is at or under `.anomaly/` or `.scratch/` (the folders of local work units: a clone has none,
-  so they are never reported), or exists beside that file or at the repository root, or when git ignores it (a folder that git
+  it is at or under `.anomaly/` (the folder of local work units: a clone has none, so it is never
+  reported), or exists beside that file or at the repository root, or when git ignores it (a folder that git
   ignores, such as a local work-unit folder, exists in one checkout only, so it is live whether or
   not it is on disk), or when a tracked file or folder equals it or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is
   live for `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md`

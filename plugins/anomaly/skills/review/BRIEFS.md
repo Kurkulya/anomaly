@@ -6,7 +6,7 @@ Loaded at dispatch; the last section is for the main window after each round. Fi
 
 - Mode: <mode>. Range: <range>, explicit; ignore tip merges. Tip: <tip sha>.
 - Main checkout: <path>. Read files at the tip with `git show <tip>:<path>`.
-- Seam ledgers: every `.scratch/*/seams.md` and `.anomaly/*/seams.md`. [R6, I26]
+- Seam ledgers: every `.anomaly/*/seams.md`. [R6, I26]
 - A CI log is read only through the CLI's `ci log`, never by piping the CI tool's output.
 - Word limit: 500 words (delta: 250).
 
@@ -21,7 +21,7 @@ Loaded at dispatch; the last section is for the main window after each round. Fi
 - Known items the implementer reported: <items>. [R7]
 - Ticket mode: the open tickets that will call the reviewed code: <paths>. [X1]
 - No-behaviour-change ticket (main window first clones the main checkout at the base into the session scratchpad; paste only what follows): base copy at <that path>, or propose the byte-diff commands. [X2]
-- Cumulative mode: the spec is `spec.md`, else `stories.md` + `decisions.md`; one keep / rewrite / delete verdict per characterization test file. [O36, O37]
+- Cumulative mode: the spec is `stories.md` + `decisions.md`; one keep / rewrite / delete verdict per characterization test file. [O36, O37]
 - Rules mode: brief <path>, new SKILL.md <path> and its extra docs, budgets <bytes>. [N7]
 - Check every "X owns Y" deferral against X's own text. [N1]
 

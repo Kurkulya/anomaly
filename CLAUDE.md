@@ -16,7 +16,7 @@ Standard library only; no install step.
 
 - `plugins/anomaly/anomaly_loop/` — CLI code; `tests/` — unittest suite and bench fixtures.
 - `docs/adr/` — the why of each decision. `CONTEXT.md` — glossary.
-- `.anomaly/` and `.scratch/` — work units (stories, tickets, briefs). Git-excluded (ADR-0011):
+- `.anomaly/` — work units (stories, tickets, briefs). Git-excluded (ADR-0011):
   they exist only in the local checkout, never in a clone.
 
 ## Rules

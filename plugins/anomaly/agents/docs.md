@@ -20,7 +20,7 @@ You run the two checks of the docs audit that need judgment: a commit that decid
 ## Where the ADRs are
 
 1. The ADR folder the caller passes. The caller has already resolved it through the CLI, so read it as given and work out no other folder yourself.
-2. The `adr/` folder of every work unit (a unit folder under `.anomaly/` or `.scratch/`). Git may ignore these, so read them from the main checkout with Read and Glob, not with `git show`.
+2. The `adr/` folder of every work unit (a unit folder under `.anomaly/`). Git may ignore these, so read them from the main checkout with Read and Glob, not with `git show`.
 
 Read only the files named `NNNN-*.md`. Skip an ADR whose status starts with `Superseded`.
 
