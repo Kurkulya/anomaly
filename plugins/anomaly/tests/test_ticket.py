@@ -167,6 +167,23 @@ class ShowTest(TicketTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertIn(repro, out.splitlines())
 
+    def test_prints_the_key_line_that_a_ticket_has(self):
+        """AC-9: the core key line is `Key:`; a ticket with only a `Jira:` line shows as before (the first
+        test of this class)."""
+        path = self.ticket_path(TICKET_TEXT.replace('Jira: no-ticket', 'Key: ABC-1'))
+        code, out, err = self.run_ticket('show', str(path))
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('Key: ABC-1', out.splitlines())
+        self.assertFalse([line for line in out.splitlines() if line.startswith('Jira')], out)
+
+    def test_prints_the_line_that_the_key_line_port_names_and_still_a_jira_line(self):
+        """AC-9: the profile key `key_line` names the line; `Jira:` is still read until the switch-over."""
+        write_text(self.home / 'profile.md', '---\nkey_line: Story\n---\n')
+        story = self.ticket_path(TICKET_TEXT.replace('Jira: no-ticket', 'Story: ABC-3'))
+        self.assertIn('Story: ABC-3', self.run_ticket('show', str(story))[1].splitlines())
+        jira = self.ticket_path(TICKET_TEXT.replace('Jira: no-ticket', 'Jira: ABC-2'), name='03-jira.md')
+        self.assertIn('Jira: ABC-2', self.run_ticket('show', str(jira))[1].splitlines())
+
 
 class GateTest(TicketTestCase):
     def write_blockers(self, **statuses):
@@ -1212,9 +1229,11 @@ class ParseTest(unittest.TestCase):
         self.assertFalse(ticket.parse('# 03: T\n').has_blocked_line)
         self.assertTrue(ticket.parse('# 03: T\n\nBlocked by: 01\n').has_blocked_line)
 
-    def test_jira_key(self):
-        self.assertEqual(ticket.parse('# 03: T\n\nJira: no-ticket\n').jira, 'no-ticket')
-        self.assertEqual(ticket.parse('# 03: T\n').jira, '')
+    def test_key_is_read_from_the_key_line_or_a_jira_line(self):
+        self.assertEqual(ticket.parse('# 03: T\n\nJira: no-ticket\n').key, 'no-ticket')
+        self.assertEqual(ticket.parse('# 03: T\n').key, '')
+        self.assertEqual(ticket.parse('# 03: T\n\nKey: ABC-1\n').key, 'ABC-1')
+        self.assertEqual(ticket.parse('# 03: T\n\nStory: ABC-3\n', key_line='Story').key, 'ABC-3')
 
     def test_covers_each_id_once_and_none_means_no_coverage(self):
         parsed = ticket.parse('# 03: T\n\nCovers: AC-1, AC-3 and AC-1 again\n')

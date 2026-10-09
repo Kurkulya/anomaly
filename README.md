@@ -105,11 +105,13 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
 | `models` | optional: the model per dispatch role, one `role: model` per indented line; roles `explore`, `implement`, `review`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse` |
+| `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
+| `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to (core default `docs/adr/`) |
 
 After changing `ticket_key`, run `measure --full` so old rows are rescanned.
 
-There are nine required keys (`tracker` to `issue_source`) and eight optional ones
-(`build_skills` to `models`). The pipeline reads some of them as ports (see Ports and the
+There are nine required keys (`tracker` to `issue_source`) and ten optional ones
+(`build_skills` to `adr_folder`). The pipeline reads some of them as ports (see Ports and the
 repo layer).
 
 ## Ports and the repo layer
@@ -136,6 +138,8 @@ python plugins/anomaly/scripts/anomaly.py ports --home <dir> [--repo <dir>]
 | `mr` | replace | `mr_tool` | print the MR body to paste |
 | `commit`, `branch` | replace | `commit_style`, `branch_pattern` | `type(scope): summary`, `feat/<slug>` |
 | `ui_check` | replace | `verify_ui` | built-in browser walkthrough of the ticket's UI ACs; its app facts come from the repo layer |
+| `key_line` | replace | `key_line` | `Key`: the name of the ticket line that holds the key; a `Jira:` line is still read when a ticket has no such line |
+| `adr_folder` | replace | `adr_folder` | `docs/adr/`: the repo folder ADR drafts are moved to |
 
 Replace: the adapter takes the core default's place. Add: the adapter's names (separated by
 commas or lines, optionally inside one pair of `[ ]`) are listed after the core default's.
@@ -237,6 +241,8 @@ port mr = print the MR body to paste [core default]
 port commit = type(scope): summary [core default]
 port branch = feat/<slug> [core default]
 port ui_check = built-in browser walkthrough of the ticket's UI ACs [core default]
+port key_line = Key [core default]
+port adr_folder = docs/adr/ [core default]
 repo name = demo [checkout]
 repo override = <home>/repos/demo.md [absent]
 repo base = main [core default]
@@ -846,10 +852,11 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   fenced code block (three backticks or tildes) are examples and are never read or changed. A
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
-- `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, `Jira`,
-  `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`,
-  `Verified`, `Red`, `Red-changed`) and a `warning:` line when the ticket
-  has no `Blocked by:` line or its value is not only two-digit ticket numbers (see `ticket gate`).
+- `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, the key line
+  (under the name it has in the ticket), `Tests`, `Repro`, `Base` (the integration branch, which
+  `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
+  the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
+  `ticket gate`).
 - `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
   each blocker that is not done (a missing file counts as not done) and exits 1. `None` and
@@ -907,7 +914,7 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
   `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
-  `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
+  key line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
   the title unless `--slug` gives it.
 
@@ -1170,8 +1177,9 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   that `build` cannot run is caught by code before the plan gate. Errors, each a line
   `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
-  `Covers:`, `Tests:` or `Jira:` line, or one with an empty value (`Jira:` accepts any word for now:
-  the key is not checked until the tracker port names the key line, phase 2, D-11); a `Status:`
+  `Covers:`, `Tests:` or key line, or one with an empty value (the key line is the line the
+  `key_line` port names, core `Key:`, read from the profile in `--home`; a `Jira:` line is read
+  when the ticket has no such line; it accepts any word for now, see ADR-0017, Revisit); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
   (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
