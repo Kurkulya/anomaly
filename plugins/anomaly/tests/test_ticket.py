@@ -89,7 +89,7 @@ class TicketTestCase(unittest.TestCase):
 class RegistryTest(TicketTestCase):
     def test_ticket_is_registered_once_and_lists_every_action(self):
         self.assertEqual(cli.COMMANDS.count('ticket'), 1)
-        actions = ('show', 'gate', 'set-status', 'result', 'reviewed', 'verified', 'adhoc', 'red')
+        actions = ('show', 'gate', 'set-status', 'result', 'reviewed', 'verified', 'adhoc', 'red', 'amend')
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['ticket', '--help'], environ={})
@@ -349,6 +349,101 @@ class SetStatusTest(TicketTestCase):
             with self.subTest(argv=argv[0:2]):
                 self.assert_error(self.run_ticket(argv[0], str(path), *argv[1:]), 'Status:')
         self.assertEqual(self.read(path), text)
+
+
+STORIES_TEXT = """# Stories
+
+- AC-1: first criterion
+- AC-2: second criterion
+- AC-10: tenth criterion
+"""
+DECISIONS_TEXT = """# Decisions
+
+- D-1: first decision. Why: a reason.
+  Amended 2026-10-01: an older note.
+  Amended 2026-10-02: a newer note.
+- D-2: second decision. Why: another reason.
+"""
+AMEND_NOTE = 'AC-2 now also covers the retry'
+
+
+class AmendTest(TicketTestCase):
+    def unit_file(self, name, text):
+        path = self.root / '.anomaly' / 'feature' / name
+        write_text(path, text)
+        return path
+
+    def test_appends_a_dated_amended_line_to_a_ticket_file_with_the_date_of_the_cli_clock(self):
+        path = self.ticket_path()
+        code, out, err = self.run_ticket('amend', str(path), AMEND_NOTE)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(path), TICKET_TEXT + f'Amended 2026-10-04: {AMEND_NOTE}\n')
+
+    def test_after_an_ac_writes_the_line_right_below_that_ac_line_in_stories(self):
+        path = self.unit_file('stories.md', STORIES_TEXT)
+        code, out, err = self.run_ticket('amend', str(path), '--after', 'AC-1', AMEND_NOTE)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(path), STORIES_TEXT.replace(
+            '- AC-2:', f'Amended 2026-10-04: {AMEND_NOTE}\n- AC-2:'))
+
+    def test_an_ac_line_inside_a_fenced_block_is_an_example_and_is_not_the_target(self):
+        fenced = '```\n- AC-1: an example\n```\n'
+        path = self.unit_file('stories.md', STORIES_TEXT.replace('- AC-1:', fenced + '- AC-1:'))
+        code, out, err = self.run_ticket('amend', str(path), '--after', 'AC-1', AMEND_NOTE)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(path), STORIES_TEXT.replace(
+            '- AC-1: first criterion\n', f'{fenced}- AC-1: first criterion\nAmended 2026-10-04: {AMEND_NOTE}\n'))
+
+    def test_after_a_decision_writes_the_line_below_the_amended_lines_already_under_it(self):
+        path = self.unit_file('decisions.md', DECISIONS_TEXT)
+        code, out, err = self.run_ticket('amend', str(path), '--after', 'D-1', AMEND_NOTE)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(path), DECISIONS_TEXT.replace(
+            '- D-2:', f'  Amended 2026-10-04: {AMEND_NOTE}\n- D-2:'))
+
+    def test_after_a_decision_with_no_amended_line_indents_the_line_by_two_spaces(self):
+        path = self.unit_file('decisions.md', DECISIONS_TEXT)
+        code, out, err = self.run_ticket('amend', str(path), '--after', 'D-2', AMEND_NOTE)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(path), DECISIONS_TEXT + f'  Amended 2026-10-04: {AMEND_NOTE}\n')
+
+    def test_an_id_that_is_no_ac_or_decision_is_refused_and_the_file_is_unchanged(self):
+        path = self.unit_file('stories.md', STORIES_TEXT)
+        for bad in ('X-1', 'AC-', 'D1'):
+            with self.subTest(id=bad):
+                self.assert_error(self.run_ticket('amend', str(path), '--after', bad, AMEND_NOTE), bad)
+                self.assertEqual(path.read_bytes(), STORIES_TEXT.encode('utf-8'))
+
+    def test_an_id_that_is_not_in_the_file_is_refused_and_the_file_is_unchanged(self):
+        """`AC-1` is not found by the line of `AC-10`, nor `D-1` by `D-10`: an id matches whole."""
+        cases = (('stories.md', STORIES_TEXT.replace('- AC-1: first criterion\n', ''), 'AC-1'),
+                 ('stories.md', STORIES_TEXT, 'AC-3'),
+                 ('decisions.md', DECISIONS_TEXT.replace('D-1:', 'D-10:'), 'D-1'),
+                 ('decisions.md', DECISIONS_TEXT, 'D-9'))
+        for name, text, missing in cases:
+            with self.subTest(file=name, id=missing):
+                path = self.unit_file(name, text)
+                self.assert_error(self.run_ticket('amend', str(path), '--after', missing, AMEND_NOTE), missing)
+                self.assertEqual(path.read_bytes(), text.encode('utf-8'))
+
+    def test_a_text_that_fails_the_privacy_check_is_refused_and_the_file_is_unchanged(self):
+        stories = self.unit_file('stories.md', STORIES_TEXT)
+        ticket_file = self.ticket_path()
+        for path, text, extra in ((ticket_file, TICKET_TEXT, ()), (stories, STORIES_TEXT, ('--after', 'AC-1'))):
+            with self.subTest(file=path.name):
+                result = self.run_ticket('amend', str(path), *extra, 'ask kim.lee@example.com about it')
+                self.assert_error(result, 'email address')
+                self.assertEqual(path.read_bytes(), text.encode('utf-8'))
+
+    def test_a_text_with_a_line_break_is_refused_and_the_file_is_unchanged(self):
+        stories = self.unit_file('stories.md', STORIES_TEXT)
+        ticket_file = self.ticket_path()
+        for path, text, extra in ((ticket_file, TICKET_TEXT, ()), (stories, STORIES_TEXT, ('--after', 'AC-1'))):
+            for text_with_break in ('first\nStatus: done', 'first\r\nsecond'):
+                with self.subTest(file=path.name, text=text_with_break):
+                    result = self.run_ticket('amend', str(path), *extra, text_with_break)
+                    self.assert_error(result, 'line')
+                    self.assertEqual(path.read_bytes(), text.encode('utf-8'))
 
 
 class ReviewedVerifiedTest(TicketTestCase):
