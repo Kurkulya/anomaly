@@ -652,6 +652,16 @@ class CheckStoriesTest(unittest.TestCase):
                 code, out, err = check(owner)
                 self.assertEqual((code, err), (0, ''), out)
 
+    def test_an_adr_folder_outside_the_repo_falls_back_to_the_core_folder(self):
+        """ADR-0017's accepted risk: an absolute, `..`, `.` or URL value names no folder of the repo, so the
+        lookup uses the core folder `docs/adr`; a relative value is normalized (no slash, no `./`)."""
+        from anomaly_loop import check
+        for value, folder in (('/abs/adr', 'docs/adr'), ('../adr', 'docs/adr'), ('.', 'docs/adr'),
+                              ('https://wiki.example/adr', 'docs/adr'), ('docs/adr/', 'docs/adr'),
+                              ('./docs/adr', 'docs/adr'), ('decisions/', 'decisions')):
+            with self.subTest(value=value):
+                self.assertEqual(check.adr_folder_path(value), folder)
+
     def test_a_specify_line_without_the_ids_shape_is_an_error_naming_the_shape(self):
         self.put(log=GOOD_LOG + '2026-10-02 10:00 specify: ACs: AC-1, AC-2 claim check passed\n')
         self.assert_error(2, 'ACs: AC-1, AC-2, …;', file_name='log.md')

@@ -30,6 +30,7 @@ as a `note:` line. The ticket keeps no order between its lines, so `ticket red` 
 only the edits after the red commit it was written for.
 """
 import argparse
+import glob
 import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -166,16 +167,16 @@ def unit_folders(root, name):
 
 
 def adr_folder_path(adr_folder):
-    """The ADR folder as a repo-relative POSIX path with no trailing slash; '' when it has no path part, has
-    `..` or is absolute (then only the adr/ of a unit folder holds ADRs)."""
-    parts = relative_parts(adr_folder)
-    return PurePosixPath(*parts).as_posix() if parts else ''
+    """The ADR folder as a repo-relative POSIX path with no trailing slash. A value that names no folder of the
+    repo (no path part such as `.`, `..`, an absolute path or a URL) gives the core folder: an org that keeps
+    its ADRs outside the repo gets `docs/adr` (ADR-0017)."""
+    parts = () if '://' in adr_folder else relative_parts(adr_folder)
+    return PurePosixPath(*(parts or relative_parts(ADR_FOLDER_CORE))).as_posix()
 
 
 def adr_file_name(name, adr_folder):
     """True when `name` has the shape of an ADR file, `NNNN-*.md`, directly in the ADR folder."""
-    folder = adr_folder_path(adr_folder)
-    return bool(folder) and re.fullmatch(re.escape(folder) + r'/\d{4}-[^/]+\.md', name) is not None
+    return re.fullmatch(re.escape(adr_folder_path(adr_folder)) + r'/\d{4}-[^/]+\.md', name) is not None
 
 
 def owner_file_exists(root, name, adr_folder=ADR_FOLDER_CORE):
@@ -194,8 +195,7 @@ def owner_file_exists(root, name, adr_folder=ADR_FOLDER_CORE):
 def adr_exists(root, number, adr_folder):
     """True when `NNNN-*.md` for the ADR `number` is in the `adr_folder` or in the adr/ of a unit folder."""
     patterns = [pattern.format(number) for pattern in ADR_GLOBS]
-    if folder := adr_folder_path(adr_folder):
-        patterns.append(f'{folder}/{number}-*.md')
+    patterns.append(f'{glob.escape(adr_folder_path(adr_folder))}/{number}-*.md')
     return any(any(root.glob(pattern)) for pattern in patterns)
 
 
