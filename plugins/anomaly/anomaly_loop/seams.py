@@ -1,5 +1,4 @@
-"""seams: keep a seam ledger (`.anomaly/<work-unit>/seams.md`; the old `.scratch/<feature>/seams.md` is
-read the same way until the switch-over) true after each merge.
+"""seams: keep a seam ledger (`.anomaly/<work-unit>/seams.md`) true after each merge.
 
   prune   list, and rewrite, the ledger lines that name a file the merge renamed, deleted or reshaped
   add     append one line: `- <name> · <owner file> · replaces <old way> (ticket NN)`

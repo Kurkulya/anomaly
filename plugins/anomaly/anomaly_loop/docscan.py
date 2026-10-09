@@ -24,7 +24,7 @@ repository-relative `path:line`:
   nor is the word followed by `(<`. A key whose date is not a real date counts as no key. `todo-overdue`: a
   key with a real date before today, wherever it stands in the line.
 - `dead-path`: in a tracked `CLAUDE.md`, a path claim that is not live. It is live when it is at or under a unit
-  home folder (check.OWNER_HOME_DIRS: `.anomaly`, `.scratch`; local work units, so a clone has none), or exists
+  home folder (check.OWNER_HOME_DIRS: `.anomaly`; local work units, so a clone has none), or exists
   beside that file or at the repo root, or when git ignores it (an ignored folder, such as a local work-unit folder, exists
   in one checkout only, so it is live on or off disk), or when a tracked file or folder is the claim or ends
   with `/<claim>`. A claim is a backticked word with no

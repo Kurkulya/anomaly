@@ -37,7 +37,7 @@ import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import files, gitrepo, paths, ports, ticket
-from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
+from .constants import (KEY_LINE_CORE, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
                         TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
                         TICKET_STATUS_READY, TICKET_STATUS_WONTFIX)
 from .records import is_date
@@ -122,17 +122,16 @@ TODO_KEY = re.compile(r'TODO\([^(),]+, revisit (\d{4}-\d{2}-\d{2})\)')   # the d
 BACKTICKED = re.compile(r'`([^`]+)`')
 TICKET_REF = re.compile(r'\bticket (\d+)\b(?: (of|in) `([^`]+)`)?')   # (number, 'of' or 'in' or '', unit named after it or '')
 ADR_REF = re.compile(r'\bADR-(\d{4})\b')
-# The folders that hold the tickets of a unit, by the home folder of the unit: only the old `.scratch` layout
-# has `issues/`. A unit folder is `<root>/<one of these homes>/<name>/`.
-TICKET_FOLDERS = {'.anomaly': ('tickets',), '.scratch': ('tickets', 'issues')}
-OWNER_HOME_DIRS = tuple(TICKET_FOLDERS)
+# A unit folder is `<root>/<one of these homes>/<name>/` and holds its tickets in TICKETS_DIR.
+OWNER_HOME_DIRS = ('.anomaly',)
+TICKETS_DIR = 'tickets'
 ADR_FOLDER_CORE = ports.core_default('adr_folder')[0]   # the `adr_folder` port's core default
-ADR_GLOBS = ('.anomaly/*/adr/{}-*.md', '.scratch/*/adr/{}-*.md')   # the adr/ of every unit folder
+ADR_GLOBS = ('.anomaly/*/adr/{}-*.md',)   # the adr/ of every unit folder
 # A file path is an owner only when it is a ticket file or an ADR file, never any file of the checkout. An ADR
 # file in the `adr_folder` port's folder is matched by adr_file_name.
-OWNER_FILE = re.compile(r'(?:\.anomaly|\.scratch)/[^/]+/tickets/\d+-[^/]+\.md|\.scratch/[^/]+/issues/\d+-[^/]+\.md|'
+OWNER_FILE = re.compile(r'\.anomaly/[^/]+/tickets/\d+-[^/]+\.md|'
                         + re.escape(TICKET_ADHOC_DIR.as_posix()) + r'/[^/]+\.md|'
-                        r'(?:\.anomaly|\.scratch)/[^/]+/adr/\d{4}-[^/]+\.md')
+                        r'\.anomaly/[^/]+/adr/\d{4}-[^/]+\.md')
 
 
 def owner_value(line):
@@ -159,9 +158,8 @@ def relative_parts(name):
 
 
 def unit_folders(root, name):
-    """The existing unit folders `name` names: a bare name under `<root>/.anomaly/` and `<root>/.scratch/`, or
-    the path `.anomaly/<name>`, `.scratch/<name>`. `.anomaly/adhoc/` only stores adhoc tickets and is no
-    unit. A name the file system refuses (too long) names none."""
+    """The existing unit folders `name` names: a bare name under `<root>/.anomaly/`, or the path
+    `.anomaly/<name>`. `.anomaly/adhoc/` only stores adhoc tickets and is no unit. A name the file system refuses (too long) names none."""
     parts = relative_parts(name)
     if len(parts) == 1:
         candidates = [root / home / name for home in OWNER_HOME_DIRS]
@@ -213,13 +211,11 @@ def adr_exists(root, number, adr_folder):
 
 
 def ticket_exists(root, folder, number, unit):
-    """True when `tickets/NN-*.md` (or, in a `.scratch` unit, `issues/NN-*.md`) exists in the unit folder named
-    by `unit` (a name or path, as in unit_folders), or in the checked work-unit `folder` when `unit` is empty.
+    """True when `tickets/NN-*.md` exists in the unit folder named by `unit` (a name or path, as in unit_folders), or in the checked work-unit `folder` when `unit` is empty.
     NN is padded to the ticket number width."""
     units = unit_folders(root, unit.strip()) if unit else [folder]
     padded = number.zfill(TICKET_NUMBER_DIGITS)
-    return any(ticket.find_blocker(path / name, padded)
-               for path in units for name in TICKET_FOLDERS.get(path.parent.name, ('tickets',)))
+    return any(ticket.find_blocker(path / TICKETS_DIR, padded) for path in units)
 
 
 def owner_exists(owner, folder, adr_folder=ADR_FOLDER_CORE):
@@ -227,7 +223,7 @@ def owner_exists(owner, folder, adr_folder=ADR_FOLDER_CORE):
     something in the checkout (no git lookup): a unit folder other than the checked one (a unit is never its
     own owner, also when its bare name is the name of the checked one), the path of a ticket or ADR file,
     `ticket NN` or `ADR-NNNN` (in the `adr_folder`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md`
-    (or `issues/NN-*.md` in a `.scratch` unit) of the unit named by "of `unit`" right after it, else of the
+    of the unit named by "of `unit`" right after it, else of the
     checked work-unit folder; "in `unit`" names no ticket. A ticket never passes on its unit alone, and a
     backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR file. `<root>` is the
     grandparent of the work-unit folder. A bracketed text is a citation and names nothing."""
@@ -342,7 +338,7 @@ def stories(folder, adr_folder=ADR_FOLDER_CORE):
     where an ADR owner is looked up besides the adr/ of a unit folder. A missing
     stories.md is an error line; a missing decisions.md or log.md is empty (no decisions, no
     recorded ids). Sizes over 6 KB (stories.md) and 8 KB (decisions.md) only warn. A folder that is not
-    `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no owner lookup, since
+    `<root>/.anomaly/<unit>` gets one layout error and no owner lookup, since
     `<root>` is found from that layout."""
     folder = Path(folder)
     if not folder.is_dir():
@@ -350,7 +346,7 @@ def stories(folder, adr_folder=ADR_FOLDER_CORE):
     errors, warnings = [], []
     in_layout = folder.resolve().parent.name in OWNER_HOME_DIRS
     if not in_layout:
-        errors.append('folder: a work unit is a folder at <root>/.anomaly/<unit> or <root>/.scratch/<unit>; '
+        errors.append('folder: a work unit is a folder at <root>/.anomaly/<unit>; '
                       'this one is not, so its owners cannot be looked up (move the folder there)')
     stories_text = read_optional(folder / 'stories.md')
     decisions_text = read_optional(folder / 'decisions.md')
@@ -415,12 +411,6 @@ HYPOTHESES_MIN, HYPOTHESES_MAX = 3, 5
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
 
 
-def key_shape(key_line):
-    """The shape of the key line that `key_line` names; a `Jira:` line is still read in its place."""
-    shape = f'{key_line}: {KEY_VALUE_SHAPE}'
-    return shape if key_line == KEY_LINE_LEGACY else f'{shape}; a {KEY_LINE_LEGACY}: line is read too'
-
-
 def blocker_cycle(graph, start):
     """The path [start, ..., start] of a blocker cycle through `start`, or None. `graph` maps a ticket
     number to the numbers that block it."""
@@ -479,7 +469,7 @@ def key_errors(lines, keys):
 
 def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
     """Errors for one ticket file: the missing or wrong lines, an unresolved blocker, a line anchor.
-    The key line is the `key_line` line, or the `Jira:` line when the ticket has no such line.
+    The key line is the `key_line` line.
     Fills `graph` with the resolved blockers of the ticket, keyed by its number."""
     lines = ticket.split_lines(text)
     errors = [f'{name}:{number}: {message}'
@@ -495,7 +485,7 @@ def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
                 graph[number].append(blocker)
     errors += [f'{name}:{number}: {message}'
                for number, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
-                                                         (ticket.key_name(lines, key_line), key_shape(key_line))))]
+                                                         (key_line, f'{key_line}: {KEY_VALUE_SHAPE}')))]
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
         match = None if number - 1 in skip or D_LINE.match(body) else line_anchor(body)
@@ -573,7 +563,7 @@ def draft_warnings(text):
 def slice(folder, key_line=KEY_LINE_CORE):
     """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
     stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or key
-    line (the `key_line` line, or `Jira:`), a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
+    line (the `key_line` line), a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
     line anchor (fenced code blocks and copied `- D-n:` lines are not checked). A ticket over 5 KB only warns."""
     folder = Path(folder)
     if not folder.is_dir():
@@ -642,11 +632,11 @@ def register(commands, common):
                      'with no Source:, an Out of scope line with no — owner: marker, an owner after — owner:\n'
                      'that names a D-n outside brackets, an owner (an Out of scope line, or a D-n line with\n'
                      '— owner:) that is not in the checkout (a unit folder other than the checked one, ticket NN\n'
-                     'or ticket NN of `<unit>` (never "in"; issues/ only in .scratch),\n'
+                     'or ticket NN of `<unit>` (never "in"),\n'
                      'ADR-NNNN or a ticket or ADR file path; an ADR is looked up in the folder the adr_folder\n'
                      'port names, from the profile in --home, and in the adr/ of every unit folder)\n'
                      'and carries no TODO(<owner>, revisit YYYY-MM-DD) key with a real date, a work-unit folder\n'
-                     'that is not <root>/.anomaly/<unit> or <root>/.scratch/<unit> (one error, no owner lookup).\n'
+                     'that is not <root>/.anomaly/<unit> (one error, no owner lookup).\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
                      'exit 1 on any error, 0 otherwise; an error (a folder that is not there) is one\n'
                      'anomaly: line and exit 2.'))
@@ -657,7 +647,7 @@ def register(commands, common):
         help='exit 1 when the tickets of a work unit cannot be run by build',
         description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
                      'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or key line\n'
-                     '(the line the key_line port names, from the profile in --home; a Jira: line is read too),\n'
+                     '(the line the key_line port names, from the profile in --home),\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
                      'line anchor (not in a fenced block or a copied - D-n: line; a host:port after :// or @\n'
                      'is not one, a bare example.com:8080 is; a path right after @ such as @check.py:42, or in a\n'

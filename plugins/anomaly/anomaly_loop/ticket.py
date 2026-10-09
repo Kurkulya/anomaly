@@ -2,8 +2,7 @@
 writer of the dated `Amended` lines of planning files (stories.md, decisions.md).
 
 A ticket is a markdown file `.anomaly/<work-unit>/tickets/NN-<slug>.md` (or one file in
-`.anomaly/adhoc/`); until the switch-over the old `.scratch/<feature>/issues/NN-<slug>.md` is read
-the same way. Its state lives in header lines, each plain (`Status: x`) or bold
+`.anomaly/adhoc/`). Its state lives in header lines, each plain (`Status: x`) or bold
 (`**Status:** x`); both are read, and a rewritten line keeps its own shape.
 
   show        print the state lines; warn when `Blocked by:` is missing
@@ -31,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import files, gitrepo, paths, ports, privacy, records
-from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
+from .constants import (KEY_LINE_CORE, NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
                         TICKET_STATUS_DONE, TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
                         TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_STATUS_WONTFIX, TICKET_START_UNKNOWN,
                         TICKET_NUMBER_DIGITS, TICKET_TIME_FORMAT, TICKET_TITLE_MAX_CHARS)
@@ -39,10 +38,10 @@ from .files import RecordError
 from .records import require_one_line
 
 LINE_ORDER = ('Status', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed', 'Result')
-HEADER_KEYS = (KEY_LINE_CORE, KEY_LINE_LEGACY, 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
+HEADER_KEYS = (KEY_LINE_CORE, 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
 SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', KEY_LINE_CORE, 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
               'Red-changed')   # Base: the work unit's integration branch, which build reads here;
-                               # KEY_LINE_CORE marks the slot of the key line, shown under key_name()
+                               # KEY_LINE_CORE marks the slot of the key line, shown under the `key_line` name
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
 WAITS_FOR_PERSON = (TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_WONTFIX)   # the statuses only a person moves on
@@ -126,14 +125,6 @@ def values_of(lines, key):
     return tuple(pattern.match(lines[index][0]).group(2) for index in find_lines(lines, key))
 
 
-def key_name(lines, key_line=KEY_LINE_CORE):
-    """The name of the key line this ticket has: the `key_line` port's line, else the `Jira:` line that is
-    still read. A ticket with neither has the port's line."""
-    if not find_lines(lines, key_line) and find_lines(lines, KEY_LINE_LEGACY):
-        return KEY_LINE_LEGACY
-    return key_line
-
-
 def line_ending(lines):
     return next((end for _, end in lines if end), '\n')
 
@@ -199,7 +190,7 @@ class Ticket:
     blockers: tuple              # ticket numbers ('01', '02'); none for `None`
     blockers_unreadable: bool    # a Blocked by: value that is not `none` and holds no ticket number, or a
                                  # number outside the parentheses that is not two digits
-    key: str                     # the first word of the key line (key_name)
+    key: str                     # the first word of the `key_line` line
     covers: tuple                # AC ids, each once; none for `none`
     has_covers_line: bool
     tests: str
@@ -216,7 +207,7 @@ class Ticket:
 
 def parse(text, slug='', key_line=KEY_LINE_CORE):
     """Read a ticket's text into its fields. Ports the old ticket.mjs rules, and reads `Blocked by:`
-    plain as well as bold. The key is read from the `key_line` line (key_name)."""
+    plain as well as bold. The key is read from the `key_line` line."""
     lines = split_lines(text)
     skip = fenced(lines)
     bodies = [body for index, (body, _) in enumerate(lines) if index not in skip]
@@ -230,7 +221,7 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
     blockers = () if says_none else tuple(BLOCKER_NUMBER.findall(without_titles))
     other_numbers = not says_none and any(len(number) != TICKET_NUMBER_DIGITS
                                            for number in re.findall(r'\b[0-9]+\b', without_titles))
-    key = (value_of(lines, key_name(lines, key_line)) or '').split(None, 1)
+    key = (value_of(lines, key_line) or '').split(None, 1)
     covers = value_of(lines, 'Covers') or ''
     covered = () if re.match(r'none\b', covers, re.I) else tuple(dict.fromkeys(AC_ID.findall(covers)))
     red = value_of(lines, 'Red')
@@ -252,11 +243,11 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
 
 def state_lines(text, key_line=KEY_LINE_CORE):
     """The lines `ticket show` prints: each state line with bold markers dropped, in SHOWN_KEYS order;
-    the key line is shown under the name it has in the ticket (key_name)."""
+    the key line is shown under the name the `key_line` port gives it."""
     lines = split_lines(text)
     shown = []
     for key in SHOWN_KEYS:
-        key = key_name(lines, key_line) if key == KEY_LINE_CORE else key
+        key = key_line if key == KEY_LINE_CORE else key
         shown += [f'{key}: {value}'.rstrip() for value in values_of(lines, key)]
     return shown
 
@@ -520,7 +511,7 @@ def check_slug(slug):
 # ---------- the command line ----------
 
 def register(commands, common):
-    command = commands.add_parser('ticket', help='read and edit .anomaly tickets (and old .scratch ones): the one writer of ticket lines')
+    command = commands.add_parser('ticket', help='read and edit .anomaly tickets: the one writer of ticket lines')
     actions = command.add_subparsers(dest='action', required=True, metavar='action')
 
     def action(name, handler, help_text, file_help='path of the ticket file'):
