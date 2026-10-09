@@ -1027,14 +1027,16 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   (for example a ticket of a unit) is refused, so a unit never gets a body file beside its tickets.
 - **Title.** `<type>` is `feat` for a work unit. For an ad-hoc ticket it is the part of the current
   branch name before the first `/` when that is an Angular type (`fix/widget` gives `fix`), else
-  `feat`. `<key>` is the first key line a ticket of the unit has (the line the `key_line` port names;
-  `ticket.load(path, ports.key_line(home))`), else `no-ticket`. `<summary>` is the first heading of
+  `feat`. `<key>` of a unit is the key line (the line the `key_line` port names;
+  `ticket.load(path, ports.key_line(home))`) that every keyed ticket shares; when the keyed tickets
+  have different keys it is the unit folder name. A key of `no-ticket` counts as no key, and a unit
+  with no key at all gets `no-ticket`. `<summary>` is the first heading of
   the AC file or the title of the ad-hoc ticket. The summary is cut at a word so the whole title is
   under 70 characters; a summary with no word left after the cut is an error. The AC file is `spec.md`
   when the unit has one, else `stories.md` (ADR-0011), as in `frontier`.
 - **Work unit sections.** Each is left out when it has no facts, and they come in this order. Only the
   tickets with `Status: done` count as merged.
-  - Why: the `Why:` line of the AC file.
+  - Why: the `Why:` line of the AC file, its first letter a capital (the rest as written).
   - What changed: one line per merged ticket, from its title (the merge subjects hold only
     `merge <NN-slug>`, so they add nothing).
   - Acceptance criteria: `n of m covered`, where m is the AC lines of the AC file and n those that a
@@ -1053,7 +1055,7 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
     time. No commit id is printed. It is left out when no ticket is merged.
 - `--draft` writes a two-line body: the Why, then `Work in progress`. With no Why, the draft is the one
   line `Work in progress`. It works for an ad-hoc ticket too.
-- **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's `What to build:`) and What
+- **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's `What to build:`, with the same capital first letter) and What
   changed (the subjects of the commits on the current branch of `--repo` that are not on the repo base,
   oldest first, merge commits left out). The repo base is the one `ports` prints (`repo base`). Git is
   read only here; `--docs-gate` is refused, since the body has no Tested section.
@@ -1919,8 +1921,10 @@ the CLI.
   shared `seams.md` owner, medium or larger, at most one UI check), builds a prep branch for a
   shared helper (a `ticket adhoc` unit on `build`'s light path), and makes one plain worktree per
   ticket with `command install` run once in it; a branch or worktree left by a stopped wave is
-  reused. `conduct` itself runs the red step: one message with one `test_writer` dispatch per
-  ticket, then it commits each red test and runs `ticket red`. One more message sends one
+  reused. `conduct` itself runs the red step: it starts the build worklog of each ticket
+  (`worklog start <key> build --ticket <NN>`, so the later `worklog add` has a start time), sets it
+  in progress, then sends one message with one `test_writer` dispatch per ticket, commits each red
+  test and runs `ticket red`. One more message sends one
   `implementer` agent per ticket with absolute paths; the agents only implement. Then, one branch
   at a time, `conduct` removes the agent's worktree, switches its own worktree to the ticket
   branch and runs the close of `anomaly:build` (review, verify, CI check, merge) there, so the
