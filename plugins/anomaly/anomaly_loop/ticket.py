@@ -298,12 +298,13 @@ def is_blocked(parsed, unfinished):
     return bool(unfinished) or parsed.blockers_unreadable
 
 
-def open_blockers(path, parsed):
-    """One line per blocker that is not done: its number, its status and its file."""
+def blocker_lines(path, unfinished):
+    """One line per blocker that is not done (`unfinished`, from unfinished_blockers): its number, its status
+    and its file."""
     name = Path(path).name
     return [f'blocked by {number}: no ticket file {number}-*.md next to {name}' if found is None
             else f'blocked by {number}: {status} ({found.name})'
-            for number, status, found in unfinished_blockers(Path(path).parent, parsed)]
+            for number, status, found in unfinished]
 
 
 # ---------- writing ----------
@@ -576,10 +577,10 @@ def run_show(args, environ):
 def run_gate(args, environ):
     _, parsed = load(args.ticket)
     print_blocker_warnings(args.ticket, parsed)
-    problems = open_blockers(args.ticket, parsed)
-    for problem in problems:
-        print(problem)
-    return 1 if is_blocked(parsed, problems) else 0
+    unfinished = unfinished_blockers(Path(args.ticket).parent, parsed)
+    for line in blocker_lines(args.ticket, unfinished):
+        print(line)
+    return 1 if is_blocked(parsed, unfinished) else 0
 
 
 def run_set_status(args, environ):
