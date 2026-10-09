@@ -9,9 +9,12 @@ The keeper has one user and a few hundred notes. A database would be more machin
 ## Decision
 
 - Every note is one line of `notes.jsonl`, written by `append_note` in `notes/store.py`.
-- `list_notes` in `notes/store.py` returns the notes newest first.
 - Nothing else writes the file.
 
 ## Why
 
 One plain file is easy to back up, to read by eye and to repair by hand.
+
+## Consequences
+
+- `list_notes` in `notes/store.py` returns the notes newest first.
