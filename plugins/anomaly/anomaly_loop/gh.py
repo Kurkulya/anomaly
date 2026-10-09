@@ -20,6 +20,9 @@ class GhError(Exception):
     """gh is missing, failed, or answered something that is not usable."""
 
 
+ERROR = GhError                      # the error of this adapter, as `mr` names it for every MR adapter
+
+
 def run(*args, environ=None, input=None):
     """Run `gh <args>` in `environ` (a copy of it as the tool's environment; default: the process's) with `input`
     as its standard input; returns the completed process (text output, UTF-8). A non-zero exit is not an error

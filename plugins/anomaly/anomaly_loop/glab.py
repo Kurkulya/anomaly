@@ -39,6 +39,9 @@ class CiUnreachable(CiError):
     """The CI tool kept failing with network errors on every try."""
 
 
+ERROR = CiError                      # the error of this adapter, as `mr` names it for every MR adapter
+
+
 def executable(environ=None):
     """The glab program: on Windows the per-user install folder when glab is there, else `glab` on
     PATH. `environ` is the environment the tool runs in; the install is looked up in it too

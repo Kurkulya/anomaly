@@ -52,7 +52,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import NamedTuple
 
-from . import check, constants, files, frontier, gh, gitrepo, glab, paths, ports, privacy, records, ticket
+from . import check, constants, files, frontier, gitrepo, paths, ports, privacy, records, ticket
 from .constants import TICKET_ADHOC_DIR, TICKET_STATUS_DONE
 from .files import RecordError
 
@@ -63,8 +63,8 @@ ADHOC_STATE_SUFFIX = '.mr.md'            # after the name of an ad-hoc ticket, b
 MR_LABEL, REVIEWED_LABEL, VERIFIED_LABEL = 'MR', 'Reviewed', 'Verified'
 STATE_LABELS = (MR_LABEL, REVIEWED_LABEL, VERIFIED_LABEL)   # the lines of the MR file, in file order
 ADAPTERS = {name: import_module(f'.{name}', __package__) for name in constants.MR_ADAPTERS}   # the module of each adapter
-# (glab.py, gh.py): each has HOST and create_mr, update_mr, ready_mr, view_mr
-ADAPTER_ERRORS = (glab.CiError, gh.GhError)
+# (glab.py, gh.py): each has HOST, ERROR and create_mr, update_mr, ready_mr, view_mr
+ADAPTER_ERRORS = tuple(module.ERROR for module in ADAPTERS.values())
 TITLE_LINE = re.compile(r'Title:[ \t]*(\S.*?)[ \t]*')
 MR_NUMBER = re.compile(r'.*/(\d+)/?')    # the end of a link: .../pull/7 or .../-/merge_requests/7
 TITLE_MAX_CHARS = 70                     # a title is under this
