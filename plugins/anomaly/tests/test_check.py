@@ -388,6 +388,12 @@ class PrePushTest(CheckTestCase):
                 lines = self.problems(self.push_check(target))
                 self.assertEqual(sorted(line.split(':')[0] for line in lines), ['Reviewed', 'Verified'], lines)
 
+    def test_a_target_that_cannot_be_checked_is_an_error_not_a_failed_line(self):
+        for name, target, fragment in (('unit without mr.md', self.unit, 'mr.md'),
+                                       ('ticket outside the ad-hoc folder', self.ticket, 'ad-hoc ticket')):
+            with self.subTest(case=name):
+                assert_cli_error(self, self.push_check(target), fragment)
+
 
 GOOD_STORIES = """# A unit
 Sources: chat · Gathered: 2026-10-01
