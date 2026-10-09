@@ -819,16 +819,15 @@ class InterviewSkillTest(unittest.TestCase):
     """Workflow-plan ticket 08 (AC-16 to AC-18): the interview skill's text, by key tokens. The rule trace
     against the brief is run by review, not here."""
     SKILL = PLUGIN / 'skills' / 'interview' / 'SKILL.md'
-    SKILL_MAX_BYTES = 6 * 1024   # the brief's size; the all-skills cap is 8 KB
     ROOT = PLUGIN.parent.parent
 
     def text(self):
         self.assertTrue(self.SKILL.is_file(), 'skills/interview/SKILL.md is missing')
         return self.SKILL.read_text(encoding='utf-8')
 
-    def test_the_interview_skill_fits_in_6_KB_and_its_tools_are_the_cli_only(self):
+    def test_the_interview_skill_fits_in_8_KB_and_its_tools_are_the_cli_only(self):
         self.text()
-        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        self.assertLessEqual(self.SKILL.stat().st_size, SkillFileTest.SKILL_MAX_BYTES)
         fields = frontmatter.split(self.text())[0]
         self.assertEqual(fields.get('name'), 'interview')
         self.assertEqual(fields.get('allowed-tools'), constants.CLI_PATTERN)
@@ -854,9 +853,35 @@ class InterviewSkillTest(unittest.TestCase):
         self.assertRegex(lowered, r'(?:at most|up to|no more than|max(?:imum)?(?: of)?)\s*8\b')
         self.assertIn('Assumes:', text)
         self.assertIn('Recommend:', text)
-        self.assertIn('Conflicts: <D-n / ADR-n / none>', text)
+        self.assertRegex(text, r'Conflicts:\*{0,2} <D-n / ADR-n / none>')
         self.assertIn('defaults', lowered)
         self.assertRegex(lowered, r'low[- ]risk')
+        # Adhoc 2026-10-10-readable-interview-rounds, AC-1: a round is Markdown, not plain text.
+        section = text.split('\n## A round', 1)[1].split('\n## ', 1)[0]
+        fence = re.search(r'```\n(.*?)\n```', section, re.S)
+        self.assertIsNotNone(fence, 'the "A round" section has no fenced round template')
+        template = fence.group(1).splitlines()
+        with self.subTest('the rule says Markdown with bold labels, blank lines and list options'):
+            self.assertNotIn('Plain text, no emoji', section)
+            rule = [line for line in section.splitlines() if 'Markdown, no emoji' in line]
+            self.assertTrue(rule, 'no line says "Markdown, no emoji"')
+            self.assertRegex(rule[0].lower(), r'bold labels')
+            self.assertRegex(rule[0].lower(), r'blank line')
+            self.assertRegex(rule[0].lower(), r'options as a list')
+        with self.subTest('the template uses bold labels'):
+            for label in ('**Settled already:**', '**Facts pending:**',
+                          '**Taking these defaults unless you object:**', '**Q<n> — <title>**',
+                          '**Assumes:**', '**Recommend:**', '**Risk:**', '**Conflicts:**'):
+                self.assertIn(label, '\n'.join(template), f'the round template drops {label}')
+        with self.subTest('the template lists its options'):
+            self.assertTrue(any(re.match(r'- a\) ', line) for line in template),
+                            'the round template has no option list line starting "- a) "')
+        with self.subTest('the template has a blank line between its blocks'):
+            for label in ('**Facts pending:**', '**Taking these defaults unless you object:**', '**Q<n> — <title>**',
+                          '**Assumes:**', '**Recommend:**'):
+                at = next((i for i, line in enumerate(template) if line.startswith(label)), None)
+                self.assertIsNotNone(at, f'the round template has no line starting with {label}')
+                self.assertEqual(template[at - 1], '', f'no blank line before {label}')
 
     def test_it_writes_d_and_t_lines_with_a_source_after_each_round_and_edits_nothing_else(self):
         """AC-17."""
