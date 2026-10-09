@@ -19,9 +19,8 @@ You run the two checks of the docs audit that need judgment: a commit that decid
 
 ## Where the ADRs are
 
-1. The folder the `adr_folder` port names: the caller passes its value, and the core default is `docs/adr`.
-2. When that value is outside the repo (an absolute path, a `..` part, `.` or a URL), use `docs/adr` instead. This is the same fallback `docs scan` uses, so both read one folder.
-3. The `adr/` folder of every work unit (a unit folder under `.anomaly/` or `.scratch/`), also when git ignores it.
+1. The ADR folder the caller passes. The caller has already resolved it through the CLI, so read it as given and work out no other folder yourself.
+2. The `adr/` folder of every work unit (a unit folder under `.anomaly/` or `.scratch/`). Git may ignore these, so read them from the main checkout with Read and Glob, not with `git show`.
 
 Read only the files named `NNNN-*.md`. Skip an ADR whose status starts with `Superseded`.
 
@@ -33,13 +32,14 @@ Read only the files named `NNNN-*.md`. Skip an ADR whose status starts with `Sup
    - Search the ADRs (all folders above) for the commit's subject, its topic words and the names it touches. If an ADR records it, say nothing. If none does, report it.
    - The fix is the ADR to write: a title, the choice, and the reason as far as the commit message gives it. Do not invent a reason; write "reason not in the commit".
 5. ADR claims the code no longer matches (the code has drifted from the ADR).
-   - A claim is a named file, function, flag, setting or behaviour in the Decision part of an ADR (for example "`list_notes` returns the newest first").
+   - A claim is a named file, function, flag, setting or behaviour in the text of an ADR (for example "`load_config` reads `settings.toml`").
    - For each claim, find the code at the tip. A missing file or name, or a behaviour that differs, is a finding. A claim the code still holds is not.
    - When the range changes a file an ADR names, check that ADR first; then sample the rest. Say in a `fine:` line how many ADRs you read.
    - The fix is either the new text of the claim, or "write a new ADR that supersedes this one" when the code moved on by a real decision.
 
 ## Severity
 
+- Blocker: none; this agent never ranks a finding Blocker.
 - High: an ADR claim the code now contradicts, on a behaviour that other code or users rely on.
 - Medium: an unrecorded decision commit; an ADR claim about a name, place or detail that moved.
 - Low: a decision that is recorded only in part; wording.

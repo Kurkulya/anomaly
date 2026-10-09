@@ -45,7 +45,7 @@ class SkillFileTest(unittest.TestCase):
     REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window after each round (AC-53)
     DOCS_AGENT = PLUGIN / 'agents' / 'docs.md'
     REVIEW_SKILL = PLUGIN / 'skills' / 'review' / 'SKILL.md'
-    REVIEW_BRIEF =PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
+    REVIEW_BRIEF = PLUGIN /'skills' / 'review' / 'BRIEFS.md'
     BUILD_SKILL = PLUGIN / 'skills' / 'build' / 'SKILL.md'
     BUILD_UI_DOC = BUILD_SKILL.parent / 'UI-CHECK.md'
     BUILD_DOCS = {   # the build skill's extra docs, each loaded only when used (AC-42), and their budgets
@@ -115,19 +115,18 @@ class SkillFileTest(unittest.TestCase):
         self.assertTrue(any(re.search(r'ADR', line) and re.search(r'no longer match|drift|moved away', line, re.I)
                             for line in lines), 'ADR + drift on one line')
 
-    def test_the_docs_agent_reads_adrs_through_the_adr_folder_port_and_each_unit_adr_folder_not_a_fixed_docs_adr(self):
-        """AC-52 (Amended 2026-10-09): `ports` gives `port adr_folder`; a value outside the repo falls back to
-        docs/adr (check.adr_folder_path); each unit folder's adr/ counts too. A line that names docs/adr must
-        also say it is the port's default or the fallback."""
+    def test_the_docs_agent_reads_the_adr_folder_the_caller_passes_and_each_unit_adr_folder_and_states_no_fallback(self):
+        """AC-52 (Amended 2026-10-09, third line): the caller passes the ADR folder, already resolved through
+        the CLI, so check.adr_folder_path stays the one owner of the fallback; each unit folder's adr/ counts
+        too. No line names a fixed docs/adr or states a fallback rule."""
         lines = self.docs_agent_lines()
         text = '\n'.join(lines)
-        self.assertIn('adr_folder', text)
-        self.assertRegex(text, r'outside the repo')
+        self.assertRegex(text, r'(?i)ADR folder the caller passes')
         self.assertRegex(text, r'\bunit\b[^\n]*\badr/|\badr/[^\n]*\bunit\b')
         for line in lines:
-            if 'docs/adr' in line:
-                with self.subTest(line=line):
-                    self.assertTrue(re.search(r'adr_folder|default|fall ?back|outside the repo', line, re.I))
+            with self.subTest(line=line):
+                self.assertNotIn('docs/adr', line)
+                self.assertNotRegex(line, r'(?i)fall ?back|outside the repo|adr_folder')
 
     def test_the_rules_mode_doc_fits_in_2_KB_and_only_the_feature_agent_loads_it(self):
         self.assertLessEqual(self.RULES_DOC.stat().st_size, self.RULES_DOC_MAX_BYTES)

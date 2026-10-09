@@ -1128,7 +1128,7 @@ by a finding marked unverified; the feature fixture's F-D8). A decoy is correct 
 wrong: an `id` and `places` or a `rule`. Planted defects: code 10 (3 decoys; D9, a new check
 that repeats an existing one, and D10, a check deleted with no cover, plant the test rules),
 feature 8 (3 decoys), 5 in rules mode (2 decoys) and 1 in cumulative mode (F-D9, a
-characterization check that mocks internals; 1 decoy), security 10 (3 decoys), docs 2 (no decoy; see Reviewer agents).
+characterization check that mocks internals; 1 decoy), security 10 (3 decoys), docs 2 (1 decoy, an ADR claim the code still holds).
 
 Each findings file is the text of one run. A finding is one line in the shape every agent prints:
 
@@ -1267,9 +1267,9 @@ characters or fewer and a file of 6 KB or less.
 `anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
 does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
 checks 1 to 3 (overdue ADR revisit dates, unkeyed deferrals, dead paths in `CLAUDE.md`): `docs scan`
-owns them, and the agent may be passed that output. It reads ADRs from the folder of the `adr_folder`
-port (a value outside the repo gives `docs/adr`, as in `docs scan`) and from the `adr/` of each unit
-folder. For a commit finding, `<path>:<line>` is the first changed line of the main file the commit
+owns them, and the agent may be passed that output. It reads ADRs from the ADR folder
+the caller passes, already resolved through the CLI (so the folder fallback of `docs scan` has one
+owner), and from the `adr/` of each unit folder. For a commit finding, `<path>:<line>` is the first changed line of the main file the commit
 touched; for an ADR claim, the ADR line that holds the claim. The `docs/` fixture has no diff to
 review: its `commits.md` gives the two commit messages to use when you build the repository (first
 `base/`, then `change/`), and the agent reviews the whole history.
