@@ -26,6 +26,16 @@ class GhTest(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs['input'], 'line one\nline two')
         self.assertFalse(run.call_args.kwargs.get('shell'))
 
+    def test_a_body_is_replaced_through_the_rest_api_with_the_body_on_standard_input(self):
+        """gh 2.46 `gh pr edit` fails on the deprecated Projects classic query; the REST call does not use it."""
+        with mock.patch('subprocess.run', return_value=done('{}')) as run:
+            gh.update_mr('owner/repo', 7, 'line one\nline two')
+        command = run.call_args.args[0]
+        self.assertEqual(command, ['gh', 'api', '-X', 'PATCH', 'repos/owner/repo/pulls/7', '-F', 'body=@-'])
+        self.assertNotIn('line one\nline two', command)
+        self.assertEqual(run.call_args.kwargs['input'], 'line one\nline two')
+        self.assertFalse(run.call_args.kwargs.get('shell'))
+
     def test_a_failed_call_is_one_error_with_the_message_of_the_tool_and_is_not_repeated(self):
         with mock.patch('subprocess.run', return_value=done(code=1, stderr='HTTP 502: bad gateway')) as run:
             with self.assertRaisesRegex(gh.GhError, 'HTTP 502: bad gateway'):
