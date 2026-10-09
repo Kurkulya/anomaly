@@ -1846,8 +1846,9 @@ is read only at the ready gate. Its only pre-approved tool is the CLI.
 - **Pushes.** Before every push `check pre-push` must pass; on a stale head `ship` runs a delta review
   and one verify first, and records the head only when no Blocker or High is open and the verify is
   green. At a draft's first push there is no `mr.md` yet, so the check exits 2 and `ship` goes on. It
-  never pushes to the base branch, never forces, and does not retry a refused push. On the core
-  default or with no `origin` it skips the push, `ci watch`, `mr ready` and `mr show`.
+  never pushes to the base branch, never forces, and does not retry a refused push. With no
+  `origin` it skips the push and `ci watch`; on the `mr` core default or with no `origin`, it skips
+  `mr ready` and `mr show`.
 - **End.** One line each offering `/anomaly:observe` and `/clear`, and one `ship` work-unit line.
 
 ## Development
