@@ -160,10 +160,12 @@ def ready_mr(project, number, environ=None):
     if not isinstance(answer, dict):
         raise CiError('glab api answered the merge request change in an unknown shape')
     data = answer.get('data') if isinstance(answer.get('data'), dict) else {}
-    result = data.get('mergeRequestSetDraft') if isinstance(data.get('mergeRequestSetDraft'), dict) else {}
-    problems = answer.get('errors') or result.get('errors')
+    result = data.get('mergeRequestSetDraft')
+    problems = answer.get('errors') or (result.get('errors') if isinstance(result, dict) else None)
     if problems:
         raise CiError(f'glab api failed: {" ".join(json.dumps(problems).split())[:REASON_MAX_CHARS]}')
+    if not isinstance(result, dict):
+        raise CiError(f'glab api did not answer a result for merge request {number}: it may still be a draft')
 
 
 def view_mr(project, number, environ=None):

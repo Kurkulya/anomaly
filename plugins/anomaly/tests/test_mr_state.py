@@ -89,6 +89,20 @@ class EnvironmentTest(PutSetup, MrCase):
         self.assertEqual(self.gh.environs, [marker] * 4)
 
 
+class GlabReadyAnswerTest(PutSetup, MrCase):
+    ADAPTER = 'glab'
+
+    def test_a_ready_answer_with_no_mutation_result_is_an_error_not_a_success(self):
+        folder = self.unit(link=self.link)
+        for answer in ('{"data": {"mergeRequestSetDraft": null}}', '{"data": null}', '{}',
+                       '{"data": {"mergeRequestSetDraft": {"errors": ["not allowed"]}}}'):
+            with self.subTest(answer=answer):
+                self.glab.ready_answer = answer
+                code, out, err = self.run_mr('ready', folder)
+                self.assertEqual(code, 2, (out, err))
+                self.assertNotIn('ready for review', out)
+
+
 class TargetKindTest(PutSetup, AdhocCase):
     ADAPTER = 'gh'
 

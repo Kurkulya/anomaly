@@ -452,6 +452,7 @@ class FakeMrGlab(FakeGlab):
     def __init__(self):
         super().__init__()
         self.records, self.failure = [], None
+        self.ready_answer = json.dumps({'data': {'mergeRequestSetDraft': {'errors': []}}})   # the GraphQL answer
 
     def run(self, *args, environ=None, **kwargs):
         self.calls.append(args)
@@ -460,6 +461,8 @@ class FakeMrGlab(FakeGlab):
         if self.failure:
             return finished('glab', args, code=1, stderr=self.failure)
         kind = self.records[-1].kind
+        if kind == 'ready':
+            return finished('glab', args, self.ready_answer)
         if args[:1] == ('api',) or kind == 'show':
             return finished('glab', args, json.dumps({'web_url': LINKS['glab'], 'iid': 7, 'state': 'opened',
                                                       'draft': True}))
