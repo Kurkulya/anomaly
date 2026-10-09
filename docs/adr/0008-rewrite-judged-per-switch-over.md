@@ -1,6 +1,6 @@
 # ADR-0008: A rewritten skill is judged as one experiment at its switch-over
 
-Status: Accepted; partly superseded by ADR-0013 (the sessions compared, the metric and the five sessions of a switch-over) · Date: 2026-10-04 · Owner: VK · Revisit-by: 2026-12-01
+Status: Accepted; partly superseded by ADR-0013 (the sessions compared, the metric and the five sessions of a switch-over); the first rewrite ran no switch-over (2026-10-09, see Consequences) · Date: 2026-10-04 · Owner: VK · Revisit-by: 2026-12-01
 
 ## Context
 
@@ -51,3 +51,12 @@ After the first switch-over reaches a result.
 
 Design decisions 2026-10-04 (`.scratch/anomaly-workflow/decisions.md`, git-excluded); calibrate
 run 2026-10-04 (experiments on `implement`). Applies ADR-0002 to rewrites.
+
+## Consequences
+
+- 2026-10-09: when phases 1 to 3 had merged, the owner found no old build skill left in use to compare
+  against, so the first rewrite ran no switch-over and is not judged against the old skills. Its
+  upgrades stay unmeasured as a set; later fixes are judged one by one as ADR-0002 says. The
+  compatibility kept for the switch-over is dropped: the `.scratch` layout (ADR-0011) and the `Jira:`
+  key line (ADR-0017). The switch-over method itself (ADR-0013, `calibrate declare --skill`) stays for a
+  later rewrite.
