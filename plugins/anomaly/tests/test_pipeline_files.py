@@ -44,7 +44,7 @@ ALLOW_RULE = re.compile(r'"allow"\s*:|permissions\.allow')
 TOOL_RULE = re.compile(r'\b(?:Bash|Read|Edit|Write|WebFetch)\([^)\n]*\)')   # a rule in the text a user reads
 QUOTED = re.compile(r'"([^"\n]*)"|\'[^\'\n]*\'')   # a double-quoted span (group 1) or a single-quoted one, left to right
 PLACEHOLDER = re.compile(r'<[^<>\n]*>')
-FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|\bticket amend\s+\S+(?:\s+--after\s+\S+)?|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--from\s+(?:<[^>]*>|\S+)(?:\s+--[\w-]+\s+(?:<[^>]*>|\S+))*\s*$)")
+FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|\bticket amend\s+\S+(?:\s+--after\s+\S+)?|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--after\b|--from\s+(?:<[^>]*>|\S+)(?:\s+--[\w-]+\s+(?:<[^>]*>|\S+))*\s*$)")
 
 
 def pipeline_files(root):
@@ -466,7 +466,9 @@ class FreeTextTest(TempPluginTest):
                 f'{constants.CLI_COMMAND} ticket adhoc --from <draft file> <task>\n```\n'),
             'skills/slice/SKILL.md': (
                 f'```\n{constants.CLI_COMMAND} ticket amend <ticket> \'<text>\'\n'
-                f'{constants.CLI_COMMAND} ticket amend <ticket> <text>\n```\n')})
+                f'{constants.CLI_COMMAND} ticket amend <ticket> <text>\n'
+                f'{constants.CLI_COMMAND} ticket amend <ticket> --after AC-1 \'<text>\'\n'
+                f'{constants.CLI_COMMAND} ticket amend <ticket> --after AC-1 <text>\n```\n')})
         self.assertEqual(free_text_hits(self.root), [
             'skills/build/SKILL.md:2: free text not in single quotes',
             'skills/build/SKILL.md:2: placeholder in double quotes',
@@ -476,7 +478,8 @@ class FreeTextTest(TempPluginTest):
             'skills/build/SKILL.md:6: free text not in single quotes',
             'skills/build/SKILL.md:8: placeholder in double quotes',
             'skills/diagnose/SKILL.md:3: free text not in single quotes',
-            'skills/slice/SKILL.md:3: free text not in single quotes'])
+            'skills/slice/SKILL.md:3: free text not in single quotes',
+            'skills/slice/SKILL.md:5: free text not in single quotes'])
 
     def test_the_pipeline_files_of_this_plugin_put_free_text_in_single_quotes(self):
         self.assertEqual(free_text_hits(PLUGIN), [])
