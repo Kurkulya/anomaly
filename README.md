@@ -1062,8 +1062,8 @@ the gate lines.
 python plugins/anomaly/scripts/anomaly.py mr put      <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr ready    <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr show     <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
-python plugins/anomaly/scripts/anomaly.py mr reviewed <work unit folder | ad-hoc ticket> <ref> [--repo <dir>] [--home <dir>]
-python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder | ad-hoc ticket> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr reviewed <work unit folder> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
 ```
 
 - **Adapter.** The `mr` port (profile key `mr_tool`) names the tool: `glab` or `gh`
@@ -1084,13 +1084,18 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder | ad-hoc
   prints the title and the body (and a `note:` line on standard error) and calls nothing. `ready` and
   `show` are errors then, since there is no tool to call.
 - **ready, show.** Act on the MR of the `MR:` line; without one they say to run `mr put` first. `ready`
-  takes the draft state off. `show` prints the link, then `state: open|closed|merged`, with `, draft`
-  when it is a draft.
+  takes the draft state off. `show` prints the link, then `state: open|closed|merged|locked` (`locked`
+  is glab's), with `, draft` when it is a draft.
 - **The MR file.** `mr.md` in a work unit folder, or `<name>.mr.md` beside an ad-hoc ticket, holds the
   lines `MR: <link>`, `Reviewed: <sha>` and `Verified: <sha>`, in this order. Only the CLI writes it:
   `put` sets the first line, `reviewed` and `verified` set the other two, and each action keeps the
   others. `<ref>` is a commit id, branch or tag; the file holds the full commit id, and a ref that
   names no commit is an error that writes nothing.
+- **Targets.** A folder target must be a work unit folder: a folder in `.anomaly/` or `.scratch/`, not
+  `.anomaly/adhoc/`; any other folder is refused. `reviewed` and `verified` take a work unit folder
+  only: an ad-hoc ticket keeps its own `Reviewed:` and `Verified:` lines (`ticket reviewed`,
+  `ticket verified`), so its `<name>.mr.md` holds only the `MR:` line, and the two actions refuse it
+  and name those commands.
 
 ## Benchmark
 
@@ -1635,7 +1640,7 @@ python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
 python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        put|ready|show <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
-python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder | ad-hoc ticket> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).

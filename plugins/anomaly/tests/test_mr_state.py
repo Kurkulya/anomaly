@@ -1,7 +1,7 @@
 """Cases of `mr put`, `ready`, `show`, `reviewed` and `verified` that the acceptance tests of ticket 07 (test_mr.py)
 leave open: the order and the keeping of the lines of mr.md, and the errors that say what to run first. The fakes
 and the fixtures are those of test_mr.py; no test runs `gh` or `glab`."""
-from tests.fixtures import assert_cli_error
+from tests.fixtures import assert_cli_error, run_cli
 from tests.test_mr import (LINKS, MR_BODY_FILE, ORIGINS, UNIT, AdhocCase, MrCase, PutSetup, write_text)
 
 
@@ -54,6 +54,45 @@ class WhatToRunFirstTest(PutSetup, MrCase):
         for action in ('ready', 'show'):
             with self.subTest(action=action):
                 assert_cli_error(self, self.run_mr(action, folder), 'core default')
+        self.assert_no_tool_call()
+
+
+class UnusableStateTest(PutSetup, MrCase):
+    ADAPTER = 'gh'
+
+    def test_put_on_a_detached_head_is_an_error_and_calls_nothing(self):
+        self.repo.git('checkout', '-q', '--detach')
+        folder = self.unit()
+        assert_cli_error(self, self.run_mr('put', folder), 'detached')
+        self.assert_no_tool_call()
+        self.assertFalse((folder / 'mr.md').exists())
+
+    def test_an_mr_line_whose_link_has_no_number_is_an_error_for_show_ready_and_put(self):
+        folder = self.unit(link='https://example.com/x')
+        for action in ('show', 'ready', 'put'):
+            with self.subTest(action=action):
+                assert_cli_error(self, self.run_mr(action, folder), 'number')
+        self.assert_no_tool_call()
+
+
+class TargetKindTest(PutSetup, AdhocCase):
+    ADAPTER = 'gh'
+
+    def test_reviewed_and_verified_refuse_an_adhoc_ticket_and_name_the_ticket_command(self):
+        for action in ('reviewed', 'verified'):
+            with self.subTest(action=action):
+                assert_cli_error(self, self.run_mr(action, self.ticket, 'HEAD'), f'ticket {action}')
+        self.assertFalse(self.ticket.with_name(self.ticket.stem + '.mr.md').exists())
+
+    def test_a_folder_that_is_no_work_unit_folder_is_refused_by_every_action(self):
+        elsewhere = self.repo.root / 'docs' / UNIT
+        write_text(elsewhere / 'mr-body.md', MR_BODY_FILE)
+        for folder in (elsewhere, self.ticket.parent):
+            for action in ('body', 'put', 'ready', 'show', 'reviewed'):
+                with self.subTest(folder=folder.name, action=action):
+                    assert_cli_error(self, self.run_mr(action, folder, *(('HEAD',) if action == 'reviewed' else ())),
+                                     'work-unit folder')
+        self.assertFalse((elsewhere / 'mr.md').exists())
         self.assert_no_tool_call()
 
 

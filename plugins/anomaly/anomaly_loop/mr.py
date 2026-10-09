@@ -26,8 +26,8 @@ A body holds no commit id, no table row and no attribution line (`plain`). A bod
   mr put <work unit folder | ad-hoc ticket> [--repo <dir>]
   mr ready <work unit folder | ad-hoc ticket> [--repo <dir>]
   mr show <work unit folder | ad-hoc ticket> [--repo <dir>]
-  mr reviewed <work unit folder | ad-hoc ticket> <ref> [--repo <dir>]
-  mr verified <work unit folder | ad-hoc ticket> <ref> [--repo <dir>]
+  mr reviewed <work unit folder> <ref> [--repo <dir>]
+  mr verified <work unit folder> <ref> [--repo <dir>]
 
 `put` reads the title from the first `Title:` line of the body file and the body from the lines after the blank line,
 and opens a draft MR from the current branch to the base branch, or, when the MR file already has an `MR:` line,
@@ -41,7 +41,10 @@ errors then. Without an `MR:` line, `ready` and `show` say to run `mr put` first
 The MR file holds the lines `MR: <link>`, `Reviewed: <sha>` and `Verified: <sha>`, in this order, and is written
 only here: `put` sets the first, `reviewed` and `verified` set the others (the ref is resolved to a full commit id
 through git), and each leaves the other lines as they were. A work unit folder keeps it as `<folder>/mr.md`; an
-ad-hoc ticket as the sibling `<ticket name>.mr.md` in `.anomaly/adhoc/`.
+ad-hoc ticket as the sibling `<ticket name>.mr.md` in `.anomaly/adhoc/`, which holds only the `MR:` line: the gate
+lines of an ad-hoc ticket are its own `Reviewed:` and `Verified:` lines (`ticket reviewed`, `ticket verified`), so
+`reviewed` and `verified` refuse an ad-hoc ticket. A folder target must be a work unit folder (a folder in
+`.anomaly/` or `.scratch/`, not `adhoc`).
 """
 import re
 import sys
@@ -105,7 +108,8 @@ def register(commands, common):
     for label, handler in ((REVIEWED_LABEL, run_reviewed), (VERIFIED_LABEL, run_verified)):
         gate = actions.add_parser(label.lower(), parents=[common],
                                   help=f'write the {label}: line of mr.md with the full commit id of a ref')
-        gate.add_argument('target', help='a work-unit folder or an ad-hoc ticket file (as for put)')
+        gate.add_argument('target', help='a work-unit folder (an ad-hoc ticket has its own line: ticket reviewed, '
+                                         'ticket verified)')
         gate.add_argument('ref', help='a commit id, branch or tag; written as the full commit id')
         gate.add_argument('--repo', help=gitrepo.REPO_HELP)
         gate.set_defaults(handler=handler)
@@ -242,6 +246,9 @@ def locate(target):
     """The Target of a work unit folder or an ad-hoc ticket file (a file outside `.anomaly/adhoc/` is refused)."""
     target = Path(target)
     if target.is_dir():
+        if frontier.unit_home(target) not in check.OWNER_HOME_DIRS or target.resolve().name == TICKET_ADHOC_DIR.name:
+            raise RecordError(f'{target}: not a work-unit folder (a folder in {" or ".join(check.OWNER_HOME_DIRS)}, '
+                              f'not {TICKET_ADHOC_DIR.name})')
         return Target(True, target / BODY_FILE, target / STATE_FILE)
     if not target.is_file():
         raise RecordError(f'{target}: not a work-unit folder or a ticket file')
@@ -408,6 +415,9 @@ def run_show(args, environ):
 
 def write_gate(args, label):
     found = locate(args.target)
+    if not found.unit:
+        raise RecordError(f'{args.target}: mr {label.lower()} is for a work-unit folder; an ad-hoc ticket keeps its '
+                          f'own line: run `ticket {label.lower()} <ticket> <sha>`')
     sha = gitrepo.require_commit(gitrepo.repo_for(args.repo), args.ref)
     state = read_state(found.state)
     state[label] = sha
