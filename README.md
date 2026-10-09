@@ -1,11 +1,12 @@
 # anomaly
 
-A personal Claude Code plugin that measures, observes and calibrates how you work with
-Claude Code: the agent's environment, the workflow, cost and speed, and the loop itself.
-It never looks at the product work. The vocabulary is in [CONTEXT.md](CONTEXT.md).
+A personal Claude Code plugin with two halves. A **feedback loop** measures, observes and
+calibrates how you work with Claude Code: the agent's environment, the workflow, cost and speed,
+and the loop itself. A **pipeline** takes a piece of work from an idea to a reviewed, ready merge
+request. The vocabulary is in [CONTEXT.md](CONTEXT.md).
 
-The plugin keeps one backlog of **anomalies** (things that went wrong, and wins worth
-keeping) and runs a loop over it:
+The loop keeps one backlog of **anomalies** (things that went wrong, and wins worth keeping) and
+runs over it:
 
 1. **measure** turns your session transcripts into numbers, at no model cost.
 2. **observe** looks back over a session and records anomalies.
@@ -14,11 +15,28 @@ keeping) and runs a loop over it:
 
 Two more pieces sit around the loop. **assess** judges something new (a link, a text, an
 opinion) against the recorded evidence and keeps the verdict as an idea. A once-a-week
-**nudge** tells you in the first session of the week when the backlog needs you.
+**nudge** tells you in the first session of the week when the backlog needs you. The loop never
+reads the product work itself, only the transcripts and its own records.
+
+The pipeline runs one **work unit** (a feature, kept in `.anomaly/<work-unit>/`) through its
+**stages**:
+
+1. **interview** turns an idea into settled decisions by asking you in rounds.
+2. **specify** writes the stories and their acceptance criteria.
+3. **slice** cuts them into tickets that each say what they cover and what blocks them.
+4. **conduct** runs the tickets in waves through **build**, which takes one ticket from a red
+   acceptance test to a reviewed, verified merge into the work unit's integration branch.
+5. **ship** opens the one merge request as a draft and takes it to ready.
+
+**review** dispatches the reviewer agents at each gate, and **diagnose** finds a bug's root cause
+and leaves a light-path ticket for `build`. Each stage writes a work-unit line, so the loop can
+read what each piece of work cost, and each reviewer's accepted and rejected findings, so the loop
+can judge the reviewers. Org-specific tools and names come in through **ports** in a profile kept
+outside the plugin.
 
 This repo is a local marketplace (`anomaly-local`) that holds one plugin, `anomaly`.
 Read this file from top to bottom: install, configure, then the data, then each part of the
-loop in the order you meet it.
+loop in the order you meet it, then the pipeline, from tickets to the stage skills.
 
 ## Install
 
@@ -34,8 +52,9 @@ claude plugin install anomaly@anomaly-local
 
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
-listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review` and
-`anomaly:ship` beside them.
+listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review`,
+`anomaly:ship` and `anomaly:diagnose` beside them. `/anomaly:interview`, `/anomaly:specify` and
+`/anomaly:slice` are slash-only: they are not in that list, and you start them by typing them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
