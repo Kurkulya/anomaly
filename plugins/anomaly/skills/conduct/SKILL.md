@@ -47,13 +47,13 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 ## Run
 
 9. One chapter per wave (`mark_chapter`, if the tool exists). [O18] `log add` `wave <n>: <tickets>`, n = the `wave` lines of `log.md` plus 1. [O16] `anomaly:build` once per ticket in frontier order: the ticket's absolute path, `<wt>` as the checkout, "last review: no" (a one-ticket unit: "yes"). A stop of build stops the wave. [AC-21, C1, Amended 2026-10-09]
-10. With a remote, after each merge: a plain `git -C <wt> push -u origin <branch>`, never the base or the default branch, never forced; a refused push is printed, not retried. `check pre-push` is skipped: the gate lines are written at step 19. [O19, AC-23, Amended 2026-10-09] Then, with no `push` line in `log.md` yet: `anomaly:ship` for the draft MR, with `<wt>` as the checkout and the integration branch checked out. [O22, AC-25] Then `log add` `push <sha>`.
+10. With a remote, after each merge: a plain `git -C <wt> push -u origin <branch>`, never the base or the default branch, never forced; a refused push is printed, not retried. Then `log add` `push <sha>`. `check pre-push` is skipped: the gate lines are written at step 19. [O19, AC-23, Amended 2026-10-09] With no `push` line before this one in `log.md`: `anomaly:ship` for the draft MR, with `<wt>` as the checkout and the integration branch checked out. [O22, AC-25]
 11. `ci` port off its core default: after each push, `ci watch <tip> --max-min 30` in the background. Never hold the report for it; its result line becomes a later event. Exit 3: run it again; 5: run it again once, still 5: say so, go on; 1, 2 or 4: a red tip. [O20, O28, AC-23]
 
 ## Report
 
 12. `log add`: `merge <NN-slug>` and `stop <why>`, one line each; no cost numbers. [AC-28]
-13. A run's first wave: `worklog add` before `conduct status`, which exits 2 without it. [N6, AC-32] Print the five lines of `conduct status`. With an MR, one more line: `MR size: <n> changed lines`, n = insertions + deletions of `git -C <wt> diff --shortstat <base>...HEAD`, never a question; without one, nothing about size. [N2, N3, AC-29]
+13. `conduct status`; on its exit 2 "no lines for work unit" only: `worklog add`, then it again. [N6, AC-32] Print its five lines. With an MR, one more line: `MR size: <n> changed lines`, n = insertions + deletions of `git -C <wt> diff --shortstat <base>...HEAD`, never a question; without one, nothing about size. [N2, N3, AC-29]
 
 ## Go on or stop
 
@@ -69,4 +69,4 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 17. `anomaly:review` cumulative on `<base>...<branch>` in `<wt>`, "last review: yes". One ticket: skip. [O36c, AC-38]
 18. One fix branch off the tip (`branch` port, slug `<key>-fixes`), the `implementer` port: every fix, and every open Low and Nit whose fix needs no decision; list the others to the user. Merge `--no-ff`; the message goes through a scratchpad file and `-F`. [O38, N9, AC-39]
 19. One full `command verify` in `<wt>`, foreground; the `ui_check` port (`browse` model, the `app` lines) for UI ACs. With no Blocker or High open and green: `mr reviewed`, `mr verified` on the tip; else stop and report. [O39, AC-40]
-20. `anomaly:ship` for the ready gate, with the integration branch checked out in `<wt>`; hand it every proof that cannot run here as an accepted risk. This run wrote no `worklog add` yet: write it now. Stop: ship offers `/anomaly:observe`. [O41, N15, O42, AC-32, AC-41]
+20. `anomaly:ship` for the ready gate, with the integration branch checked out in `<wt>`; list every proof that cannot run here to the user in chat. This run wrote no `worklog add` yet: write it now. Stop: ship offers `/anomaly:observe`. [O41, N15, O42, AC-32, AC-41]
