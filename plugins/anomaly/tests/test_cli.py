@@ -43,6 +43,7 @@ class SkillFileTest(unittest.TestCase):
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
     REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window after each round (AC-53)
+    DOCS_AGENT = PLUGIN / 'agents' / 'docs.md'
     REVIEW_SKILL = PLUGIN / 'skills' / 'review' / 'SKILL.md'
     REVIEW_BRIEF = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
     BUILD_SKILL = PLUGIN / 'skills' / 'build' / 'SKILL.md'
@@ -80,8 +81,10 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_the_core_reviewers_and_the_plan_reviewer_read_only_and_with_no_pinned_model(self):
-        self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), lens.PLAN_LENS)))   # plan: the plan-gate reviewer, outside the core lenses
+    def test_the_agents_are_the_core_reviewers_the_plan_reviewer_and_the_docs_agent_read_only_and_with_no_pinned_model(self):
+        """AC-52: the docs agent is the fifth file; the size, description and tools checks run over every agent,
+        so they cover it once the file exists."""
+        self.assertEqual({path.stem for path in self.agents()}, {*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem})   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
             with self.subTest(agent=path.stem):
@@ -89,6 +92,41 @@ class SkillFileTest(unittest.TestCase):
                 self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')],
                                  ['Read', 'Grep', 'Glob', 'Bash'])
                 self.assertNotIn('model', fields)
+
+    def docs_agent_lines(self):
+        """The docs agent's text as lines; fails while the file is missing."""
+        self.assertTrue(self.DOCS_AGENT.is_file(), self.DOCS_AGENT.relative_to(PLUGIN).as_posix())
+        return self.DOCS_AGENT.read_text(encoding='utf-8').splitlines()
+
+    def test_the_docs_agent_names_the_finding_line_shape_the_other_agents_print(self):
+        """AC-52: the shape line of code, feature and plan (security adds a label field, so it is not the model)."""
+        shape = (f'- [<{"|".join(constants.FINDING_SEVERITIES)}>] <path>:<line> — <problem> — fix: <fix> '
+                 f'— <{"|".join(constants.FINDING_STATES)}>')
+        self.assertIn(shape, self.docs_agent_lines())
+        for name in ('code', 'feature', 'plan'):
+            with self.subTest(agent=name):
+                self.assertIn(shape, (PLUGIN / 'agents' / f'{name}.md').read_text(encoding='utf-8').splitlines())
+
+    def test_the_docs_agent_names_both_checks_the_unrecorded_decision_commit_and_the_drifted_adr_claim(self):
+        """AC-52: one line each, so a check named only in passing does not count."""
+        lines = self.docs_agent_lines()
+        self.assertTrue(any(re.search(r'commit', line, re.I) and re.search(r'decision', line, re.I)
+                            and re.search(r'ADR', line) for line in lines), 'commit + decision + ADR on one line')
+        self.assertTrue(any(re.search(r'ADR', line) and re.search(r'no longer match|drift|moved away', line, re.I)
+                            for line in lines), 'ADR + drift on one line')
+
+    def test_the_docs_agent_reads_the_adr_folder_the_caller_passes_and_each_unit_adr_folder_and_states_no_fallback(self):
+        """AC-52 (Amended 2026-10-09, third line): the caller passes the ADR folder, already resolved through
+        the CLI, so check.adr_folder_path stays the one owner of the fallback; each unit folder's adr/ counts
+        too. No line names a fixed docs/adr or states a fallback rule."""
+        lines = self.docs_agent_lines()
+        text = '\n'.join(lines)
+        self.assertRegex(text, r'(?i)ADR folder the caller passes')
+        self.assertRegex(text, r'\bunit\b[^\n]*\badr/|\badr/[^\n]*\bunit\b')
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertNotIn('docs/adr', line)
+                self.assertNotRegex(line, r'(?i)fall ?back|outside the repo|adr_folder')
 
     def test_the_rules_mode_doc_fits_in_2_KB_and_only_the_feature_agent_loads_it(self):
         self.assertLessEqual(self.RULES_DOC.stat().st_size, self.RULES_DOC_MAX_BYTES)

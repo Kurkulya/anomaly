@@ -1100,7 +1100,7 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [
 ## Benchmark
 
 Each reviewer agent has one small seeded-defect fixture under `plugins/anomaly/tests/bench/`
-(`code/`, `feature/`, `security/`). A reviewer change is judged by running the agent on the
+(`code/`, `feature/`, `security/`, and `docs/` for the docs agent). A reviewer change is judged by running the agent on the
 fixture by hand and scoring what it printed with `bench score`; it needs no home and no profile.
 
 ```
@@ -1128,7 +1128,7 @@ by a finding marked unverified; the feature fixture's F-D8). A decoy is correct 
 wrong: an `id` and `places` or a `rule`. Planted defects: code 10 (3 decoys; D9, a new check
 that repeats an existing one, and D10, a check deleted with no cover, plant the test rules),
 feature 8 (3 decoys), 5 in rules mode (2 decoys) and 1 in cumulative mode (F-D9, a
-characterization check that mocks internals; 1 decoy), security 10 (3 decoys).
+characterization check that mocks internals; 1 decoy), security 10 (3 decoys), docs 2 (1 decoy, an ADR claim the code still holds).
 
 Each findings file is the text of one run. A finding is one line in the shape every agent prints:
 
@@ -1251,8 +1251,8 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships four read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones and `anomaly:plan`, the planning
-gate's. Only the `review` skill dispatches them, and it passes the model: no agent file pins
+The plugin ships five read-only agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
+gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model: no agent file pins
 one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
 characters or fewer and a file of 6 KB or less.
 
@@ -1262,6 +1262,17 @@ characters or fewer and a file of 6 KB or less.
 | `anomaly:feature` | the diff does what its ticket or spec asks and no more: the AC coverage table, scope, visible changes, docs drift, deferral targets, claims against their sources, known items; in cumulative mode a keep, rewrite or delete verdict per characterization test file | ticket, delta, cumulative, rules (loads `skills/review/rules-mode.md`, 2 KB or less, in that mode only) |
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
 | `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
+| `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
+
+`anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
+does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
+checks 1 to 3 (overdue ADR revisit dates, unkeyed deferrals, dead paths in `CLAUDE.md`): `docs scan`
+owns them, and the agent may be passed that output. It reads ADRs from the ADR folder
+the caller passes, already resolved through the CLI (so the folder fallback of `docs scan` has one
+owner), and from the `adr/` of each unit folder. For a commit finding, `<path>:<line>` is the first changed line of the main file the commit
+touched; for an ADR claim, the ADR line that holds the claim. The `docs/` fixture has no diff to
+review: its `commits.md` gives the two commit messages to use when you build the repository (first
+`base/`, then `change/`), and the agent reviews the whole history.
 
 Each agent prints one finding per line in the shape above, with the fix always after ` — fix: `
 and nothing after the closing `observed` or `unverified`; then a `fine: <class> — ...` line for
