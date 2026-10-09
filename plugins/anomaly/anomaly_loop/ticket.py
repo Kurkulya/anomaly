@@ -28,17 +28,18 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import files, gitrepo, privacy, records
-from .constants import (NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
+from . import files, gitrepo, paths, ports, privacy, records
+from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, NO_START_WARNING, TICKET_ADHOC_DIR,TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
                         TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_START_UNKNOWN,
                         TICKET_NUMBER_DIGITS, TICKET_TIME_FORMAT, TICKET_TITLE_MAX_CHARS)
 from .files import RecordError
 from .records import require_one_line
 
 LINE_ORDER = ('Status', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed', 'Result')
-HEADER_KEYS = ('Jira', 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
-SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', 'Jira', 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
-              'Red-changed')   # Base: the work unit's integration branch, which build reads here
+HEADER_KEYS = (KEY_LINE_CORE, KEY_LINE_LEGACY, 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
+SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', KEY_LINE_CORE, 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
+              'Red-changed')   # Base: the work unit's integration branch, which build reads here;
+                               # KEY_LINE_CORE marks the slot of the key line, shown under key_name()
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
 BOM = chr(0xFEFF)   # a byte order mark; written as a code point so the file holds no invisible character
@@ -115,6 +116,14 @@ def value_of(lines, key):
 def values_of(lines, key):
     pattern = label(key)
     return tuple(pattern.match(lines[index][0]).group(2) for index in find_lines(lines, key))
+
+
+def key_name(lines, key_line=KEY_LINE_CORE):
+    """The name of the key line this ticket has: the `key_line` port's line, else the `Jira:` line that is
+    still read. A ticket with neither has the port's line."""
+    if not find_lines(lines, key_line) and find_lines(lines, KEY_LINE_LEGACY):
+        return KEY_LINE_LEGACY
+    return key_line
 
 
 def line_ending(lines):
@@ -197,9 +206,9 @@ class Ticket:
     open: str                    # the text after `Open:` or `Open (Low):` on the Result line
 
 
-def parse(text, slug=''):
+def parse(text, slug='', key_line=KEY_LINE_CORE):
     """Read a ticket's text into its fields. Ports the old ticket.mjs rules, and reads `Blocked by:`
-    plain as well as bold."""
+    plain as well as bold. The key is read from the `key_line` line (key_name)."""
     lines = split_lines(text)
     skip = fenced(lines)
     bodies = [body for index, (body, _) in enumerate(lines) if index not in skip]
@@ -213,7 +222,7 @@ def parse(text, slug=''):
     blockers = () if says_none else tuple(BLOCKER_NUMBER.findall(without_titles))
     other_numbers = not says_none and any(len(number) != TICKET_NUMBER_DIGITS
                                            for number in re.findall(r'\b[0-9]+\b', without_titles))
-    jira = (value_of(lines, 'Jira') or '').split(None, 1)
+    jira = (value_of(lines, key_name(lines, key_line)) or '').split(None, 1)
     covers = value_of(lines, 'Covers') or ''
     covered = () if re.match(r'none\b', covers, re.I) else tuple(dict.fromkeys(AC_ID.findall(covers)))
     red = value_of(lines, 'Red')
@@ -233,19 +242,21 @@ def parse(text, slug=''):
         has_result_line=result is not None, open=open_items.group(1) if open_items else '')
 
 
-def state_lines(text):
-    """The lines `ticket show` prints: each state line with bold markers dropped, in SHOWN_KEYS order."""
+def state_lines(text, key_line=KEY_LINE_CORE):
+    """The lines `ticket show` prints: each state line with bold markers dropped, in SHOWN_KEYS order;
+    the key line is shown under the name it has in the ticket (key_name)."""
     lines = split_lines(text)
     shown = []
     for key in SHOWN_KEYS:
+        key = key_name(lines, key_line) if key == KEY_LINE_CORE else key
         shown += [f'{key}: {value}'.rstrip() for value in values_of(lines, key)]
     return shown
 
 
-def load(path):
+def load(path, key_line=KEY_LINE_CORE):
     """(text, Ticket) of a ticket file, read as bytes so no line ending is translated."""
     text = read_text(path)
-    return text, parse(text, slug=Path(path).stem)
+    return text, parse(text, slug=Path(path).stem, key_line=key_line)
 
 
 def read_text(path, what='ticket'):
@@ -504,8 +515,9 @@ def print_blocker_warnings(path, parsed):
 
 
 def run_show(args, environ):
-    text, parsed = load(args.ticket)
-    for line in state_lines(text):
+    key_line = ports.key_line(paths.resolve_home(args.home, environ))
+    text, parsed = load(args.ticket, key_line)
+    for line in state_lines(text, key_line):
         print(line)
     print_blocker_warnings(args.ticket, parsed)
     return 0

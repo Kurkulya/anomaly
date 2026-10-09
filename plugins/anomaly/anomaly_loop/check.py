@@ -33,8 +33,8 @@ import argparse
 import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from . import files, gitrepo, ticket
-from .constants import (TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
+from . import files, gitrepo, paths, ports, ticket
+from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, TICKET_ADHOC_DIR,TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
                         TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
                         TICKET_STATUS_READY, TICKET_STATUS_WONTFIX)
 from .records import is_date
@@ -357,7 +357,7 @@ STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
 COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
-JIRA_SHAPE = 'Jira: <key> | no-ticket'
+KEY_VALUE_SHAPE = '<key> | no-ticket'   # the value of the key line, whatever the line is called
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
 REPRO_SHAPE = 'Repro: <command>'
 HYPOTHESES_SHAPE = '1. <hypothesis>: confirmed | refuted, probe <output>'
@@ -367,6 +367,12 @@ RESULT_WORD = re.compile(r':\s*(?:confirmed|refuted)\b', re.IGNORECASE)
 PROBE_WORD = re.compile(r'\bprobe\b', re.IGNORECASE)
 HYPOTHESES_MIN, HYPOTHESES_MAX = 3, 5
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
+
+
+def key_shape(key_line):
+    """The shape of the key line that `key_line` names; a `Jira:` line is still read in its place."""
+    shape = f'{key_line}: {KEY_VALUE_SHAPE}'
+    return shape if key_line == KEY_LINE_LEGACY else f'{shape}; a {KEY_LINE_LEGACY}: line is read too'
 
 
 def blocker_cycle(graph, start):
@@ -425,8 +431,9 @@ def key_errors(lines, keys):
     return errors
 
 
-def ticket_errors(name, text, parsed, folder, graph):
+def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
     """Errors for one ticket file: the missing or wrong lines, an unresolved blocker, a line anchor.
+    The key line is the `key_line` line, or the `Jira:` line when the ticket has no such line.
     Fills `graph` with the resolved blockers of the ticket, keyed by its number."""
     lines = ticket.split_lines(text)
     errors = [f'{name}:{number}: {message}'
@@ -442,7 +449,7 @@ def ticket_errors(name, text, parsed, folder, graph):
                 graph[number].append(blocker)
     errors += [f'{name}:{number}: {message}'
                for number, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
-                                                         ('Jira', JIRA_SHAPE)))]
+                                                         (ticket.key_name(lines, key_line), key_shape(key_line))))]
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
         match = None if number - 1 in skip or D_LINE.match(body) else line_anchor(body)
@@ -517,16 +524,16 @@ def draft_warnings(text):
     return []
 
 
-def slice(folder):
+def slice(folder, key_line=KEY_LINE_CORE):
     """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
-    stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or Jira:
-    line, a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
+    stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or key
+    line (the `key_line` line, or `Jira:`), a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
     line anchor (fenced code blocks and copied `- D-n:` lines are not checked). A ticket over 5 KB only warns."""
     folder = Path(folder)
     if not folder.is_dir():
         raise files.RecordError(f'{folder}: not a folder')
     tickets_dir = folder / 'tickets'
-    loaded = [(f'tickets/{path.name}', *ticket.load(path))
+    loaded = [(f'tickets/{path.name}', *ticket.load(path, key_line))
               for path in sorted(tickets_dir.glob('*.md')) if TICKET_NUMBER.match(path.name)]
     errors, warnings, graph, covered = [], [], {}, set()
     stories_text = read_optional(folder / 'stories.md')
@@ -537,7 +544,7 @@ def slice(folder):
         errors.extend(f'stories.md:{number}: {ac} is in no ticket\'s Covers: line ({COVERS_SHAPE})'
                       for ac, number in ac_ids(stories_text)[0].items() if ac not in covered)
     for name, text, parsed in loaded:
-        errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph))
+        errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph, key_line))
         if len(text.encode('utf-8')) > SLICE_WARN_BYTES:
             warnings.append(f'{name}: over 5 KB; consider splitting the ticket')
     for name, text, parsed in loaded:
@@ -590,7 +597,8 @@ def register(commands, common):
         'slice', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
         help='exit 1 when the tickets of a work unit cannot be run by build',
         description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
-                     'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
+                     'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or key line\n'
+                     '(the line the key_line port names, from the profile in --home; a Jira: line is read too),\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
                      'line anchor (not in a fenced block or a copied - D-n: line; a host:port after :// or @\n'
                      'is not one, a bare example.com:8080 is; a path right after @ such as @check.py:42, or in a\n'
@@ -620,7 +628,8 @@ def run_stories(args, environ):
 
 
 def run_slice(args, environ):
-    return print_check('slice', *slice(args.folder), args.folder)
+    key_line = ports.key_line(paths.resolve_home(args.home, environ))
+    return print_check('slice', *slice(args.folder, key_line), args.folder)
 
 
 def run_pre_merge(args, environ):
