@@ -6,7 +6,7 @@ allowed-tools: Bash(python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" *)
 
 # conduct
 
-Explicit request only. [AC-15] One work unit = one branch = one MR, none per ticket. [O2] State lives in ticket files and git: resume from them. [O1] The tracker is read-only. [O46] A user change to a ticket that is not done is a `ticket amend`; a changed AC or decision: `ticket amend <unit>/stories.md --after AC-n '<text>'`, or `decisions.md --after D-n`, never a hand edit. [O51, N5]
+Explicit request only. [AC-15] One work unit = one branch = one MR, none per ticket. [O2] State lives in ticket files and git: resume from them. [O1] The tracker is read-only. [O46] A user change to a ticket that is not done is a `ticket amend`; a changed AC or decision: `ticket amend` with `--after` on `<unit>/stories.md` or `<unit>/decisions.md`, no hand edit. [O51, N5]
 
 `<unit>`: the unit folder by absolute path in the main checkout (`.anomaly/<unit>/`, or `.scratch/<feature>/`); it is not in the worktree. `<main>`: the main checkout. `<wt>`: the integration worktree.
 
@@ -21,6 +21,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" frontier <unit>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket show <ticket> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket gate <ticket>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket amend <ticket> '<claim and what is true now>'
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket amend <file> --after <AC-n> '<text>'
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" log add <unit> --stage conduct '<event>'
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ci watch <tip> --max-min 30 --home '${user_config.home}' --repo <wt>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <key> --stage conduct --session ${CLAUDE_SESSION_ID} --docs <unit> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
@@ -56,7 +57,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 
 ## Go on or stop
 
-14. A sequential wave with no open decision and a tip that is not red: next wave. Stop for a parallel pick, a scope change, a red tip, the ready gate. At a stop, offer the next steps as buttons if a question tool exists, else as text. [C2] While the user decides, prepare the next claim check. [N1, O44, O43, AC-30] Every stop of a run (a blocker, an `anomaly:` line, a red tip, a scope change, a failed verify) first writes `worklog add` if this run wrote none. [AC-32]
+14. A sequential wave with no open decision and a tip that is not red: next wave. Stop for a parallel pick, a scope change, a red tip, the ready gate. At a stop, offer the next steps as buttons if a question tool exists, else as text. [C2, Amended 2026-10-09] While the user decides, prepare the next claim check. [N1, O44, O43, AC-30] Every stop of a run (a blocker, an `anomaly:` line, a red tip, a scope change, a failed verify) first writes `worklog add` if this run wrote none. [AC-32]
 15. Under 200k tokens of context: same window. Past it: stop after the report and offer a fresh session. [N13, L4, AC-31]
 
 ## Chip mode
