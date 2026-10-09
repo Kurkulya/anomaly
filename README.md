@@ -942,23 +942,25 @@ python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
 
 - It reads the numbered ticket files (`NN-*.md`) of `tickets/`, or of `issues/` in an old `.scratch`
   unit, and decides "every blocker is done" with the rule `ticket gate` uses (`ticket.unfinished_blockers`
-  and `ticket.is_blocked`), so a missing blocker file and an unreadable `Blocked by:` value count as
-  not done in both commands.
+  and `ticket.is_blocked`), so a blocker that is not `done` and an unreadable `Blocked by:` value (for
+  example `TBD`) make a ticket blocked in both commands. A blocker with no ticket file is also not
+  done, but `frontier` reports it as an error (see below).
 - A **startable** ticket is not `done`, not `in-progress`, and has every blocker `done`. It is one
   line, `<ticket>: <status>`, in ticket order. An `in-progress` ticket is one line too, `<ticket>: in
-  progress`; it is neither startable nor blocked, so a ticket that waits for it is not printed. A
-  `Blocked by:` of `none` or `None` is no blocker.
-- With no startable ticket and at least one open ticket that is neither `done` nor `in-progress`,
-  `frontier` prints each in-progress ticket and each waiting ticket with its unfinished blockers
-  (`<ticket>: blocked by <NN> (<status>)`), and exits 1. With only in-progress tickets left it lists
-  them and exits 0. With every ticket `done` it prints one line that says the unit is finished and
-  exits 0. A work unit with no ticket file is an error.
+  progress`; it is neither startable nor blocked, so a ticket that waits for it is not printed while
+  another ticket is startable. A `Blocked by:` of `none` or `None` is no blocker.
+- With no startable ticket, `frontier` prints each in-progress ticket and each waiting ticket with
+  its unfinished blockers (`<ticket>: blocked by <NN> (<status>)`). It exits 1 only when nothing is
+  in progress and at least one open ticket waits; while a ticket is in progress it exits 0, so
+  `conduct` can offer to resume it. With every ticket `done` it prints one line that says the unit
+  is finished and exits 0. A work unit with no ticket file is an error (exit 2).
 - A ticket that is not `done` and has no `Blocked by:` line, or names a blocker number with no
   ticket file, is an error: one `anomaly:` line names each such ticket, nothing else is printed, and
   the exit code is 2.
-- After the ticket lines, one `warning:` line names each AC of the unit's `stories.md` (`spec.md` in
-  an old `.scratch` unit) that no ticket's `Covers:` names. The AC lines are read as `check stories`
-  reads them (`- AC-n:`). A missing stories file is one `warning:` line, not an error.
+- After the ticket lines, one `warning:` line names each AC of the unit's AC file that no ticket's
+  `Covers:` names. The file is `spec.md` when the unit has one, else `stories.md` (ADR-0011); the AC
+  lines are read as `check stories` reads them (`- AC-n:`), and the uncovered ACs are found by the
+  same function as in `check slice`. A unit with neither file gets one `warning:` line, not an error.
 
 ## Benchmark
 
