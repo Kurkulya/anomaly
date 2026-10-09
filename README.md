@@ -1011,16 +1011,18 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
 
 - The file starts with `Title: <type>(<key>): <summary>` and a blank line, then the body in markdown
   with `## <Section>` headings. A work unit folder gives `<folder>/mr-body.md`; an ad-hoc ticket gives
-  the sibling file `.anomaly/adhoc/<date>-<slug>.mr-body.md`.
+  the sibling file `.anomaly/adhoc/<date>-<slug>.mr-body.md`. A ticket file outside `.anomaly/adhoc/`
+  (for example a ticket of a unit) is refused, so a unit never gets a body file beside its tickets.
 - **Title.** `<type>` is `feat` for a work unit. For an ad-hoc ticket it is the part of the current
   branch name before the first `/` when that is an Angular type (`fix/widget` gives `fix`), else
   `feat`. `<key>` is the first key line a ticket of the unit has (the line the `key_line` port names;
   `ticket.load(path, ports.key_line(home))`), else `no-ticket`. `<summary>` is the first heading of
-  `stories.md` (else `spec.md`) or the title of the ad-hoc ticket. The summary is cut at a word so the
-  whole title is under 70 characters.
+  the AC file or the title of the ad-hoc ticket. The summary is cut at a word so the whole title is
+  under 70 characters; a summary with no word left after the cut is an error. The AC file is `spec.md`
+  when the unit has one, else `stories.md` (ADR-0011), as in `frontier`.
 - **Work unit sections.** Each is left out when it has no facts, and they come in this order. Only the
   tickets with `Status: done` count as merged.
-  - Why: the `Why:` line of `stories.md` (else `spec.md`).
+  - Why: the `Why:` line of the AC file.
   - What changed: one line per merged ticket, from its title (the merge subjects hold only
     `merge <NN-slug>`, so they add nothing).
   - Acceptance criteria: `n of m covered`, where m is the AC lines of the AC file and n those that a
@@ -1028,23 +1030,27 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
     follow as `missing: AC-4`.
   - Still open: the `Open:` text of each merged ticket's `Result:` line, except `none`, with the ticket
     number.
-  - Breaking changes: the `- Breaking:` lines of `decisions.md` (see `docs/formats.md`).
-  - Tested: the `full suites`, `reviewer passes` and `High` counts of the merged tickets' `Metrics:`
-    lines, summed; `Docs gate: <text>` when `--docs-gate '<text>'` is given (one line, checked for
-    private content); and `no CI ran` when the `ci` port is on its core default.
+  - Breaking changes: the `- Breaking:` lines of `decisions.md` and the numbered form
+    `- D-n: Breaking: ...` (see `docs/formats.md`); for the numbered form the fact stops before its
+    `Why:` or `Source:`.
+  - Tested: the `full suites`, `type-checks`, `reviewer passes` and `High` counts of the merged tickets'
+    `Metrics:` lines, summed (`ticket.metric_counts` reads them); `Docs gate: <text>` when
+    `--docs-gate '<text>'` is given (one line, checked for private content); and `no CI ran` when the
+    `ci` port is on its core default.
   - How to review: one line that names the merged tickets, in order, to review one merge commit at a
     time. No commit id is printed. It is left out when no ticket is merged.
-- `--draft` writes a two-line body: the Why, then `Work in progress`. It works for an ad-hoc ticket too.
+- `--draft` writes a two-line body: the Why, then `Work in progress`. With no Why, the draft is the one
+  line `Work in progress`. It works for an ad-hoc ticket too.
 - **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's `What to build:`) and What
   changed (the subjects of the commits on the current branch of `--repo` that are not on the repo base,
   oldest first, merge commits left out). The repo base is the one `ports` prints (`repo base`). Git is
   read only here; `--docs-gate` is refused, since the body has no Tested section.
-- The body holds no commit id, no table row and no attribution line: a fact with a hex word that has a
-  digit loses that word, a `|` becomes `/`, and a fact with `Co-Authored-By` or `Generated with` is
-  dropped. A body over 2.5 KB (2560 bytes, not counting the Title line) prints one `warning:` line on
+- The body holds no commit id, no table row and no attribution line: a hex word (the id shapes of
+  `privacy.COMMIT_ID`) that has a digit and a letter a-f loses that word, a `|` becomes `/`, and a
+  fact that starts with `Co-Authored-By:` or `Generated with` is dropped. A body over 2.5 KB (2560 bytes, not counting the Title line) prints one `warning:` line on
   standard error and is still written.
-- Facts come only from the ticket files, `stories.md` (else `spec.md`), `decisions.md` and, for an
-  ad-hoc ticket, commit subjects; the diff is never read.
+- Facts come only from the ticket files, the AC file, `decisions.md` and, for an ad-hoc ticket,
+  commit subjects; the diff is never read.
 
 ## Benchmark
 
@@ -1587,7 +1593,7 @@ python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
 python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
 python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [--home <dir>]
-python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
