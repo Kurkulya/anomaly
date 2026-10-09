@@ -1348,5 +1348,66 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertIn('anomaly:diagnose', section)
 
 
+class ShipSkillTest(unittest.TestCase):
+    """Workflow-conduct ticket 11 (AC-58 to AC-61, the ship half): the ship skill's files. The rule trace against
+    the brief (AC-49, AC-51, AC-54 to AC-57) is run by review, not here. The all-skills checks (250-character
+    description, folder set) and the `allowed-tools` and deny-shape checks of test_pipeline_files.py cover the
+    new folder through ALLOWED_TOOLS_SKILLS (AC-61); test_neutral.py scans these files for the owner's profile
+    identifiers, so the example test below holds only the shapes it does not look for."""
+    SKILL = PLUGIN / 'skills' / 'ship' / 'SKILL.md'
+    GATE = SKILL.parent / 'DOCS-GATE.md'
+    SKILL_MAX_BYTES = 5 * 1024   # tighter than the 8 KB of the all-skills check
+    GATE_MAX_BYTES = 2 * 1024
+    DOMAIN_WORDS = re.compile(r'(?i)\b(?:recipes?|bakery|library|garden|plants?|shop|carts?|orders?|invoices?|books?|'
+                              r'loans?|playlists?|tea|coffee|pets?|trips?|bookings?|menu|quiz|calendar|weather)\b')   # loose: a made-up everyday domain
+    REAL_NAME = re.compile(r'(?i)\b(?:anomaly|claude|anthropic|jira|gitlab|github|glab)\b')   # a real product, org or project name
+    TICKET_KEY = re.compile(r'\b(?!AC-|D-|ADR-)[A-Z][A-Z0-9]+-\d+\b')   # PRJ-123; AC-n, D-n and ADR-n are the plugin's own ids
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/ship/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_ship_skill_is_model_invocable_and_its_description_names_conduct(self):
+        """The brief's Start line: model-invocable, and conduct calls it (the 250-character limit is the
+        all-skills check; `allowed-tools` is the check of test_pipeline_files.py)."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'ship')
+        self.assertNotEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertIn('conduct', fields.get('description', ''))
+
+    def test_the_ship_skill_fits_in_5_KB_and_its_docs_gate_doc_in_2_KB(self):
+        """AC-59, ship half."""
+        self.text()
+        self.assertTrue(self.GATE.is_file(), 'skills/ship/DOCS-GATE.md is missing')
+        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        self.assertLessEqual(self.GATE.stat().st_size, self.GATE_MAX_BYTES)
+
+    def test_the_docs_gate_doc_is_named_once_and_only_in_the_ready_gate_step(self):
+        """AC-60, DOCS-GATE half: one line of SKILL.md names it, outside the frontmatter, and that line or
+        the heading above it says "ready". The check is on the text of the line, so the skill's step layout
+        stays free."""
+        fields, body = frontmatter.split(self.text())
+        self.assertNotIn(self.GATE.name, ' '.join(str(value) for value in fields.values()))
+        lines = body.splitlines()
+        named = [number for number, line in enumerate(lines) if self.GATE.name in line]
+        self.assertEqual(len(named), 1, f'{self.GATE.name} is named on {len(named)} lines, expected 1')
+        heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
+        self.assertRegex(f'{heading}\n{lines[named[0]]}', r'(?i)\bready\b')
+
+    def test_it_holds_one_worked_mr_body_example_in_a_fence_with_no_real_name(self):
+        """AC-58. The example is the one fenced block with the body's Why, What changed and Tested sections.
+        A made-up domain is checked loosely: a real-name pattern, a ticket key, a link, a mention and a commit id
+        must be absent, and one everyday domain word must be present."""
+        fences = re.findall(r'(?ms)^```[a-z]*\n(.*?)^```', self.text())
+        examples = [block for block in fences
+                    if all(re.search(rf'(?i)\b{section}\b', block) for section in ('why', 'what changed', 'tested'))]
+        self.assertEqual(len(examples), 1, 'expected one fenced MR body example with Why, What changed and Tested')
+        example = examples[0]
+        self.assertIsNone(self.REAL_NAME.search(example), 'a real product, org or project name')
+        self.assertIsNone(self.TICKET_KEY.search(example), 'a ticket key')
+        self.assertIsNone(re.search(r'https?://|@\w|\b[0-9a-f]{7,40}\b', example), 'a link, a mention or a commit id')
+        self.assertIsNotNone(self.DOMAIN_WORDS.search(example), 'no word of a made-up everyday domain')
+
+
 if __name__ == '__main__':
     unittest.main()

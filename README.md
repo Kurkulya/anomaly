@@ -34,7 +34,7 @@ claude plugin install anomaly@anomaly-local
 
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
-listed, and the pipeline skills `anomaly:build` and `anomaly:review` beside them.
+listed, and the pipeline skills `anomaly:build`, `anomaly:review` and `anomaly:ship` beside them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -1830,6 +1830,26 @@ finds the root cause and changes no source.
   `Hypotheses` section of the draft, each with its probe result (`confirmed` or `refuted`), not a chat list.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
   `/anomaly:build <adhoc ticket path>`.
+
+## The ship skill
+
+`anomaly:ship` is model-invocable but acts only on an explicit request from you or from `conduct`.
+It takes the MR of one work unit, or of a light-path ticket, from a clean tree to ready. Its text is
+`plugins/anomaly/skills/ship/SKILL.md` (5 KB or less); the docs gate `DOCS-GATE.md` (2 KB or less)
+is read only at the ready gate. Its only pre-approved tool is the CLI.
+
+- **Draft.** `check pre-push`, `mr body --draft`, one plain `git push`, `mr put`.
+- **Ready.** The docs gate (`docs scan` on the range; a `[touched]` finding stops the gate until it is
+  fixed or waived in the Tested section, or on the light path in one chat line and a `ticket amend`;
+  `anomaly:docs` runs only when you ask), `mr body`, the push, `mr put`, `ci watch`, the tracker AC
+  re-check against the stories' `Gathered:` date, and `mr ready`.
+- **Pushes.** Before every push `check pre-push` must pass; on a stale head `ship` runs a delta review
+  and one verify first, and records the head only when no Blocker or High is open and the verify is
+  green. At a draft's first push there is no `mr.md` yet, so the check exits 2 and `ship` goes on. It
+  never pushes to the base branch, never forces, and does not retry a refused push. With no
+  `origin` it skips the push and `ci watch`; on the `mr` core default or with no `origin`, it skips
+  `mr ready` and `mr show`.
+- **End.** One line each offering `/anomaly:observe` and `/clear`, and one `ship` work-unit line.
 
 ## Development
 
