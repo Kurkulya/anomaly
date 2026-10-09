@@ -822,7 +822,7 @@ class InterviewSkillTest(unittest.TestCase):
     """Workflow-plan ticket 08 (AC-16 to AC-18): the interview skill's text, by key tokens. The rule trace
     against the brief is run by review, not here."""
     SKILL = PLUGIN / 'skills' / 'interview' / 'SKILL.md'
-    SKILL_MAX_BYTES = 6 * 1024   # the brief's size; the all-skills cap is 8 KB
+    SKILL_MAX_BYTES = 8 * 1024   # the all-skills cap; raised from the brief's 6 KB for the Markdown round template (2026-10-10)
     ROOT = PLUGIN.parent.parent
 
     def text(self):
