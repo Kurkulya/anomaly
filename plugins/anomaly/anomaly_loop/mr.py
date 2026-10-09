@@ -333,10 +333,10 @@ def project_of(repo, name):
     return project
 
 
-def call(function, *args):
-    """function(*args), with the error of an MR tool as a RecordError."""
+def call(function, *args, **kwargs):
+    """function(*args, **kwargs), with the error of an MR tool as a RecordError."""
     try:
-        return function(*args)
+        return function(*args, **kwargs)
     except ADAPTER_ERRORS as error:
         raise RecordError(str(error)) from None
 
@@ -371,12 +371,13 @@ def run_put(args, environ):
     tool = ADAPTERS[name]
     state = read_state(found.state)
     if MR_LABEL in state:
-        call(tool.update_mr, project, mr_number(state[MR_LABEL], found.state), body)
+        call(tool.update_mr, project, mr_number(state[MR_LABEL], found.state), body, environ=environ)
     else:
         branch = current_branch(repo)
         if not branch:
             raise RecordError('the head is detached: check out the branch of the work to open its MR')
-        state[MR_LABEL] = call(tool.create_mr, project, title, body, branch, resolution.layer.base.value)
+        state[MR_LABEL] = call(tool.create_mr, project, title, body, branch, resolution.layer.base.value,
+                               environ=environ)
         write_state(found.state, state)
     print(state[MR_LABEL])
     return 0
@@ -401,14 +402,14 @@ def existing_mr(args, environ):
 
 def run_ready(args, environ):
     tool, project, number, link = existing_mr(args, environ)
-    call(tool.ready_mr, project, number)
+    call(tool.ready_mr, project, number, environ=environ)
     print(f'{link}\nstate: ready for review')
     return 0
 
 
 def run_show(args, environ):
     tool, project, number, _ = existing_mr(args, environ)
-    link, state, draft = call(tool.view_mr, project, number)
+    link, state, draft = call(tool.view_mr, project, number, environ=environ)
     print(f'{link}\nstate: {state}{", draft" if draft else ""}')
     return 0
 
