@@ -52,8 +52,8 @@ meaning.
 
 - [ ] No CLI step records the old skill's deletion as a `calibrate fix`, as ADR-0008 says. After
   `keep` the anomaly is `fixed`, so `declare` refuses it (the anomaly is not active), and `fix`
-  refuses it (no open experiment, and the fix is already recorded). The AC-78 wording goes to the
-  to-spec pass: a closing note that cites the verify result, or a new CLI step. Owner: VK ·
+  refuses it (no open experiment, and the fix is already recorded). The AC-78 wording goes to a
+  later spec pass: a closing note that cites the verify result, or a new CLI step. Owner: VK ·
   Revisit: 2026-10-25.
 - [ ] A switch-over that stalls below 20 new-skill sessions is never due; the progress line
   (`n/20 <skill> sessions, m fall-backs`, listed as stalled once its check date has passed) shows

@@ -90,12 +90,12 @@ class TokensTest(Base):
 
     def test_tokens_by_skill_and_agent(self):
         self.session([
-            assistant(ts(0), 'm1', out=10, attributionSkill='grilling', attributionAgent='Explore'),
-            assistant(ts(1), 'm2', out=10, attributionSkill='grilling'),
+            assistant(ts(0), 'm1', out=10, attributionSkill='interview', attributionAgent='Explore'),
+            assistant(ts(1), 'm2', out=10, attributionSkill='interview'),
             assistant(ts(2), 'm3', out=10),
         ])
         row, _ = self.summarize()
-        skill = row['tokens_by_skill']['grilling']
+        skill = row['tokens_by_skill']['interview']
         self.assertEqual(skill['output'], 20)
         self.assertEqual(skill['input'], 200)
         self.assertAlmostEqual(skill['weighted'], 200 + 100 * 1.25 + 2000 * 0.1 + 20 * 5)
@@ -271,15 +271,15 @@ class ToolsTest(Base):
     def test_tool_skill_and_question_counts(self):
         self.session([
             assistant(ts(0), 'm1', tools=[('t1', 'Bash', {'command': 'git status'}),
-                                          ('t2', 'Skill', {'skill': 'grilling'})]),
-            assistant(ts(1), 'm2', tools=[('t3', 'Skill', {'skill': 'grilling'}),
-                                          ('t4', 'Skill', {'skill': 'tdd'}),
+                                          ('t2', 'Skill', {'skill': 'interview'})]),
+            assistant(ts(1), 'm2', tools=[('t3', 'Skill', {'skill': 'interview'}),
+                                          ('t4', 'Skill', {'skill': 'build'}),
                                           ('t5', 'AskUserQuestion', {'questions': []})]),
             assistant(ts(2), 'm3', tools=[('t6', 'Bash', {'command': 'git status'})]),
         ])
         row, _ = self.summarize()
         self.assertEqual(row['tools'], {'Bash': 2, 'Skill': 3, 'AskUserQuestion': 1})
-        self.assertEqual(row['skills_invoked'], {'grilling': 2, 'tdd': 1})
+        self.assertEqual(row['skills_invoked'], {'interview': 2, 'build': 1})
         self.assertEqual(row['ask_user_questions'], 1)
 
     def test_bash_shapes_ranked_and_capped(self):
