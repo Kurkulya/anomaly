@@ -1061,10 +1061,10 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   standard error and is still written.
 - Facts come only from the ticket files, the AC file, `decisions.md` and, for an ad-hoc ticket,
   commit subjects; the diff is never read.
-- **Privacy.** Every body line goes through `privacy.privacy_problems` (a URL with a query string,
+- **Privacy.** The `Title:` line (section `title`) and every body line go through `privacy.privacy_problems` (a URL with a query string,
   an email address, a credential, pasted program output, a long opaque identifier). A problem is
   an error (exit 2) that names the section it is in, and no file is written. `mr put` runs the same
-  check on the body file before any tool call, since the file can be edited by hand.
+  check on the title and body of the file before any tool call, since the file can be edited by hand.
 
 ## MR
 
@@ -1096,7 +1096,7 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [
   it; a missing file says to run `mr body` first. With no `MR:` line in the MR file it opens a draft MR
   from the current branch to the repo base (`ports` prints it as `repo base`) and writes the link as
   the `MR:` line. With an `MR:` line it replaces the body of that MR; the title and the draft state stay.
-  It prints the link. It refuses the body file when a line has a privacy problem (see MR body).
+  It prints the link. It refuses the body file when its title or a line has a privacy problem (see MR body).
 - **The MR link check.** Before `put` replaces a body and before `ready` acts, the CLI views the MR
   that the origin project has under the number of the `MR:` link. It refuses (exit 2, no change)
   when that MR has another link than the line, which is the case for a link of another project, or

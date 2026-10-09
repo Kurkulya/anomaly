@@ -21,8 +21,8 @@ An ad-hoc ticket body has Why (the ticket's `What to build:`) and What changed (
 current branch that are not on the repo base).
 
 A body holds no commit id, no table row and no attribution line (`plain`). A body over 2.5 KB prints one
-`warning:` line and is still written. The file path is printed. A body line with a privacy problem
-(`privacy.privacy_problems`) is an error that names its section (`check_privacy`); no file is written.
+`warning:` line and is still written. The file path is printed. The title or a body line with a privacy
+problem (`privacy.privacy_problems`) is an error that names its section (`check_privacy`); no file is written.
 
   mr put <work unit folder | ad-hoc ticket> [--repo <dir>]
   mr ready <work unit folder | ad-hoc ticket> [--repo <dir>]
@@ -32,7 +32,7 @@ A body holds no commit id, no table row and no attribution line (`plain`). A bod
 
 `put` reads the title from the first `Title:` line of the body file and the body from the lines after the blank line,
 and opens a draft MR from the current branch to the base branch, or, when the MR file already has an `MR:` line,
-replaces the body of that MR (the title stays). `put` runs `check_privacy` on the body file first. Before it replaces a
+replaces the body of that MR (the title stays). `put` runs `check_privacy` on the title and body of the file first. Before it replaces a
 body, and before `ready` acts, the MR is viewed and must have the link of the `MR:` line and the current branch as its
 source (`check_same_mr`). `ready` takes the draft state off and `show` prints the link and the state. The tool is the adapter the `mr` port names (constants.MR_ADAPTERS; an unknown value is an error naming
 them), run for the project of the `origin` remote, which must be on the host of the adapter (`gh`: github.com,
@@ -238,18 +238,20 @@ def render(title, why, sections, draft):
     return f'Title: {title}\n\n{body}\n', body
 
 
-def check_privacy(label, body):
-    """Refuse a body line that `privacy.privacy_problems` names (ADR-0003), naming the section it is in (the last
-    `## ` heading before it; a draft body has none). It is the one check `mr body` runs before it writes the file
-    and `mr put` runs on the file before it sends the body, which may have been edited by hand."""
-    section = 'body'
-    for line in body.splitlines():
+def check_privacy(label, title, body):
+    """Refuse the title or a body line that `privacy.privacy_problems` names (ADR-0003), naming the section it is in
+    (`title`, or the last `## ` heading before the line; a draft body has none). It is the one check `mr body` runs
+    before it writes the file and `mr put` runs on the file before it sends it, which may have been edited by hand."""
+    section = 'title'
+    for line in [title, *body.splitlines()]:
         if line.startswith('## '):
             section = line[3:].strip()
         problems = privacy.privacy_problems(line)
         if problems:
             raise RecordError(f'{label}: the {section} section holds {" and ".join(problems)}; '
                               'describe it in your own words')
+        if section == 'title':
+            section = 'body'   # the lines after the title, until a heading
 
 
 class Target(NamedTuple):
@@ -293,7 +295,7 @@ def run_body(args, environ):
         repo = gitrepo.repo_for(args.repo)
         parts = adhoc_parts(target, repo, ports.resolve(home, repo), key_line)
     text, body = render(*parts, args.draft)
-    check_privacy('mr body', body)
+    check_privacy('mr body', parts[0], body)
     size = len(body.encode('utf-8'))
     files.write_text(found.body, text)
     print(found.body)
@@ -395,7 +397,7 @@ def run_put(args, environ):
     resolution = ports.resolve(home, repo)
     name = adapter_name(resolution)
     title, body = read_title_and_body(found.body, args.target)
-    check_privacy('mr put', body)
+    check_privacy('mr put', title, body)
     if name is None:
         print_only(title, body, 'the mr port is on its core default')
         return 0
