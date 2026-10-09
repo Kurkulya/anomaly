@@ -4,7 +4,7 @@
               acceptance test is unchanged since its red commit (or the ticket notes why)
   pre-push    exit 0 only when `Reviewed:` and `Verified:` both name the current head: in the mr.md of a
               work-unit folder, or in an ad-hoc ticket; each stale or missing line is one line, exit 1
-  stories    exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
+  stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
   slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
               a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN

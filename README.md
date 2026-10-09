@@ -1301,7 +1301,7 @@ needs a home or a profile.
 
 ```
 python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>] [--repo <dir>]
-python plugins/anomaly/scripts/anomaly.py check pre-push  <work-unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py check pre-push  <work-unit folder | ad-hoc ticket> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder>
 python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder>
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
