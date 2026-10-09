@@ -544,11 +544,22 @@ class PlanningDocsTest(unittest.TestCase):
         next-step offer, the ADR front block."""
         text = self.doc_text(self.FORMATS)
         for token in ('## stories.md', '## decisions.md', '- D-n:', '- T-n:', 'Source:', 'Avoid:', 'Amended <date>:',
-                      'Jira:', 'no-ticket', 'Repro:', '## log.md', 'anomaly log add', 'ACs: AC-1',
+                      'Key:', 'no-ticket', 'Repro:', '## log.md', 'anomaly log add', 'ACs: AC-1',
                       'ready-for-agent', 'ready-for-human (', 'needs-info', 'wontfix', '`in-progress` and `done`',
                       '/anomaly:<name>', '- Decision:', '- Revisit:', '## Out of scope', '(verbatim', '— owner:'):
             with self.subTest(token=token):
                 self.assertIn(token, text)
+
+    def test_the_formats_doc_names_the_key_line_through_the_key_line_port_not_as_jira(self):
+        """AC-11: the ticket shape and its key-line rule name the `key_line` port (core line `Key:`). A `Jira:`
+        line is still read until the switch-over, so the doc may say that, but never as the required line."""
+        text = self.doc_text(self.FORMATS)
+        self.assertIn('key_line', text)
+        self.assertNotRegex(text, r'(?m)^Jira:')
+        for line in text.splitlines():
+            if 'Jira:' in line:
+                with self.subTest(line=line):
+                    self.assertRegex(line, r'(?i)still read|legacy|switch-over')
 
     def test_the_formats_doc_repro_shape_is_the_runnable_command_without_a_red_now_suffix(self):
         """Adhoc 2026-10-08-durable-runnable-repro, AC-1: `Repro: <command>` runs as written."""
@@ -967,9 +978,11 @@ class SpecifySkillTest(unittest.TestCase):
         """AC-20."""
         text = self.text()
         self.assertRegex(text, r'\.anomaly/<work unit>/adr/')
-        self.assertIn('git log --all -- docs/adr/', text)
+        self.assertRegex(text, r'git log --all -- [^\n]*<NNNN>')
         self.assertRegex(text.lower(), r'free on every branch|every branch')
         self.assertRegex(text, r'\.anomaly/\*/adr/')
+        self.assertIn('adr_folder', text)
+        self.assertNotIn('docs/adr/', text)   # AC-11: the ADR folder is named through the port
 
     def test_it_runs_check_stories_then_the_spec_review_then_a_digest_of_at_most_5_lines_and_waits(self):
         """AC-21, with the Blocker and warning rules of the review amendments."""
@@ -1105,6 +1118,12 @@ class SliceSkillTest(unittest.TestCase):
         self.assertIn('ready-for-human', text)
         self.assertRegex(text, r'Result:')   # named only to say that slice never writes it
         self.assertRegex(text.lower(), r'never writes?|does not write|writes none|not write')
+
+    def test_it_names_the_key_line_through_the_key_line_port_not_as_jira(self):
+        """AC-11."""
+        text = self.text()
+        self.assertIn('key_line', text)
+        self.assertNotIn('Jira:', text)
 
     def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
         text = self.text()
