@@ -1857,8 +1857,9 @@ is read only at the ready gate. Its only pre-approved tool is the CLI.
 `anomaly:conduct` drives every ticket of one work unit through `anomaly:build` on one integration
 branch, then takes the one MR to the ready gate. It is model-invocable but acts only on an explicit
 request from you. Its text is `plugins/anomaly/skills/conduct/SKILL.md` (8 KB or less); the
-kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode. Its only pre-approved tool is
-the CLI. This version runs sequential waves; the parallel path is a later addition.
+kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode, and the parallel text
+`PARALLEL.md` (3 KB or less) only after you pick a parallel wave. Its only pre-approved tool is
+the CLI.
 
 - **Start.** `worklog start`, `ports`, then `frontier` (its warnings are shown; blockers stop the
   run; an `in-progress` ticket is resumed only after you confirm that no other session runs it).
@@ -1878,6 +1879,14 @@ the CLI. This version runs sequential waves; the parallel path is a later additi
   stop; no cost numbers), `worklog add` once per run before the first `conduct status` (or at the
   first stop, if that comes sooner), then the five lines of the wave report. With an MR, one more
   line gives its size as a number.
+- **Parallel pick.** A wave of two or more tickets with disjoint `Touches:` paths is the only wave
+  that asks you a question: parallel or sequential. Any other wave is sequential and starts without
+  one. After a parallel pick, `PARALLEL.md` marks each ticket `par` or `seq` (disjoint touches, no
+  shared `seams.md` owner, medium or larger, at most one UI check), builds a prep branch for a
+  shared helper, makes one plain worktree per ticket and sends one `implementer` agent per ticket
+  in one message with absolute paths. The agents stop at a branch tip; the close of `anomaly:build`
+  (review, verify, CI check, merge) then runs one branch at a time, each worktree is removed right
+  after its merge, and the push, CI watch and report follow as in a sequential wave.
 - **Go on or stop.** A sequential wave with no open decision and a tip that is not red goes straight
   on. It stops for a parallel pick, a scope change, a red tip and the ready gate. Past 200k tokens
   of context it stops after the report and offers a fresh session: in the desktop app a chip with the
