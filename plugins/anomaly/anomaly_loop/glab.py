@@ -172,9 +172,11 @@ def ready_mr(project, number, environ=None):
 
 
 def view_mr(project, number, environ=None):
-    """(link, state, is_draft) of merge request `number`; the state is `open`, `closed`, `merged` or `locked`."""
+    """(link, state, is_draft, source branch) of merge request `number`; the state is `open`, `closed`, `merged` or
+    `locked`."""
     answer = api(mr_path(project, number), environ)
     try:
-        return answer['web_url'], {'opened': 'open'}.get(answer['state'], answer['state']), bool(answer['draft'])
+        return (answer['web_url'], {'opened': 'open'}.get(answer['state'], answer['state']), bool(answer['draft']),
+                answer['source_branch'])
     except (KeyError, TypeError):
         raise CiError(f'glab api answered merge request {number} in an unknown shape') from None

@@ -75,10 +75,11 @@ def ready_mr(project, number, environ=None):
 
 
 def view_mr(project, number, environ=None):
-    """(link, state, is_draft) of pull request `number`; the state is `open`, `closed` or `merged`."""
-    out = call('pr', 'view', str(number), '--repo', project, '--json', 'url,state,isDraft', environ=environ)
+    """(link, state, is_draft, source branch) of pull request `number`; the state is `open`, `closed` or `merged`."""
+    check_project(project)
+    out = call('pr', 'view', str(number), '--repo', project, '--json', 'url,state,isDraft,headRefName', environ=environ)
     try:
         answer = json.loads(out)
-        return answer['url'], answer['state'].lower(), bool(answer['isDraft'])
+        return answer['url'], answer['state'].lower(), bool(answer['isDraft']), answer['headRefName']
     except (ValueError, KeyError, TypeError, AttributeError):
         raise GhError(f'gh answered pull request {number} in an unknown shape') from None

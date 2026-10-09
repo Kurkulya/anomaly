@@ -372,6 +372,20 @@ def print_only(title, body, reason):
     print(f'note: nothing was sent: {reason}', file=sys.stderr)
 
 
+def check_same_mr(tool, project, number, link, repo, environ):
+    """Refuse (before a change) an MR line that is not this repository's MR of the current branch: the MR the
+    origin project answers for `number` must have the link of the MR line, and its source branch must be the
+    current branch. A link of another project, or a stale or hand-written one, never changes another MR."""
+    shown, _, _, source = call(tool.view_mr, project, number, environ=environ)
+    if shown.rstrip('/').lower() != link.rstrip('/').lower():
+        raise RecordError(f'the MR line names {link}, but merge request {number} of the origin project is {shown}; '
+                          'it is not an MR of this repository')
+    branch = current_branch(repo)
+    if source != branch:
+        raise RecordError(f'the MR {link} has the source branch "{source}", but the current branch is '
+                          f'"{branch or "(detached head)"}"; check out the branch of the MR')
+
+
 def run_put(args, environ):
     home = paths.resolve_home(args.home, environ)
     found = locate(args.target)
@@ -390,7 +404,9 @@ def run_put(args, environ):
     tool = ADAPTERS[name]
     state = read_state(found.state)
     if MR_LABEL in state:
-        call(tool.update_mr, project, mr_number(state[MR_LABEL], found.state), body, environ=environ)
+        number = mr_number(state[MR_LABEL], found.state)
+        check_same_mr(tool, project, number, state[MR_LABEL], repo, environ)
+        call(tool.update_mr, project, number, body, environ=environ)
     else:
         branch = current_branch(repo)
         if not branch:
@@ -403,7 +419,7 @@ def run_put(args, environ):
 
 
 def existing_mr(args, environ):
-    """(adapter module, project, number, link) of the MR in the MR file, for `ready` and `show`."""
+    """(adapter module, project, number, link, repo) of the MR in the MR file, for `ready` and `show`."""
     home = paths.resolve_home(args.home, environ)
     found = locate(args.target)
     repo = gitrepo.repo_for(args.repo)
@@ -416,19 +432,20 @@ def existing_mr(args, environ):
     project = project_of(repo, name)
     if project is None:
         raise RecordError('the repository has no origin remote: there is no MR to call')
-    return ADAPTERS[name], project, mr_number(link, found.state), link
+    return ADAPTERS[name], project, mr_number(link, found.state), link, repo
 
 
 def run_ready(args, environ):
-    tool, project, number, link = existing_mr(args, environ)
+    tool, project, number, link, repo = existing_mr(args, environ)
+    check_same_mr(tool, project, number, link, repo, environ)
     call(tool.ready_mr, project, number, environ=environ)
     print(f'{link}\nstate: ready for review')
     return 0
 
 
 def run_show(args, environ):
-    tool, project, number, _ = existing_mr(args, environ)
-    link, state, draft = call(tool.view_mr, project, number, environ=environ)
+    tool, project, number, *_ = existing_mr(args, environ)
+    link, state, draft, _ = call(tool.view_mr, project, number, environ=environ)
     print(f'{link}\nstate: {state}{", draft" if draft else ""}')
     return 0
 

@@ -169,5 +169,5 @@ class MergeRequestTest(unittest.TestCase):
             glab.ready_mr('g/p', 7)
 
     def test_view_reads_the_link_state_and_draft_flag(self):
-        self.answers(done('{"web_url": "u", "state": "opened", "draft": true}'))
-        self.assertEqual(glab.view_mr('g/p', 7), ('u', 'open', True))
+        self.answers(done('{"web_url": "u", "state": "opened", "draft": true, "source_branch": "feat/x"}'))
+        self.assertEqual(glab.view_mr('g/p', 7), ('u', 'open', True, 'feat/x'))
