@@ -52,7 +52,7 @@
 | **term line** | A `T-n:` line in `decisions.md`: one settled term, its meaning and the words to avoid, waiting for the ticket that writes it into the glossary. | glossary entry (for the line) |
 | **red commit** | The commit that holds a ticket's acceptance test alone, before any code commit; recorded as `Red: <sha> · <test path>`. `check pre-merge` requires the test file to be unchanged since it, unless a `Red-changed:` line says why. | test commit |
 | **plan gate** | The `spec` or `tickets` review mode that ends `specify` or `slice`; it stops only on a Blocker. | plan-sanity, claim check (for the whole gate) |
-| **frontier** | The tickets of a work unit whose blockers are all done and that are neither done nor in progress. | queue, backlog (that is the anomaly list) |
+| **frontier** | The tickets of a work unit whose blockers are all done, that are neither done nor in progress, and that wait for no person; only a `ready-for-agent` ticket counts. | queue, backlog (that is the anomaly list) |
 | **wave** | One round of frontier tickets run together, one after another or in parallel. | batch, round (that is a review round) |
 | **wave report** | The 5-line chat summary `conduct` prints after a wave: done, failed, open, next, cost. | digest (that is the backlog digest command and an Avoid word for **log**) |
 | **MR** | The one merge request of a work unit (a pull request on GitHub), opened as a draft and made ready through `ship`. | PR (in plugin text) |

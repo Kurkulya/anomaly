@@ -1092,7 +1092,7 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [
   `anomaly_loop/gh.py` and `glab` through `anomaly_loop/glab.py`, with argument lists and no shell.
   The body reaches `gh` on its standard input (`--body-file -`) and `glab api` as one argument; a write
   is tried once, and a failed call prints the tool's message (exit 2).
-  TODO(VK, revisit 2026-12-01): verify mr put, ready and show against a live gitlab.com project — see ADR-0017
+  TODO(VK, revisit 2026-12-01): verify mr put, ready and show against a live gitlab.com project
 - **put.** Reads the title from the first `Title:` line of the body file (`mr-body.md`, or the sibling
   `<name>.mr-body.md` of an ad-hoc ticket) and the body from the lines after the blank line that follows
   it; a missing file says to run `mr body` first. With no `MR:` line in the MR file it opens a draft MR
@@ -1892,7 +1892,9 @@ kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode, and the para
 the CLI.
 
 - **Start.** `worklog start`, `ports`, then `frontier` (its warnings are shown; blockers stop the
-  run; an `in-progress` ticket is resumed only after you confirm that no other session runs it).
+  run; an `in-progress` ticket is resumed only after you confirm that no other session runs it; when
+  only tickets that wait for a person are left, `conduct` names them and goes to the finish, so they
+  run after the MR exists).
   The integration worktree is made once with `git worktree add`; the main checkout stays on the base
   branch. With no `origin` there is no push, MR or CI step and no question about it: the `ports`
   lines decide.
@@ -1906,8 +1908,10 @@ the CLI.
   `anomaly:ship` for the draft MR; a `ci` port that is not on its core default starts `ci watch` in
   the background.
 - **Report.** `log add` events (a `wave <n>` line at the start of each wave, then merge, push and
-  stop; no cost numbers), `worklog add` once per run before the first `conduct status` (or at the
-  first stop, if that comes sooner), then the five lines of the wave report. With an MR, one more
+  stop; no cost numbers), then `conduct status` first: only when it answers "no lines for work unit"
+  (exit 2) does `conduct` write `worklog add` and run it again. The end-of-run `worklog add` still
+  runs once for the run (at the finish, or at the first stop that has none yet). Then the five lines
+  of the wave report. With an MR, one more
   line gives its size as a number.
 - **Parallel pick.** A wave of two or more tickets with disjoint `Touches:` paths is the only wave
   that asks you a question: parallel or sequential. Any other wave is sequential and starts without
