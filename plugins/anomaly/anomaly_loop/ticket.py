@@ -426,6 +426,17 @@ def close(text, branch, merge, open_items, now, counts, acs=()):
     return join_lines(lines)
 
 
+def metric_counts(parsed):
+    """{key: count} for the counts of METRIC_COUNTS (`suites`, `type_checks`, ...) that the `Metrics:` line of a
+    parsed ticket holds; a count the line lacks is not in the result. The reader of what `close` writes."""
+    found = {}
+    for label, key in METRIC_COUNTS:
+        match = re.search(rf'\b{re.escape(label)} (\d+)\b', parsed.metrics)
+        if match:
+            found[key] = int(match.group(1))
+    return found
+
+
 def amend(text, today, note, after=None):
     """The text with one `Amended <date>: <note>` line. Without `after` it goes at the end of the file.
     With `after` (AC-n or D-n) it goes below that list item and below any `Amended` lines already under
@@ -459,6 +470,9 @@ def slugify(text):
     return re.sub(r'[^a-z0-9]+', '-', plain.lower()).strip('-')[:TICKET_SLUG_MAX_CHARS].rstrip('-') or 'task'
 
 
+ADHOC_TITLE_PREFIX = 'Adhoc: '   # the start of the heading adhoc_ticket writes; `mr body` strips it from the summary
+
+
 def adhoc_ticket(task, slug, today):
     """(file name, text) of a one-file ticket for a free-text task. The task is put on one line, so
     its text can never add a state line. The ticket has no key line."""
@@ -467,7 +481,7 @@ def adhoc_ticket(task, slug, today):
         raise RecordError('the task text is empty')
     check_slug(slug)
     title = task[:TICKET_TITLE_MAX_CHARS]
-    text = (f'# Adhoc: {title}\n\nCovers: AC-1\nBlocked by: None\nStatus: {TICKET_STATUS_READY}\n\n'
+    text = (f'# {ADHOC_TITLE_PREFIX}{title}\n\nCovers: AC-1\nBlocked by: None\nStatus: {TICKET_STATUS_READY}\n\n'
             f'**What to build:** {task}\n\nAcceptance criteria:\n\n- [ ] AC-1: {task}\n')
     return f'{today.isoformat()}-{slug or slugify(task)}.md', text
 

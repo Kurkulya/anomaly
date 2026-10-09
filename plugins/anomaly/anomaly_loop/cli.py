@@ -43,6 +43,7 @@ COMMANDS = (
     'log',
     'frontier',
     'conduct',
+    'mr',
 )
 
 

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import check, files, ticket
-from .constants import TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
+from .constants import KEY_LINE_CORE, TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
 from .files import RecordError
 
 AC_FILES = ('spec.md', 'stories.md')   # the files that hold the ACs, the first one that exists is read (ADR-0011)
@@ -45,9 +45,11 @@ def tickets_folder(folder):
     return found
 
 
-def load_tickets(folder):
-    """[(path, Ticket)] of the numbered ticket files in the folder, in ticket order."""
-    return [(path, ticket.load(path)[1]) for path in sorted(folder.glob('*.md')) if check.TICKET_NUMBER.match(path.name)]
+def load_tickets(folder, key_line=KEY_LINE_CORE):
+    """[(path, Ticket)] of the numbered ticket files in the folder, in ticket order; the key of each is read
+    from the `key_line` line (ticket.key_name)."""
+    return [(path, ticket.load(path, key_line)[1]) for path in sorted(folder.glob('*.md'))
+            if check.TICKET_NUMBER.match(path.name)]
 
 
 def blocked_text(parsed, unfinished):
