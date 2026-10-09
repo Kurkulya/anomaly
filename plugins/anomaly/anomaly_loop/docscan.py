@@ -21,8 +21,9 @@ repository-relative `path:line`:
   nor is the word followed by `(<`. A key whose date is not a real date counts as no key. `todo-overdue`: a
   key with a real date before today, wherever it stands in the line.
 - `dead-path`: in a tracked `CLAUDE.md`, a path claim that is not live. It is live when it exists beside that
-  file or at the repo root and git does not ignore it (an ignored folder exists in one checkout only), or
-  when a tracked file or folder is the claim or ends with `/<claim>`. A claim is a backticked word with no
+  file or at the repo root, or when git ignores it (an ignored folder, such as a local work-unit folder, exists
+  in one checkout only, so it is live on or off disk), or when a tracked file or folder is the claim or ends
+  with `/<claim>`. A claim is a backticked word with no
   space or glob or placeholder character (a trailing `:12` or `:12-20` is cut off) that holds a `/` or is a
   bare file name with one of the extensions in BARE_FILE, or the target of a markdown link that is not a URL
   or an anchor. Fenced code blocks are not read. A ref such as `origin/main` is a claim (a known limit).
@@ -128,21 +129,24 @@ def tracked_match(tracked, claim):
     return any(inner in f'/{path}/' for path in tracked)
 
 
-def is_ignored(repo, full):
-    """True when git ignores the path `full` (a path outside the repository is not)."""
+def is_ignored(repo, full, is_folder):
+    """True when git ignores the path `full` (a path outside the repository is not); `is_folder` tells git that a
+    path which is not on disk is a folder, so that a folder pattern such as `.scratch/` matches it."""
     try:
         spec, = gitrepo.relative_specs(repo, [full])
     except gitrepo.GitError:
         return False
-    return gitrepo.is_ignored(repo, spec)
+    return gitrepo.is_ignored(repo, spec + '/' if is_folder else spec)
 
 
 def exists(repo, folder, tracked, target):
-    """True when `target` is live: it is beside the file (in `folder`) or at the repo root and git does not ignore
-    it (an ignored folder is in one checkout only), or a tracked path is the claim or ends with it."""
+    """True when `target` is live: it is beside the file (in `folder`) or at the repo root, or git ignores it (a
+    local folder such as a work-unit folder is in one checkout only, so a clone must not report it), or a tracked
+    path is the claim or ends with it."""
     clean = target.removeprefix('./').rstrip('/')
     try:
-        if any((base / clean).exists() and not is_ignored(repo, base / clean) for base in (folder, repo)):
+        if any((base / clean).exists() or is_ignored(repo, base / clean, target.endswith('/'))
+               for base in (folder, repo)):
             return True
     except OSError:
         return False

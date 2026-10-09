@@ -297,11 +297,11 @@ class PathLivenessTest(unittest.TestCase):
         self.assertEqual(self.dead('CLAUDE.md', '```', 'See `gone/missing.py`.', '```', 'After `NOPE.md`.'),
                          ['NOPE.md does not exist'])
 
-    def test_a_path_that_git_ignores_is_dead_even_when_it_is_on_disk(self):
+    def test_a_path_that_git_ignores_is_live_whether_or_not_it_is_on_disk(self):
+        """An ignored folder (a local work-unit folder) is in one checkout only: a clone must not report it."""
         self.repo.write('.git/info/exclude', '.scratch/\n')
-        self.repo.write('.scratch/notes.md', 'x\n')
-        self.assertEqual(self.dead('CLAUDE.md', 'Work units: `.scratch/`, `.scratch/notes.md`, and `top.py`.'),
-                         ['.scratch/ does not exist', '.scratch/notes.md does not exist'])
+        self.assertEqual(self.dead('CLAUDE.md', 'Work units: `.scratch/`, `.scratch/notes.md`, and `.other/`.'),
+                         ['.other/ does not exist'])
 
 
 if __name__ == '__main__':
