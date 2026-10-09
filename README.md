@@ -1840,11 +1840,14 @@ is read only at the ready gate. Its only pre-approved tool is the CLI.
 
 - **Draft.** `check pre-push`, `mr body --draft`, one plain `git push`, `mr put`.
 - **Ready.** The docs gate (`docs scan` on the range; a `[touched]` finding stops the gate until it is
-  fixed or waived in the Tested section; `anomaly:docs` runs only when you ask), `mr body`, the push,
-  `mr put`, `ci watch`, the tracker AC re-check against the stories' `Gathered:` date, and `mr ready`.
+  fixed or waived in the Tested section, or on the light path in one chat line and a `ticket amend`;
+  `anomaly:docs` runs only when you ask), `mr body`, the push, `mr put`, `ci watch`, the tracker AC
+  re-check against the stories' `Gathered:` date, and `mr ready`.
 - **Pushes.** Before every push `check pre-push` must pass; on a stale head `ship` runs a delta review
-  and one verify first. It never pushes to the base branch, never forces, and does not retry a refused
-  push. With no `origin` it skips the push, `mr ready` and `mr show`.
+  and one verify first, and records the head only when no Blocker or High is open and the verify is
+  green. At a draft's first push there is no `mr.md` yet, so the check exits 2 and `ship` goes on. It
+  never pushes to the base branch, never forces, and does not retry a refused push. On the core
+  default or with no `origin` it skips the push, `ci watch`, `mr ready` and `mr show`.
 - **End.** One line each offering `/anomaly:observe` and `/clear`, and one `ship` work-unit line.
 
 ## Development
