@@ -216,6 +216,19 @@ class SkillFileTest(unittest.TestCase):
         self.assertIn('rule trace', section)
         self.assertIn('rules', section)
 
+    def test_the_build_start_section_stops_and_asks_on_an_unresolved_command_verify(self):
+        """Build-unresolved-verify ticket 01, AC-1: the rule sits in Start, before the red step."""
+        text = self.build_text()
+        self.assertLess(text.index('## Start'), text.index('## Red first'))
+        start = text.split('## Start', 1)[1].split('\n## ', 1)[0]
+        rules = [line.lower() for line in start.splitlines() if 'command verify' in line]
+        self.assertEqual(len(rules), 1, 'no Start rule names `command verify`')
+        self.assertIn('[i2]', rules[0], 'the new clause follows the [I2] step text')
+        clause = rules[0].split('[i2]', 1)[1]      # the new clause only, not the older step text
+        self.assertRegex(clause, r'unresolved|empty')
+        for part in ('stop', 'ask', 'command', 'repo override', 'verify:', 'never guess'):
+            self.assertIn(part, clause)
+
 
 class ReadmeTest(unittest.TestCase):
     README = PLUGIN.parent.parent / 'README.md'
