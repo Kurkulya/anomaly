@@ -2,7 +2,7 @@
 
 Build a temporary git repository with two commits, in this order, with these messages. The first
 holds `base/`; the second holds `change/` laid over it. Do not copy this file into the repository.
-The agent reviews the whole history.
+The agent reviews the whole history. Pass `docs/adr` as the ADR folder.
 
 ## 1. base
 

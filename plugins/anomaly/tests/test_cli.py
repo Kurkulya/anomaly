@@ -45,7 +45,7 @@ class SkillFileTest(unittest.TestCase):
     REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window after each round (AC-53)
     DOCS_AGENT = PLUGIN / 'agents' / 'docs.md'
     REVIEW_SKILL = PLUGIN / 'skills' / 'review' / 'SKILL.md'
-    REVIEW_BRIEF = PLUGIN /'skills' / 'review' / 'BRIEFS.md'
+    REVIEW_BRIEF = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
     BUILD_SKILL = PLUGIN / 'skills' / 'build' / 'SKILL.md'
     BUILD_UI_DOC = BUILD_SKILL.parent / 'UI-CHECK.md'
     BUILD_DOCS = {   # the build skill's extra docs, each loaded only when used (AC-42), and their budgets
