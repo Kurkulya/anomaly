@@ -132,3 +132,42 @@ class CallTest(unittest.TestCase):
     def test_text_returns_the_plain_output(self):
         self.answers(done('line 1\nline 2\n'))
         self.assertEqual(glab.text('p'), 'line 1\nline 2\n')
+
+
+class MergeRequestTest(unittest.TestCase):
+    def setUp(self):
+        self.pauses = []
+        patcher = mock.patch('anomaly_loop.glab.pause', self.pauses.append)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def answers(self, *items):
+        patcher = mock.patch('anomaly_loop.glab.run', side_effect=list(items))
+        self.run = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_create_sends_a_draft_titled_request_with_each_value_as_one_argument(self):
+        self.answers(done('{"web_url": "https://example.com/g/p/-/merge_requests/7"}'))
+        link = glab.create_mr('g/sub p', 'feat(K-1): t', 'line one\nline two', 'feat/x', 'main')
+        self.assertEqual(link, 'https://example.com/g/p/-/merge_requests/7')
+        args = self.run.call_args.args
+        self.assertEqual(args[:4], ('api', 'projects/g%2Fsub%20p/merge_requests', '--method', 'POST'))
+        self.assertIn('title=Draft: feat(K-1): t', args)
+        self.assertIn('description=line one\nline two', args)
+
+    def test_a_write_is_not_repeated_after_a_network_error(self):
+        self.answers(done(code=1, stderr='dial tcp: i/o timeout'))
+        with self.assertRaisesRegex(glab.CiError, 'timeout'):
+            glab.update_mr('g/p', 7, 'body')
+        self.assertEqual((self.run.call_count, self.pauses), (1, []))
+
+    def test_ready_is_an_error_when_the_mutation_answers_errors(self):
+        self.answers(done('{"data": {"mergeRequestSetDraft": {"errors": []}}}'),
+                     done('{"data": {"mergeRequestSetDraft": {"errors": ["not allowed"]}}}'))
+        glab.ready_mr('g/p', 7)
+        with self.assertRaisesRegex(glab.CiError, 'not allowed'):
+            glab.ready_mr('g/p', 7)
+
+    def test_view_reads_the_link_state_and_draft_flag(self):
+        self.answers(done('{"web_url": "u", "state": "opened", "draft": true}'))
+        self.assertEqual(glab.view_mr('g/p', 7), ('u', 'open', True))

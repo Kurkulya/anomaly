@@ -55,3 +55,4 @@
 | **frontier** | The tickets of a work unit whose blockers are all done and that are neither done nor in progress. | queue, backlog (that is the anomaly list) |
 | **wave** | One round of frontier tickets run together, one after another or in parallel. | batch, round (that is a review round) |
 | **wave report** | The 5-line chat summary `conduct` prints after a wave: done, failed, open, next, cost. | digest (that is the backlog digest command and an Avoid word for **log**) |
+| **MR** | The one merge request of a work unit (a pull request on GitHub), opened as a draft and made ready through `ship`. | PR (in plugin text) |

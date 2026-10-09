@@ -116,7 +116,7 @@ For each problem, in order:
 
    | Home | When | How it lands |
    |---|---|---|
-   | the repository's lint rule, hook or CI job | a rule a machine can check | a change in that repository, committed in the profile's `commit_style`, on a branch named by `branch_pattern`, reviewed through `mr_tool` |
+   | the repository's lint rule, hook or CI job | a rule a machine can check | a change in that repository, committed in the profile's `commit_style`, on a branch named by `branch_pattern`, reviewed in an MR opened through the `mr_tool` adapter (`glab` or `gh`) |
    | the conventions or the reviewer's rules | a rule that needs judgement | the same, in the repository that holds them |
    | a skill, agent or hook of this plugin | the loop itself | see step 5 |
    | the user's global configuration | how every session behaves | an edit in the user config folder |

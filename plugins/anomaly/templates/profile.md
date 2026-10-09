@@ -21,8 +21,9 @@ commit_style: <type>(<key>): <summary>
 implementers:
   stack-a: <agent id>
   stack-b: <agent id>
-# The skill or command that opens a merge request.
-mr_tool: <skill or command>
+# The tool that opens and updates the merge request: `glab` or `gh`. Without it `mr put` only
+# prints the title and body.
+mr_tool: <glab or gh>
 # The skill or tool that checks a user interface.
 verify_ui: <skill or tool>
 # Where requirements come from, and whether the loop may write to it.

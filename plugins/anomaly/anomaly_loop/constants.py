@@ -230,6 +230,10 @@ SHORT_SHA_CHARS = 12                 # a commit id as shown in a message
 SEAM_BULLET = '- '                   # a seam ledger line: `- <name> · <owner file> · replaces <old way> (ticket NN)`
 SEAM_REPLACES = 'replaces'           # the word before the old way; the parts are joined by TICKET_FIELD_SEPARATOR
 
+# ---------- mr put, ready and show ----------
+
+MR_ADAPTERS = ('glab', 'gh')         # the `mr` profile values that name an MR tool wrapper (glab.py, gh.py)
+
 # ---------- ci watch and ci log ----------
 
 CI_ADAPTERS = ('glab',)              # the `ci` profile values that name a CI tool wrapper

@@ -5,17 +5,29 @@ is not merged. The ad-hoc fixture is a ticket written by `ticket adhoc` on a bra
 
 The body file starts with a `Title: <type>(<key>): <summary>` line and a blank line; the sections are markdown
 headings (`## Why`, ...). Assertions name headings, ids and facts, never wording beyond what the ACs fix.
-`--repo` names the fixture repository, as in `check` and `ticket`; the docs-gate flag of Tested is never passed."""
+`--repo` names the fixture repository, as in `check` and `ticket`; the docs-gate flag of Tested is never passed.
+
+Ticket 07 adds `mr put`, `ready`, `show`, `reviewed` and `verified`. The two adapters are faked at their wrappers
+(`FakeGh` for `anomaly_loop.gh.run`, a `FakeGlab` subclass for `anomaly_loop.glab.run`), so no test runs `gh` or
+`glab` or touches a remote; a stub `gh` and `glab` first on PATH fail any call that would get past a fake. The
+fakes sort a call by the words of its arguments (create, update, ready or show), not by one argument list, so an
+adapter may use `gh pr ...`, `glab mr ...` or `glab api ...`."""
+import collections
+import json
+import os
 import re
+import subprocess
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 from anomaly_loop import mr
 from anomaly_loop.files import RecordError
-from tests.fixtures import GitFixture, run_cli, write_text
+from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 from tests.test_check import slice_ticket
+from tests.test_ci import FakeGlab
 
 DAY = date(2026, 10, 1)
 UNIT = 'demo-unit'
@@ -364,6 +376,332 @@ class AdhocBodyTest(AdhocCase):
         self.assertEqual(len(lines[2:]), 2, lines)
         self.assertIn(self.TASK, lines[2])
         self.assertTrue(lines[3].startswith('Work in progress'), lines)
+
+
+# ---------- mr put, ready, show, reviewed and verified (ticket 07) ----------
+
+PROJECT_PATH = 'example-owner/example-repo'
+LINKS = {'gh': f'https://example.com/{PROJECT_PATH}/pull/7',
+         'glab': f'https://example.com/{PROJECT_PATH}/-/merge_requests/7'}
+ORIGINS = {'gh': f'git@github.com:{PROJECT_PATH}.git', 'glab': f'git@gitlab.com:{PROJECT_PATH}.git'}
+SELF_HOSTED = f'git@git.example.com:{PROJECT_PATH}.git'
+MR_TITLE = 'feat(ABC-7): show the widget list'
+MR_BODY_LINE = 'readers of the widget list stop seeing stale rows'
+MR_BODY_FILE = f'Title: {MR_TITLE}\n\n## Why\n\n{MR_BODY_LINE}\n'
+TOOL_FAILURE = 'the tool refused: the title is not allowed here'
+Call = collections.namedtuple('Call', 'args text kind')
+
+
+def attached_text(arg):
+    """The text of the file an argument names (`path`, `--flag=path` or `field=@path`), else ''."""
+    try:
+        path = Path(arg.split('=', 1)[-1].lstrip('@'))
+        return path.read_text(encoding='utf-8') if path.is_file() else ''
+    except (OSError, ValueError):
+        return ''
+
+
+def classify(args):
+    """What a call does, by the words of its arguments: 'ready', 'create', 'update' or (anything else) 'show'.
+    A `glab api` call is sorted by its method (-X), or by its fields when it has no method."""
+    words = [arg.lower() for arg in args]
+    if 'ready' in words or re.search(r'draft\W{0,3}false', ' '.join(words)):
+        return 'ready'
+    method = next((words[i + 1].upper() for i, word in enumerate(words[:-1]) if word in ('-x', '--method')), None)
+    has_fields = any(word in ('-f', '--field', '--raw-field', '--input') for word in words)
+    if 'create' in words or method == 'POST' or (words[:1] == ['api'] and method is None and has_fields):
+        return 'create'
+    if 'edit' in words or 'update' in words or method in ('PUT', 'PATCH'):
+        return 'update'
+    return 'show'
+
+
+def record(args, kwargs):
+    """A Call: the arguments, the text they carry (the arguments, any file they name read now, and a piped
+    input) and the kind. A body file may be gone when the test looks, so its text is read at call time."""
+    text = ' '.join([*args, *(attached_text(arg) for arg in args), str(kwargs.get('input') or '')])
+    return Call(args, text, classify(args))
+
+
+def finished(tool, args, stdout='', code=0, stderr=''):
+    return subprocess.CompletedProcess([tool, *args], code, stdout, stderr)
+
+
+class FakeGh:
+    """Stands for `gh.run`: records every call and answers as gh does (the link for a create or an edit, nothing
+    for a ready, JSON for a view). `failure` set to a text makes every call fail with it."""
+
+    def __init__(self):
+        self.records, self.environs, self.failure = [], [], None
+
+    def run(self, *args, environ=None, **kwargs):
+        self.records.append(record(args, kwargs))
+        self.environs.append(environ)
+        if self.failure:
+            return finished('gh', args, code=1, stderr=self.failure)
+        kind = self.records[-1].kind
+        stdout = {'create': LINKS['gh'] + '\n', 'update': LINKS['gh'] + '\n', 'ready': '',
+                  'show': json.dumps({'url': LINKS['gh'], 'number': 7, 'state': 'OPEN', 'isDraft': True})}[kind]
+        return finished('gh', args, stdout)
+
+
+class FakeMrGlab(FakeGlab):
+    """FakeGlab for the MR calls: the same recording and the same patch point (`glab.run`), answers by the kind of
+    call instead of by API path (a `glab api` call gets JSON, a `glab mr` call the link or nothing)."""
+
+    def __init__(self):
+        super().__init__()
+        self.records, self.failure = [], None
+        self.ready_answer = json.dumps({'data': {'mergeRequestSetDraft': {'errors': []}}})   # the GraphQL answer
+
+    def run(self, *args, environ=None, **kwargs):
+        self.calls.append(args)
+        self.environs.append(environ)
+        self.records.append(record(args, kwargs))
+        if self.failure:
+            return finished('glab', args, code=1, stderr=self.failure)
+        kind = self.records[-1].kind
+        if kind == 'ready':
+            return finished('glab', args, self.ready_answer)
+        if args[:1] == ('api',) or kind == 'show':
+            return finished('glab', args, json.dumps({'web_url': LINKS['glab'], 'iid': 7, 'state': 'opened',
+                                                      'draft': True}))
+        return finished('glab', args, LINKS['glab'] + '\n' if kind in ('create', 'update') else '')
+
+
+class PutSetup:
+    """Mixin for MrCase or AdhocCase: both adapters faked at their wrappers, stub tools first on PATH, and (for a
+    class with ADAPTER) the `mr` port and the `origin` remote of that adapter."""
+    ADAPTER = None
+
+    def setUp(self):
+        super().setUp()
+        self.gh, self.glab = FakeGh(), FakeMrGlab()
+        self.has_origin = False
+        self.block_real_tools()
+        for target, replacement in (('anomaly_loop.glab.run', self.glab.run),
+                                    ('anomaly_loop.glab.pause', self.glab.pauses.append),
+                                    ('anomaly_loop.gh.run', self.gh.run)):
+            patcher = mock.patch(target, replacement)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        if self.ADAPTER:
+            self.use(self.ADAPTER)
+
+    def block_real_tools(self):
+        """Stub `gh` and `glab` first on PATH that exit 97, so a call that got past a fake fails and reaches nothing."""
+        bin_dir = self.root / 'bin'
+        for name in ('gh', 'glab'):
+            write_text(bin_dir / name, '#!/bin/sh\nexit 97\n')
+            (bin_dir / name).chmod(0o755)
+        patcher = mock.patch.dict(os.environ, {'PATH': os.pathsep.join([str(bin_dir), os.environ.get('PATH', '')])})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def set_port(self, adapter):
+        write_text(self.home / 'profile.md', f'---\nmr_tool: {adapter}\n---\n')
+
+    def point_origin(self, url):
+        self.repo.git('remote', 'set-url' if self.has_origin else 'add', 'origin', url)
+        self.has_origin = True
+
+    def use(self, adapter, origin=None):
+        self.set_port(adapter)
+        self.point_origin(origin or ORIGINS[adapter])
+
+    @property
+    def fake(self):
+        return {'gh': self.gh, 'glab': self.glab}[self.ADAPTER]
+
+    @property
+    def link(self):
+        return LINKS[self.ADAPTER]
+
+    def calls(self, kind):
+        return [call for call in self.fake.records if call.kind == kind]
+
+    def assert_no_tool_call(self):
+        self.assertEqual((self.gh.records, self.glab.records), ([], []))
+
+    def unit(self, link=None):
+        """The unit folder with its body file, and an mr.md holding the MR line when a link is given."""
+        folder = self.repo.root / '.anomaly' / UNIT
+        write_text(folder / 'mr-body.md', MR_BODY_FILE)
+        if link:
+            write_text(folder / 'mr.md', f'MR: {link}\n')
+        return folder
+
+    def run_mr(self, action, target, *flags):
+        return run_cli('mr', action, str(target), *flags, '--repo', str(self.repo.root), '--home', str(self.home))
+
+    def mr_md_lines(self, mr_md):
+        """The non-blank lines of an mr.md file."""
+        return [line.strip() for line in Path(mr_md).read_text(encoding='utf-8').splitlines() if line.strip()]
+
+
+class PutTests:
+    """The behaviours of `mr put`, `ready` and `show` that hold for each adapter."""
+
+    def test_put_creates_a_draft_mr_from_the_body_file_and_writes_the_link(self):
+        """AC-42: the create call is a draft with the project, the title (not the Title: line) and the body."""
+        folder = self.unit()
+        code, out, err = self.run_mr('put', folder)
+        self.assertEqual(code, 0, (out, err))
+        creates = self.calls('create')
+        self.assertTrue(creates, self.fake.records)
+        text = creates[0].text
+        self.assertIn('draft', text.lower())
+        self.assertIn(MR_TITLE, text)
+        self.assertIn(MR_BODY_LINE, text)
+        self.assertNotIn('Title:', text)
+        self.assertIn(PROJECT_PATH, text.replace('%2F', '/'))
+        self.assertEqual(self.mr_md_lines(folder / 'mr.md'), [f'MR: {self.link}'])
+
+    def test_put_updates_the_body_and_creates_nothing_when_mr_md_has_an_mr_line(self):
+        """AC-42."""
+        folder = self.unit(link=self.link)
+        code, out, err = self.run_mr('put', folder)
+        self.assertEqual(code, 0, (out, err))
+        self.assertEqual(self.calls('create'), [])
+        updates = self.calls('update')
+        self.assertTrue(updates, self.fake.records)
+        self.assertTrue(any(MR_BODY_LINE in call.text and 'Title:' not in call.text for call in updates), updates)
+        self.assertEqual(self.mr_md_lines(folder / 'mr.md'), [f'MR: {self.link}'])
+
+    def test_ready_marks_the_mr_of_mr_md_ready(self):
+        """AC-43."""
+        folder = self.unit(link=self.link)
+        code, out, err = self.run_mr('ready', folder)
+        self.assertEqual(code, 0, (out, err))
+        ready = self.calls('ready')
+        self.assertTrue(ready, self.fake.records)
+        self.assertRegex(ready[0].text, r'\b7\b')
+        self.assertEqual(self.calls('create'), [])
+
+    def test_show_prints_the_link_and_the_state_and_changes_nothing(self):
+        """AC-43: the fake says the MR is open."""
+        folder = self.unit(link=self.link)
+        code, out, err = self.run_mr('show', folder)
+        self.assertEqual(code, 0, (out, err))
+        self.assertIn(self.link, out)
+        self.assertIn('open', out.lower())
+        self.assertTrue(self.fake.records)
+        self.assertEqual([call for call in self.fake.records if call.kind != 'show'], [])
+
+    def test_a_failed_adapter_call_prints_the_tool_message_and_exits_non_zero(self):
+        """AC-45: put (no mr.md yet, so a create), ready and show; a failed put writes no mr.md."""
+        self.fake.failure = TOOL_FAILURE
+        for action in ('put', 'ready', 'show'):
+            with self.subTest(action=action):
+                folder = self.unit(link=None if action == 'put' else self.link)
+                code, out, err = self.run_mr(action, folder)
+                self.assertNotEqual(code, 0, (out, err))
+                self.assertIn(TOOL_FAILURE, out + err)
+                self.assertNotIn('Traceback', out + err)
+                if action == 'put':
+                    self.assertFalse((folder / 'mr.md').exists())
+
+    def test_a_self_hosted_origin_is_an_error_and_nothing_is_called(self):
+        """Notes: the project is read from a github.com or a gitlab.com remote only; any other host is never guessed."""
+        self.point_origin(SELF_HOSTED)
+        folder = self.unit()
+        assert_cli_error(self, self.run_mr('put', folder))
+        self.assert_no_tool_call()
+        self.assertFalse((folder / 'mr.md').exists())
+
+
+class GhPutTest(PutTests, PutSetup, MrCase):
+    ADAPTER = 'gh'
+
+
+class GlabPutTest(PutTests, PutSetup, MrCase):
+    ADAPTER = 'glab'
+
+
+class PrintOnlyTest(PutSetup, MrCase):
+    def assert_printed_and_unchanged(self, folder):
+        code, out, err = self.run_mr('put', folder)
+        self.assertEqual(code, 0, (out, err))
+        self.assertIn(MR_TITLE, out)
+        self.assertIn(MR_BODY_LINE, out)
+        self.assert_no_tool_call()
+        self.assertFalse((folder / 'mr.md').exists())
+
+    def test_with_the_mr_port_on_its_core_default_put_prints_the_title_and_body_and_calls_nothing(self):
+        """AC-44: a github.com origin, no profile."""
+        self.point_origin(ORIGINS['gh'])
+        self.assert_printed_and_unchanged(self.unit())
+
+    def test_with_no_origin_put_prints_the_title_and_body_and_calls_nothing(self):
+        """AC-44: the port names an adapter, the repository has no origin."""
+        self.set_port('gh')
+        self.assert_printed_and_unchanged(self.unit())
+
+
+class UnknownAdapterTest(PutSetup, MrCase):
+    def test_an_mr_port_value_that_is_no_adapter_is_one_error_naming_the_known_ones(self):
+        """AC-45: `put`, `ready` and `show` all check the value before any call."""
+        self.use('carrier-pigeon', origin=ORIGINS['gh'])
+        folder = self.unit(link=LINKS['gh'])
+        for action in ('put', 'ready', 'show'):
+            with self.subTest(action=action):
+                result = self.run_mr(action, folder)
+                assert_cli_error(self, result, 'carrier-pigeon')
+                self.assertRegex(result[2], r'\bglab\b')
+                self.assertRegex(result[2], r'\bgh\b')
+                self.assertEqual(result[1], '')
+        self.assert_no_tool_call()
+
+
+class AdhocPutTest(PutSetup, AdhocCase):
+    ADAPTER = 'gh'
+
+    def test_put_for_an_adhoc_ticket_reads_and_writes_the_sibling_files(self):
+        """AC-42 and the Amended line: `<stem>.mr-body.md` in, `<stem>.mr.md` out, no `mr.md` in the adhoc folder."""
+        write_text(self.body_file(), MR_BODY_FILE)
+        code, out, err = self.run_mr('put', self.ticket)
+        self.assertEqual(code, 0, (out, err))
+        creates = self.calls('create')
+        self.assertTrue(creates, self.fake.records)
+        self.assertIn(MR_TITLE, creates[0].text)
+        self.assertIn(MR_BODY_LINE, creates[0].text)
+        sibling = self.ticket.with_name(self.ticket.stem + '.mr.md')
+        self.assertEqual(self.mr_md_lines(sibling), [f'MR: {self.link}'])
+        self.assertFalse((self.ticket.parent / 'mr.md').exists())
+
+
+class GateLineTest(MrCase):
+    """AC-46 in a temporary git repository: c1 (base), c2 (the tip of branch `feat/gate-demo`), c3 on main."""
+
+    def setUp(self):
+        super().setUp()
+        self.c1 = self.repo.git('rev-parse', 'HEAD').strip()
+        self.repo.write('src/two.txt', 'two\n')
+        self.c2 = self.repo.commit(['src/two.txt'], 'feat: two', DAY)
+        self.repo.git('branch', 'feat/gate-demo')
+        self.repo.write('src/three.txt', 'three\n')
+        self.repo.commit(['src/three.txt'], 'feat: three', DAY)
+        self.folder = self.repo.root / '.anomaly' / UNIT
+        write_text(self.folder / 'stories.md', '# A unit\n')
+
+    def run_gate(self, action, ref):
+        return run_cli('mr', action, str(self.folder), ref, '--repo', str(self.repo.root), '--home', str(self.home))
+
+    def test_reviewed_and_verified_write_the_full_id_of_a_short_ref_and_of_a_branch_name(self):
+        """AC-46."""
+        for action, ref in (('reviewed', self.c1[:7]), ('verified', 'feat/gate-demo')):
+            code, out, err = self.run_gate(action, ref)
+            self.assertEqual(code, 0, (action, out, err))
+        lines = [line.strip() for line in (self.folder / 'mr.md').read_text(encoding='utf-8').splitlines()]
+        self.assertIn(f'Reviewed: {self.c1}', lines)
+        self.assertIn(f'Verified: {self.c2}', lines)
+
+    def test_a_ref_that_names_no_commit_is_an_error_and_writes_nothing(self):
+        """AC-46."""
+        for action in ('reviewed', 'verified'):
+            with self.subTest(action=action):
+                assert_cli_error(self, self.run_gate(action, 'no-such-ref'), 'no-such-ref')
+                self.assertFalse((self.folder / 'mr.md').exists())
 
 
 if __name__ == '__main__':
