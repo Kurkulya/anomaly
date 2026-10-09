@@ -1712,10 +1712,15 @@ decision.
   the repo gives `docs/adr`, as in `check stories`) and in the `adr/` of every work-unit folder.
 - `todo-unkeyed`: in any tracked text file, the word `TODO` that is not followed at once by the
   key `(<owner>, revisit YYYY-MM-DD)`. A key whose date is not a real date counts as no key. One
-  finding for each line.
+  finding for each line. The word inside a backtick code span, or followed by `(<`, mentions the
+  key shape and is not a deferral: it is not reported. A bare note such as `# TODO fix` or
+  `TODO: write this` is reported.
 - `todo-overdue`: a keyed deferral whose revisit date is before today.
-- `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that exists
-  neither beside that file nor at the repository root. A claim is a backticked word that has no
+- `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
+  it exists beside that file or at the repository root, or when a tracked file or folder equals it
+  or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is live for
+  `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md` exists). It is
+  dead only when none of these holds. A claim is a backticked word that has no
   space, glob, placeholder or colon character and either holds a `/` or is a bare file name ending
   in `.md`, `.py`, `.json`, `.toml`, `.yml`, `.yaml`, `.sh` or `.txt`; or the target of a markdown
   link that is relative (a URL, an anchor and a `#fragment` are skipped). Fenced code blocks are not

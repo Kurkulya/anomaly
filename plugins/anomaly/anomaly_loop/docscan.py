@@ -13,9 +13,10 @@ repository-relative `path:line`:
   value outside the repo gives docs/adr) and in the adr/ of every unit folder (check.ADR_GLOBS).
 - `todo-unkeyed` and `todo-overdue`: in any tracked text file, a deferral note (the word in
   DEFERRAL_WORD) that is not followed at once by the key `(<owner>, revisit YYYY-MM-DD)` is unkeyed; one whose
-  key date is before today is overdue. A key whose date is not a real date counts as no key.
-- `dead-path`: in a tracked `CLAUDE.md`, a path claim that exists neither beside that file nor at the repo
-  root. A claim is a backticked word with no space or glob or placeholder character that holds a `/` or is a
+  key date is before today is overdue. A key whose date is not a real date counts as no key. The word inside a
+  backtick code span, or followed by `(<`, mentions the key shape and is not reported.
+- `dead-path`: in a tracked `CLAUDE.md`, a path claim that exists neither beside that file, nor at the repo
+  root, nor as a tracked file or folder that is the claim or ends with `/<claim>`. A claim is a backticked word with no space or glob or placeholder character that holds a `/` or is a
   bare file name with one of the extensions in BARE_FILE, or the target of a markdown link that is not a URL
   or an anchor. Fenced code blocks are not read.
 
@@ -35,6 +36,7 @@ ADR_OVERDUE, TODO_UNKEYED, TODO_OVERDUE, DEAD_PATH = 'adr-overdue', 'todo-unkeye
 TOUCHED = ' [touched]'
 DEFERRAL_WORD = 'TO' + 'DO'   # joined, so that this file holds no bare deferral note of its own
 DEFERRAL = re.compile(rf'(?<!\w){DEFERRAL_WORD}(?!\w)')
+PLACEHOLDER_KEY = '(<'   # the deferral word followed by this is the key shape written out with a placeholder owner
 ADR_NUMBER = '[0-9][0-9][0-9][0-9]'
 DATE = re.compile(r'\d{4}-\d{2}-\d{2}')
 REVISIT_BY = re.compile(r'Revisit-by:\s*(\d{4}-\d{2}-\d{2})')
@@ -85,8 +87,11 @@ def adr_findings(path, lines, today):
 def deferral_findings(path, lines, today):
     findings = []
     for number, line in enumerate(lines, 1):
+        spans = [span.span() for span in SPAN.finditer(line)]
         for word in DEFERRAL.finditer(line):
-            key = check.TODO_KEY.match(line, word.start())
+            if line.startswith(PLACEHOLDER_KEY, word.end()) or any(start <= word.start() < end for start, end in spans):
+                continue   # a mention of the key shape, not a deferral
+            key =check.TODO_KEY.match(line, word.start())
             if key is None or not is_date(key[1]):
                 findings.append(Finding(path, number, TODO_UNKEYED, f'no owner and revisit date: {check.TODO_KEY_SHAPE}'))
             elif date.fromisoformat(key[1]) < today:
@@ -107,15 +112,27 @@ def path_claims(line):
     return claims
 
 
-def exists(repo, folder, target):
-    """True when `target` is beside the file (in `folder`) or at the repo root."""
+def known_paths(tracked):
+    """Every tracked file and folder, each written by its last parts as well: `a/b/c.py` gives `a/b/c.py`,
+    `b/c.py`, `c.py`, and its folders `a/b`, `b` and `a`."""
+    known = set()
+    for path in tracked:
+        parts = path.split('/')
+        known.update('/'.join(parts[start:end]) for end in range(1, len(parts) + 1) for start in range(end))
+    return known
+
+
+def exists(repo, folder, known, target):
+    """True when `target` is beside the file (in `folder`) or at the repo root, or ends a tracked path (whole
+    parts only)."""
+    clean = target.removeprefix('./').rstrip('/')
     try:
-        return any((base / target.rstrip('/')).exists() for base in (folder, repo))
+        return any((base / clean).exists() for base in (folder, repo)) or clean in known
     except OSError:
         return False
 
 
-def dead_path_findings(repo, path, lines):
+def dead_path_findings(repo, path, lines, known):
     folder = (repo / path).parent
     findings, fenced = [], False
     for number, line in enumerate(lines, 1):
@@ -123,7 +140,7 @@ def dead_path_findings(repo, path, lines):
             fenced = not fenced
         elif not fenced:
             findings += [Finding(path, number, DEAD_PATH, f'{target} does not exist')
-                         for target in path_claims(line) if not exists(repo, folder, target)]
+                         for target in path_claims(line) if not exists(repo, folder, known, target)]
     return findings
 
 
@@ -148,10 +165,11 @@ def adr_paths(repo, adr_folder):
 
 def scan(repo, adr_folder, today):
     """Every finding of the repository, ordered by path and line; a kind is reported once for a line."""
-    tracked = gitrepo.tracked_files(repo)
+    listed = gitrepo.tracked_files(repo)
+    tracked, known = set(listed), known_paths(listed)
     adrs = adr_paths(repo, adr_folder)
     findings = []
-    for path in sorted(set(tracked) | adrs):
+    for path in sorted(tracked | adrs):
         lines = read_lines(repo, path)
         if lines is None:
             continue
@@ -160,7 +178,7 @@ def scan(repo, adr_folder, today):
         if path in tracked:
             findings += deferral_findings(path, lines, today)
             if path.rsplit('/', 1)[-1] == CLAUDE_FILE:
-                findings += dead_path_findings(repo, path, lines)
+                findings += dead_path_findings(repo, path, lines, known)
     return sorted(set(findings), key=lambda finding: (finding.path, finding.line, finding.kind))
 
 
