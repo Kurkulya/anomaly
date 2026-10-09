@@ -18,7 +18,7 @@ One plain command each, exactly this form: no chains, inline code, heredoc or re
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog start <key> conduct --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ports --home '${user_config.home}' --repo <main>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" frontier <unit>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket show <ticket>
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket show <ticket> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket gate <ticket>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket amend <ticket> '<claim and what is true now>'
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" log add <unit> --stage conduct '<event>'
@@ -33,7 +33,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 
 1. `worklog start` (key: the unit folder name). `ports`: `repo base` is the base; `<base>` is `origin/<repo base>` when `repo name` has source `origin` (a remote exists), else `<repo base>`. No remote: no push, MR or CI step and no override question; the `ports` lines alone decide. [N4, N6, AC-24]
 2. `frontier`: show its `warning:` lines. [O3] Exit 1: name the blockers, stop. [O48, AC-14] Exit 2: print the `anomaly:` line, stop. Finished line: step 3, then Finish. An in-progress ticket: ask the user to confirm no other session runs it, then resume it. [O4, O12, AC-12]
-3. Integration branch: the first ticket's `Base:` (`ticket show`), else the `branch` port with the unit key as slug. A `<key>` in the port value is the ticket key from the key line of `ticket show`; stop if it is missing or a placeholder, as build does. Once: `git -C <main> worktree add <wt> -b <branch> <start>`; `<wt>` beside `<main>`, named `<repo name>-<key>`; `<start>` is `<base>` after `git fetch` (no remote: the local base). Existing: reuse it. `<main>` stays on the base branch. Then `command install` from `ports`, once, in `<wt>`. [O5, O6, O7, AC-13]
+3. Integration branch: the first ticket's `Base:` (`ticket show`), else the `branch` port with the unit key as slug. A key placeholder in the port value is the `<ticket key>` from the key line of `ticket show`; stop if it is missing or a placeholder, as build does. Once: `git -C <main> worktree add <wt> -b <branch> <start>`; `<wt>` beside `<main>`, named `<repo name>-<key>`; `<start>` is `<base>` after `git fetch` (no remote: the local base). Existing: reuse it. `<main>` stays on the base branch. Then `command install` from `ports`, once, in `<wt>`. [O5, O6, O7, AC-13]
 
 ## Plan, before each wave
 
@@ -46,17 +46,17 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 ## Run
 
 9. One chapter per wave (`mark_chapter`, if the tool exists). [O18] `log add` `wave <n>: <tickets>`, n = the `wave` lines of `log.md` plus 1. [O16] `anomaly:build` once per ticket in frontier order: the ticket's absolute path, `<wt>` as the checkout, "last review: no" (a one-ticket unit: "yes"). A stop of build stops the wave. [AC-21]
-10. With a remote, after each merge: a plain `git -C <wt> push -u origin <branch>`, never the base or the default branch, never forced; a refused push is printed, not retried. `check pre-push` is skipped: the gate lines exist only at the finish (D-11). [O19, AC-23] No `push` line in `log.md` yet: `anomaly:ship` for the draft MR, with `<wt>` as the checkout and the integration branch checked out. [O22, AC-25]
-11. `ci` port off its core default: after each push, `ci watch <tip> --max-min 30` in the background. Never hold the report for it; its result line becomes a later event. Exit 3: run it again; 5: run it again once; 1, 2 or 4: a red tip. [O20, O28, AC-23]
+10. With a remote, after each merge: a plain `git -C <wt> push -u origin <branch>`, never the base or the default branch, never forced; a refused push is printed, not retried. `check pre-push` is skipped: the gate lines are written at step 19. [O19, AC-23] Then, with no `push` line in `log.md` yet: `anomaly:ship` for the draft MR, with `<wt>` as the checkout and the integration branch checked out. [O22, AC-25] Then `log add` `push <sha>`.
+11. `ci` port off its core default: after each push, `ci watch <tip> --max-min 30` in the background. Never hold the report for it; its result line becomes a later event. Exit 3: run it again; 5: run it again once, still 5: say so, go on; 1, 2 or 4: a red tip. [O20, O28, AC-23]
 
 ## Report
 
-12. `log add`: `merge <NN-slug>`, `push <sha>` and `stop <why>`, one line each; no cost numbers. [AC-28]
+12. `log add`: `merge <NN-slug>` and `stop <why>`, one line each; no cost numbers. [AC-28]
 13. A run's first wave: `worklog add` before `conduct status`, which exits 2 without it. [N6, AC-32] Print the five lines of `conduct status`. With an MR, one more line: `MR size: <n> changed lines`, n = insertions + deletions of `git -C <wt> diff --shortstat <base>...HEAD`, never a question; without one, nothing about size. [N2, N3, AC-29]
 
 ## Go on or stop
 
-14. A sequential wave with no open decision and a tip that is not red: next wave. Stop for a parallel pick, a scope change, a red tip, the ready gate. While the user decides, prepare the next claim check. [N1, O44, O43, AC-30]
+14. A sequential wave with no open decision and a tip that is not red: next wave. Stop for a parallel pick, a scope change, a red tip, the ready gate. While the user decides, prepare the next claim check. [N1, O44, O43, AC-30] Every stop of a run (a blocker, an `anomaly:` line, a red tip, a scope change, a failed verify) first writes `worklog add` if this run wrote none. [AC-32]
 15. Under 200k tokens of context: same window. Past it: stop after the report and offer a fresh session. [N13, L4, AC-31]
 
 ## Chip mode
