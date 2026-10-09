@@ -57,8 +57,9 @@ class FrontierTest(unittest.TestCase):
         return [line for line in output.splitlines() if slug in line]
 
     def test_prints_each_startable_ticket_once_in_ticket_order_and_no_other(self):
-        """AC-1: a ticket whose blockers are all done and that is not done is startable, whatever other status
-        it has; a ticket with one done and one open blocker is not."""
+        """AC-1: a ready-for-agent ticket whose blockers are all done is startable; a ticket with one done and one
+        open blocker is not. The ready-for-human ticket gets a line too, but it waits for a person (AC-1, Amended,
+        cumulative review)."""
         tickets = {
             '01-alpha': slice_ticket('01', status='done'),
             '02-bravo': slice_ticket('02', blocked='01'),

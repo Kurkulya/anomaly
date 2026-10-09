@@ -7,7 +7,7 @@ the same way. Its state lives in header lines, each plain (`Status: x`) or bold
 (`**Status:** x`); both are read, and a rewritten line keeps its own shape.
 
   show        print the state lines; warn when `Blocked by:` is missing
-  gate        exit 0 only when every blocker ticket has `Status: done`
+  gate        exit 0 only when every blocker is `done` and the ticket is not waiting for a person
   set-status  rewrite `Status:`; `in-progress` also writes `Metrics: started <t>`
   result      tick the ACs, write `Status: done`, `Result:` and `Metrics:`
   reviewed    add or replace `Reviewed: <sha>`        (additive line)
@@ -32,7 +32,8 @@ from pathlib import Path
 
 from . import files, gitrepo, paths, ports, privacy, records
 from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
-                        TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_START_UNKNOWN,
+                        TICKET_STATUS_DONE, TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
+                        TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_STATUS_WONTFIX, TICKET_START_UNKNOWN,
                         TICKET_NUMBER_DIGITS, TICKET_TIME_FORMAT, TICKET_TITLE_MAX_CHARS)
 from .files import RecordError
 from .records import require_one_line
@@ -44,6 +45,7 @@ SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', KEY_LINE_CORE, 'Tests', 'Repro',
                                # KEY_LINE_CORE marks the slot of the key line, shown under key_name()
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
+WAITS_FOR_PERSON = (TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_WONTFIX)   # the statuses only a person moves on
 BOM = chr(0xFEFF)   # a byte order mark; written as a code point so the file holds no invisible character
 
 LINE_SPLIT = re.compile(r'(\r\n|\n|\r)')
@@ -298,6 +300,17 @@ def is_blocked(parsed, unfinished):
     return bool(unfinished) or parsed.blockers_unreadable
 
 
+def waits_for_person(parsed):
+    """The rule for `ticket gate` and `frontier`: only a `ready-for-agent` ticket starts; one that is
+    `ready-for-human`, `needs-info` or `wontfix` waits for a person, whatever its blockers are."""
+    return parsed.status in WAITS_FOR_PERSON
+
+
+def person_text(parsed):
+    """The reason a ticket that waits_for_person is not started: its status and who moves it on."""
+    return f'{parsed.status}, waits for a person'
+
+
 def blocker_lines(path, unfinished):
     """One line per blocker that is not done (`unfinished`, from unfinished_blockers): its number, its status
     and its file."""
@@ -513,7 +526,7 @@ def register(commands, common):
         return parser
 
     action('show', run_show, 'print the state lines; warn when Blocked by: is missing')
-    action('gate', run_gate, 'exit 0 only when every blocker is done; else name the open ones (exit 1)')
+    action('gate', run_gate, 'exit 0 only when every blocker is done and the ticket does not wait for a person; else say why (exit 1)')
     status = action('set-status', run_set_status, 'rewrite Status:; in-progress also writes Metrics: started')
     status.add_argument('status', help='one word, for example in-progress or done')
     result = action('result', run_result, 'tick the ACs, write Status: done, Result: and Metrics:')
@@ -594,6 +607,9 @@ def run_gate(args, environ):
     unfinished = unfinished_blockers(Path(args.ticket).parent, parsed)
     for line in blocker_lines(args.ticket, unfinished):
         print(line)
+    if waits_for_person(parsed):
+        print(person_text(parsed))
+        return 1
     return 1 if is_blocked(parsed, unfinished) else 0
 
 
