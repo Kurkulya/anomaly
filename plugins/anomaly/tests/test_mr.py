@@ -262,6 +262,18 @@ class BodyTest(UnitCase):
                 write_text(stories, original.replace(WHY, f'{WHY}, {problem}'))
                 self.assert_refused_for_privacy(folder, 'why')
 
+    def test_a_title_with_a_privacy_problem_is_refused_naming_the_title_and_writes_no_file(self):
+        """AC-37 (Amended, cumulative review): the `Title:` line goes to the host too; its summary is the first heading
+        of the AC file."""
+        folder = self.unit()
+        stories = folder / 'stories.md'
+        original = stories.read_text(encoding='utf-8')
+        for problem in PRIVACY_PROBLEMS:
+            with self.subTest(problem=problem):
+                write_text(stories, original.replace('# Make the widget list reliable and show it to every reader',
+                                                     f'# {problem}'))
+                self.assert_refused_for_privacy(folder, 'title')
+
     def test_a_decision_line_with_a_number_before_the_prefix_is_a_breaking_line(self):
         """AC-33 and formats.md: a prefix may follow the D-n id; the fact is the decision, not its Why or Source."""
         _, body = self.body_of(self.unit(breaking=(), decision_lines=(
@@ -654,6 +666,14 @@ class PutTests:
                 self.assertTrue(err.startswith('anomaly: '), err)
                 self.assert_no_tool_call()
                 self.assertFalse((folder / 'mr.md').exists())
+        with self.subTest('the Title: line'):
+            folder = self.unit()
+            write_text(folder / 'mr-body.md', f'Title: feat(no-ticket): {PRIVACY_PROBLEMS[0]}\n\n## Why\n\n{MR_BODY_LINE}\n')
+            code, out, err = self.run_mr('put', folder)
+            self.assertEqual(code, 2, (out, err))
+            self.assertIn('title', err.lower())
+            self.assert_no_tool_call()
+            self.assertFalse((folder / 'mr.md').exists())
 
     def test_put_and_ready_refuse_an_mr_link_of_another_project_and_change_nothing(self):
         """AC-42 and AC-43 (Amended, cumulative review): the `MR:` link names another project than the origin."""
