@@ -661,10 +661,11 @@ class CheckStoriesTest(unittest.TestCase):
 
 
 def slice_ticket(number, covers='AC-1', blocked='none', status='ready-for-agent', jira='no-ticket',
-                 tests='unit tests', body=''):
-    """A ticket whose lines sit at fixed numbers: Covers 3, Blocked by 4, Status 5, Jira 6, Tests 7."""
+                 tests='unit tests', body='', key_line='Jira'):
+    """A ticket whose lines sit at fixed numbers: Covers 3, Blocked by 4, Status 5, key line 6, Tests 7.
+    The key line is `Jira:` unless `key_line` names another."""
     return (f'# {number}: A ticket\n\nCovers: {covers}\nBlocked by: {blocked}\nStatus: {status}\n'
-            f'Jira: {jira}\nTests: {tests}\n{body}')
+            f'{key_line}: {jira}\nTests: {tests}\n{body}')
 
 
 class CheckSliceTest(unittest.TestCase):
@@ -819,6 +820,24 @@ class CheckSliceTest(unittest.TestCase):
             with self.subTest(key=key):
                 self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', **{key.lower(): ''}))
                 self.assert_error(f'01-first.md:{line}:', f'{key}: is empty')
+
+    def test_the_key_line_is_key_in_core_or_the_line_the_key_line_port_names_and_a_jira_line_still_counts(self):
+        """AC-9, through the CLI: a `Jira:`-only set passes in the first test of this class."""
+        home = self.folder.parent / 'home'
+        home.mkdir()
+        run = lambda: run_cli('check', 'slice', str(self.folder), '--home', str(home))
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Key', jira='ABC-1'))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Story', jira='ABC-3'))
+        code, out, err = run()
+        self.assertEqual(code, 1, out)
+        write_text(home / 'profile.md', '---\nkey_line: Story\n---\n')
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.put('02-second', slice_ticket('02', covers='AC-3', blocked='01', status='done', jira='ABC-2'))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
 
     def test_ready_for_human_without_a_reason_is_an_error_quoting_the_value(self):
         self.put('03-third', slice_ticket('03', covers='none', status='ready-for-human'))

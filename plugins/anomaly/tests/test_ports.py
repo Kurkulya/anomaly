@@ -13,7 +13,7 @@ from tests.fixtures import GitFixture, run_cli, write_text
 
 LINE = re.compile(r'(\S+) (\S+) = (.*?) ?\[([^\[\]]*)\]')
 PORT_NAMES = {'implementer', 'test_writer', 'conventions', 'reviewers', 'gather', 'tracker', 'issue_source',
-              'ci', 'mr', 'commit', 'branch', 'ui_check'}
+              'ci', 'mr', 'commit', 'branch', 'ui_check', 'key_line', 'adr_folder'}
 COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')
 LENSES = 'anomaly:code, anomaly:feature, anomaly:security'
 TEMPLATE = Path(__file__).resolve().parent.parent / 'templates' / 'profile.md'
@@ -176,7 +176,8 @@ class ProfileKeysTest(unittest.TestCase):
     def test_every_port_key_is_a_known_profile_key_and_the_new_ones_are_optional_and_in_the_template(self):
         keys = {key for _, _, key, _ in constants.PORTS} | {constants.MODELS_KEY}
         new = keys - set(profile.PROFILE_KEYS)
-        self.assertEqual(new, {'test_writers', 'conventions', 'reviewers', 'gather', 'ci', 'models'})
+        self.assertEqual(new, {'test_writers', 'conventions', 'reviewers', 'gather', 'ci', 'models',
+                               'key_line', 'adr_folder'})
         self.assertLessEqual(new, set(profile.OPTIONAL_KEYS))
         template = profile.parse_profile(TEMPLATE.read_text(encoding='utf-8'))
         self.assertLessEqual(new, set(template))
@@ -423,6 +424,21 @@ class ResolverTest(PortsCase):
         self.assertEqual(resolution.layer.commands['verify'].value, 'run-all')
         self.assertEqual(resolution.layer.risk_patterns, ('migrations/',))
         self.assertEqual(resolution.models['review'].value, 'opus')
+
+    def test_the_key_line_and_adr_folder_ports_have_a_core_default_and_each_profile_key_replaces_it(self):
+        """AC-8 (D-25): `key_line` (core `Key`) and `adr_folder` (core `docs/adr/`) are replace ports."""
+        by_name = {line.name: line for line in ports.resolve_ports({})[0]}
+        for name, default in (('key_line', 'Key'), ('adr_folder', 'docs/adr/')):
+            with self.subTest(port=name, case='core default'):
+                self.assertIn(name, by_name)
+                self.assertEqual((by_name[name].value, by_name[name].source), (default, ports.CORE))
+        lines, problems = ports.resolve_ports({'key_line': 'Story', 'adr_folder': 'docs/decisions/'})
+        by_name = {line.name: line for line in lines}
+        self.assertEqual(problems, ())
+        for name, value in (('key_line', 'Story'), ('adr_folder', 'docs/decisions/')):
+            with self.subTest(port=name, case='profile key'):
+                self.assertIn(name, by_name)
+                self.assertEqual((by_name[name].value, by_name[name].source), (value, ports.PROFILE))
 
     def break_repo_files(self):
         self.repo.write('package.json', '{"scripts": ')
