@@ -48,6 +48,7 @@ lines of an ad-hoc ticket are its own `Reviewed:` and `Verified:` lines (`ticket
 """
 import re
 import sys
+from importlib import import_module
 from pathlib import Path
 from typing import NamedTuple
 
@@ -61,7 +62,8 @@ STATE_FILE = 'mr.md'                     # the MR link and the gate lines, in a 
 ADHOC_STATE_SUFFIX = '.mr.md'            # after the name of an ad-hoc ticket, beside it
 MR_LABEL, REVIEWED_LABEL, VERIFIED_LABEL = 'MR', 'Reviewed', 'Verified'
 STATE_LABELS = (MR_LABEL, REVIEWED_LABEL, VERIFIED_LABEL)   # the lines of the MR file, in file order
-ADAPTERS = {'glab': glab, 'gh': gh}      # by constants.MR_ADAPTERS name; each has HOST and create_mr, update_mr, ready_mr, view_mr
+ADAPTERS = {name: import_module(f'.{name}', __package__) for name in constants.MR_ADAPTERS}   # the module of each adapter
+# (glab.py, gh.py): each has HOST and create_mr, update_mr, ready_mr, view_mr
 ADAPTER_ERRORS = (glab.CiError, gh.GhError)
 TITLE_LINE = re.compile(r'Title:[ \t]*(\S.*?)[ \t]*')
 MR_NUMBER = re.compile(r'.*/(\d+)/?')    # the end of a link: .../pull/7 or .../-/merge_requests/7
