@@ -173,10 +173,10 @@ def unit_parts(folder, resolution, key_line, docs_gate):
     tickets = frontier.load_tickets(frontier.tickets_folder(folder), key_line)
     if not tickets:
         raise RecordError(f'{folder}: no ticket files NN-*.md')
-    ac_file = next((name for name in frontier.AC_FILES if (folder / name).is_file()), None)
-    if ac_file is None:
+    ac_path = frontier.ac_file(folder)
+    if ac_path is None:
         raise RecordError(f'{folder}: no {" or ".join(frontier.AC_FILES)}')
-    text = files.read_input(folder / ac_file)
+    text = files.read_input(ac_path)
     merged = [(path, parsed) for path, parsed in tickets if parsed.status == TICKET_STATUS_DONE]
     ids, _ = check.ac_ids(text)
     missing = [ac for ac, _ in check.uncovered_acs(text, (parsed for _, parsed in merged))]

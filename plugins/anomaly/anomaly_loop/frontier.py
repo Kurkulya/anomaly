@@ -96,14 +96,19 @@ def classify(tickets_dir, tickets):
     return entries, errors
 
 
+def ac_file(folder):
+    """The AC file of the unit folder: `spec.md` when the unit has one, else `stories.md` (ADR-0011); None when it
+    has neither. The one pick `frontier` and `mr body` use."""
+    return next((folder / name for name in AC_FILES if (folder / name).is_file()), None)
+
+
 def ac_warnings(folder, tickets):
-    """One warning line per AC of the unit's AC file that no ticket's `Covers:` names. The file is `spec.md` when
-    the unit has one, else `stories.md` (ADR-0011)."""
-    name = next((name for name in AC_FILES if (folder / name).is_file()), None)
-    if name is None:
+    """One warning line per AC of the unit's AC file that no ticket's `Covers:` names."""
+    path = ac_file(folder)
+    if path is None:
         return [f'warning: the unit has no {" or ".join(AC_FILES)}; the ACs are not checked']
-    text = files.read_input(folder / name)
-    return [f'warning: {name}:{number}: {ac} is in no ticket\'s Covers: line'
+    text = files.read_input(path)
+    return [f'warning: {path.name}:{number}: {ac} is in no ticket\'s Covers: line'
             for ac, number in check.uncovered_acs(text, (parsed for _, parsed in tickets))]
 
 
