@@ -1692,9 +1692,11 @@ line starting with `anomaly:` and exit with status 2.
 python plugins/anomaly/scripts/anomaly.py docs scan <range> [--repo <dir>] [--home <dir>]
 ```
 
-`docs scan` runs checks 1 to 3 of the docs audit: it reports the ADRs whose revisit date has
-passed, the deferral notes without an owner and a revisit date, and the paths in `CLAUDE.md`
-files that no longer exist. It reads the working folder and writes nothing. The range is `A..B`
+`docs scan` runs the three checks of the docs audit that need no judgment: it reports the ADRs
+whose revisit date has passed, the deferral notes without an owner and a revisit date, and the
+paths in `CLAUDE.md` files that no longer exist. The other two checks (a commit that decided
+something no ADR records, and an ADR claim the code has moved away from) are the docs agent's, not
+this command's. It reads the working folder and writes nothing. The range is `A..B`
 or `A...B` (a range that does not resolve is an error, exit 2); it only decides which findings
 are marked, not what is scanned. Today is the command's clock.
 
@@ -1713,21 +1715,24 @@ decision.
 - `todo-unkeyed`: in any tracked text file, the word `TODO` that is not followed at once by the
   key `(<owner>, revisit YYYY-MM-DD)`. A key whose date is not a real date counts as no key. The
   word counts only where a deferral is written: as the first word of a comment (after `#`, `//`,
-  `--`, `/*` or `<!--`, spaces allowed), the first word of a line (after leading spaces) or the
-  first word of a list item (`- `, `* `, `1. `). A mention in the middle of code or of a sentence,
+  `--`, `/*` or `<!--`, spaces allowed), the first word of a line (after leading spaces or `> `
+  quote marks) or the first word of a list item (`- `, `* `, `1. `, also with a `[ ]` or `[x]` box).
+  A mention in the middle of code or of a sentence,
   and the word followed by `(<` (the key shape written out), are not reported. One finding for
   each line.
 - `todo-overdue`: a keyed deferral whose revisit date is before today. It is read wherever the
   key with a real date stands in the line, in a comment or not.
 - `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
-  it exists beside that file or at the repository root, or when a tracked file or folder equals it
-  or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is live for
-  `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md` exists). It is
-  dead only when none of these holds. A claim is a backticked word that has no
-  space, glob, placeholder or colon character and either holds a `/` or is a bare file name ending
-  in `.md`, `.py`, `.json`, `.toml`, `.yml`, `.yaml`, `.sh` or `.txt`; or the target of a markdown
-  link that is relative (a URL, an anchor and a `#fragment` are skipped). Fenced code blocks are not
-  read.
+  it exists beside that file or at the repository root and git does not ignore it (a folder that
+  git ignores, such as a local work-unit folder, exists in one checkout only), or when a tracked
+  file or folder equals it or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is
+  live for `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md`
+  exists). It is dead only when none of these holds. A claim is a backticked word that has no
+  space, glob, placeholder or colon character (a trailing `:12` or `:12-20` line cite is cut off
+  first) and either holds a `/` or is a bare file name ending in `.md`, `.py`, `.json`, `.toml`,
+  `.yml`, `.yaml`, `.sh` or `.txt`; or the target of a markdown link that is relative (a URL, an
+  anchor and a `#fragment` are skipped). Fenced code blocks are not read. A git ref such as
+  `origin/main` also looks like a claim: this is a known limit.
 
 The scan covers the files git tracks (`git ls-files`, read at the working folder, so an
 uncommitted edit counts); files that are not UTF-8 text and symbolic links are skipped. Work-unit

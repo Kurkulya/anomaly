@@ -1,9 +1,12 @@
-"""docs scan: checks 1 to 3 of the docs audit, from the tracked files of a repository.
+"""docs scan: three checks of the docs audit that need no judgment, from the tracked files of a repository: an ADR
+whose revisit date has passed, a deferral note without an owner and a revisit date, and a path in a `CLAUDE.md`
+that no longer exists. The other two checks of the audit (a commit that decided something no ADR records, an ADR
+claim the code has moved away from) are the docs agent's, not this command's.
 
   docs scan <range> [--repo DIR] [--home DIR]    print the findings, one line each; nothing is written
 
 The range is `A..B` or `A...B` (resolved through risk.resolve_range); it only decides which findings are
-marked. The scan itself reads the working folder, not the range. Three kinds of finding, each with the
+marked. The scan itself reads the working folder, not the range. Four kinds of finding, each with the
 repository-relative `path:line`:
 
 - `adr-overdue`: an ADR whose revisit date is before today. The date is the `Revisit-by:` field of the status
@@ -13,19 +16,20 @@ repository-relative `path:line`:
   value outside the repo gives docs/adr) and in the adr/ of every unit folder (check.ADR_GLOBS).
 - `todo-unkeyed`: in any tracked text file, a deferral note (the word in DEFERRAL_WORD) that is not followed at
   once by the key `(<owner>, revisit YYYY-MM-DD)`. It counts only as the first word of a comment (after `#`,
-  `//`, `--`, `/*` or `<!--`), of a line or of a list item (`- `, `* `, `1. `); a mention in the middle of
-  code or of a sentence is not reported, nor is the word followed by `(<`. A key whose date is not a real date
-  counts as no key. `todo-overdue`: a key with a real date before today, wherever it stands in the line.
-- `dead-path`: in a tracked `CLAUDE.md`, a path claim that exists neither beside that file, nor at the repo
-  root, nor as a tracked file or folder that is the claim or ends with `/<claim>`. A claim is a backticked
-  word with no space or glob or placeholder character that holds a `/` or is a bare file name with one of the
-  extensions in BARE_FILE, or the target of a markdown link that is not a URL or an anchor. Fenced code
-  blocks are not read.
+  `//`, `--`, `/*` or `<!--`), of a line (after spaces or `> ` quote marks) or of a list item (`- `, `* `,
+  `1. `, also with a `[ ]` or `[x]` box); a mention in the middle of code or of a sentence is not reported,
+  nor is the word followed by `(<`. A key whose date is not a real date counts as no key. `todo-overdue`: a
+  key with a real date before today, wherever it stands in the line.
+- `dead-path`: in a tracked `CLAUDE.md`, a path claim that is not live. It is live when it exists beside that
+  file or at the repo root and git does not ignore it (an ignored folder exists in one checkout only), or
+  when a tracked file or folder is the claim or ends with `/<claim>`. A claim is a backticked word with no
+  space or glob or placeholder character (a trailing `:12` or `:12-20` is cut off) that holds a `/` or is a
+  bare file name with one of the extensions in BARE_FILE, or the target of a markdown link that is not a URL
+  or an anchor. Fenced code blocks are not read. A ref such as `origin/main` is a claim (a known limit).
 
 A finding in a file the range changes ends with ` [touched]`. The command exits 1 when any finding is marked,
 else 0. Today is the CLI clock (args.today).
 """
-import glob
 import re
 from datetime import date
 from typing import NamedTuple
@@ -39,7 +43,8 @@ TOUCHED = ' [touched]'
 DEFERRAL_WORD = 'TO' + 'DO'   # joined, so that this file holds no bare deferral note of its own
 DEFERRAL = re.compile(rf'(?<!\w){DEFERRAL_WORD}(?!\w)')
 # The deferral word as the first word of a comment (after one of these markers), of a line or of a list item.
-POSITIONED = re.compile(rf'(?:^\s*(?:(?:[-*]|\d+\.)\s+)?|(?:#|//|--|/\*|<!--)\s*)(?P<word>{DEFERRAL_WORD})(?!\w)')
+POSITIONED = re.compile(rf'(?:^\s*(?:>\s*)*(?:(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?)?|(?:#|//|--|/\*|<!--)\s*)'
+                        rf'(?P<word>{DEFERRAL_WORD})(?!\w)')
 PLACEHOLDER_KEY = '(<'   # the deferral word followed by this is the key shape written out with a placeholder owner
 ADR_NUMBER = '[0-9][0-9][0-9][0-9]'
 DATE = re.compile(r'\d{4}-\d{2}-\d{2}')
@@ -50,6 +55,7 @@ SPAN = re.compile(r'`([^`]+)`')
 LINK = re.compile(r'\]\(<?([^)\s>]+)>?(?:\s+"[^"]*")?\)')
 # A claim holds none of: a space, a glob, placeholder, quote, bracket or shell character, or a colon (a URL, `file:line`).
 NOT_A_PATH = re.compile(r'[\s*?<>{}|$=:\\\[\]()"\'`;,]|\.\.\.')
+LINE_NUMBER = re.compile(r':\d+(?:-\d+)?$')   # a `path:12` or `path:12-20` cite names the path
 BARE_FILE = re.compile(r'[\w.-]+\.(?:md|py|json|toml|ya?ml|sh|txt)')
 
 
@@ -105,7 +111,7 @@ def deferral_findings(path, lines, today):
 def path_claims(line):
     """The relative paths a line of a markdown file claims, once each, in order of appearance."""
     claims = []
-    candidates = [(match.start(), match[1], False) for match in SPAN.finditer(line)]
+    candidates = [(match.start(), LINE_NUMBER.sub('', match[1]), False) for match in SPAN.finditer(line)]
     candidates += [(match.start(), match[1].split('#', 1)[0].split('?', 1)[0], True) for match in LINK.finditer(line)]
     for _, target, is_link in sorted(candidates):
         if not target or target[0] in '-/~#' or NOT_A_PATH.search(target) or target in claims:
@@ -115,27 +121,35 @@ def path_claims(line):
     return claims
 
 
-def known_paths(tracked):
-    """Every tracked file and folder, each written by its last parts as well: `a/b/c.py` gives `a/b/c.py`,
-    `b/c.py`, `c.py`, and its folders `a/b`, `b` and `a`."""
-    known = set()
-    for path in tracked:
-        parts = path.split('/')
-        known.update('/'.join(parts[start:end]) for end in range(1, len(parts) + 1) for start in range(end))
-    return known
+def tracked_match(tracked, claim):
+    """True when a tracked file or folder is `claim` or ends with `/<claim>`: the claim is a run of whole path
+    parts of a tracked path (a folder is a leading part run of the files in it)."""
+    inner = f'/{claim}/'
+    return any(inner in f'/{path}/' for path in tracked)
 
 
-def exists(repo, folder, known, target):
-    """True when `target` is beside the file (in `folder`) or at the repo root, or ends a tracked path (whole
-    parts only)."""
+def is_ignored(repo, full):
+    """True when git ignores the path `full` (a path outside the repository is not)."""
+    try:
+        spec, = gitrepo.relative_specs(repo, [full])
+    except gitrepo.GitError:
+        return False
+    return gitrepo.is_ignored(repo, spec)
+
+
+def exists(repo, folder, tracked, target):
+    """True when `target` is live: it is beside the file (in `folder`) or at the repo root and git does not ignore
+    it (an ignored folder is in one checkout only), or a tracked path is the claim or ends with it."""
     clean = target.removeprefix('./').rstrip('/')
     try:
-        return any((base / clean).exists() for base in (folder, repo)) or clean in known
+        if any((base / clean).exists() and not is_ignored(repo, base / clean) for base in (folder, repo)):
+            return True
     except OSError:
         return False
+    return tracked_match(tracked, clean)
 
 
-def dead_path_findings(repo, path, lines, known):
+def dead_path_findings(repo, path, lines, tracked):
     folder = (repo / path).parent
     findings, fenced = [], False
     for number, line in enumerate(lines, 1):
@@ -143,7 +157,7 @@ def dead_path_findings(repo, path, lines, known):
             fenced = not fenced
         elif not fenced:
             findings += [Finding(path, number, DEAD_PATH, f'{target} does not exist')
-                         for target in path_claims(line) if not exists(repo, folder, known, target)]
+                         for target in path_claims(line) if not exists(repo, folder, tracked, target)]
     return findings
 
 
@@ -161,15 +175,13 @@ def read_lines(repo, path):
 
 def adr_paths(repo, adr_folder):
     """The ADR files, repository-relative: `NNNN-*.md` in the ADR folder and in the adr/ of every unit folder."""
-    patterns = [pattern.format(ADR_NUMBER) for pattern in check.ADR_GLOBS]
-    patterns.append(f'{glob.escape(check.adr_folder_path(adr_folder))}/{ADR_NUMBER}-*.md')
-    return {found.relative_to(repo).as_posix() for pattern in patterns for found in repo.glob(pattern)}
+    return {found.relative_to(repo).as_posix()
+            for pattern in check.adr_globs(ADR_NUMBER, adr_folder) for found in repo.glob(pattern)}
 
 
 def scan(repo, adr_folder, today):
     """Every finding of the repository, ordered by path and line; a kind is reported once for a line."""
-    listed = gitrepo.tracked_files(repo)
-    tracked, known = set(listed), known_paths(listed)
+    tracked = set(gitrepo.tracked_files(repo))
     adrs = adr_paths(repo, adr_folder)
     findings = []
     for path in sorted(tracked | adrs):
@@ -181,7 +193,7 @@ def scan(repo, adr_folder, today):
         if path in tracked:
             findings += deferral_findings(path, lines, today)
             if path.rsplit('/', 1)[-1] == CLAUDE_FILE:
-                findings += dead_path_findings(repo, path, lines, known)
+                findings += dead_path_findings(repo, path, lines, tracked)
     return sorted(set(findings), key=lambda finding: (finding.path, finding.line, finding.kind))
 
 
@@ -204,6 +216,6 @@ def run_scan(args, environ):
     marked = [finding.path in touched for finding in findings]
     for finding, is_touched in zip(findings, marked):
         print(f'{finding.path}:{finding.line}: {finding.kind}: {finding.detail}{TOUCHED if is_touched else ""}')
-    print(f'docs scan: {len(findings)} findings, {sum(marked)} in files the range changes' if findings
-          else 'docs scan: no findings')
+    print(f'docs scan: {len(findings)} finding{"" if len(findings) == 1 else "s"}, {sum(marked)} in files the range changes'
+          if findings else 'docs scan: no findings')
     return 1 if any(marked) else 0

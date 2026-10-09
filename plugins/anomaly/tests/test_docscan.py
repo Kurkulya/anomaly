@@ -9,6 +9,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
+from anomaly_loop import docscan, gitrepo
 from tests.fixtures import GitFixture, run_cli, write_text
 
 # The deferral word is joined here so that this file holds no bare deferral note of its own.
@@ -108,59 +109,6 @@ class ScanFindingsTest(DocsScanTestCase):
         with self.subTest('the existing path is not named'):
             self.assertNotIn('src/present.py', out)
 
-    def test_a_deferral_counts_only_as_the_first_word_of_a_comment_a_line_or_a_list_item(self):
-        """The word after a comment marker, at the start of a line or of a list item is a deferral note; a mention
-        in the middle of code or of a sentence, or the key shape with a placeholder owner, is not. A keyed note whose
-        literal date has passed is reported where it stands."""
-        notes = f"""pattern = re.compile(r'{DEFERRAL}\\(')
-\"\"\"A sentence with no {DEFERRAL} key here.\"\"\"
-owner = f'{DEFERRAL}(VK, revisit {{date}})'
-# {DEFERRAL}(<owner>, revisit YYYY-MM-DD) is the key shape
-# the note `{DEFERRAL}: later` is quoted in a span
-# {DEFERRAL} fix the parser
-{DEFERRAL}: drop this
-- {DEFERRAL} write this
-value = 1  // {DEFERRAL} after code
-the key `{DEFERRAL}(VK, revisit 2026-09-01)` is old
-# {DEFERRAL}(VK, revisit 2026-11-05): not yet due
-"""
-        base = self.commit({'src/shape.py': notes}, 'docs: plant', 1)
-        head = self.commit({'README.md': '# Demo\n'}, 'docs: readme', 2)
-
-        result = self.scan(f'{base}..{head}')
-
-        expected = [location_of(notes, needle, 'src/shape.py')
-                    for needle in (f'# {DEFERRAL} fix', f'{DEFERRAL}: drop', f'- {DEFERRAL} write', 'after code',
-                                   'is old')]
-        self.assertEqual(self.locations(result), expected, result)
-        with self.subTest('the passed key is reported as overdue'):
-            self.assertIn('todo-overdue', [line for line in result[1].splitlines() if expected[-1] in line][0])
-
-    def test_a_path_claim_is_live_when_a_tracked_path_equals_it_or_ends_with_it(self):
-        """A claim found nowhere beside the CLAUDE.md or at the root is live when a tracked file or folder is the
-        claim or ends with `/<claim>` (whole path parts only); it is dead when no tracked path matches."""
-        claude = """# Demo
-
-Use `scripts/tool.py` for it.
-Read `GUIDE.md` first, and see the `vendor/` folder.
-The old file `gone/missing.py` is gone.
-So is `NOPE.md`.
-A part of a name, `cripts/tool.py`, is not a path of the repo.
-"""
-        base = self.commit({'tools/scripts/tool.py': 'X = 1\n', 'docs/deep/GUIDE.md': '# Guide\n',
-                            'lib/vendor/a.txt': 'a\n', 'CLAUDE.md': claude}, 'docs: plant', 1)
-        head = self.commit({'README.md': '# Demo\n'}, 'docs: readme', 2)
-
-        result = self.scan(f'{base}..{head}')
-
-        expected = [location_of(claude, needle, 'CLAUDE.md')
-                    for needle in ('gone/missing.py', 'So is', 'is not a path of the repo')]
-        self.assertEqual(self.locations(result), expected, result)
-        out = result[1]
-        for live in ('scripts/tool.py', 'GUIDE.md', 'vendor/'):
-            with self.subTest(live=live):
-                self.assertNotIn(f'{live} does not exist', out)
-
     def test_a_profile_adr_folder_moves_where_overdue_adrs_are_found(self):
         """AC-50 with the `adr_folder` port: a profile `adr_folder: decisions/` makes the scan read overdue ADRs from
         `decisions/` and not from `docs/adr/`."""
@@ -173,6 +121,8 @@ A part of a name, `cripts/tool.py`, is not a path of the repo.
 
         expected = [location_of(OVERDUE_ADR, 'Revisit-by: 2026-09-01', 'decisions/0002-overdue.md')]
         self.assertEqual(self.locations(result), expected, result)
+        with self.subTest('the count line is singular for one finding'):
+            self.assertEqual(result[1].splitlines()[-1], 'docs scan: 1 finding, 0 in files the range changes')
 
 
 class ScanTouchedFilesTest(DocsScanTestCase):
@@ -221,6 +171,137 @@ class ScanTouchedFilesTest(DocsScanTestCase):
                     if other != touched:
                         self.assertEqual(self.lines_of(result[1], other), self.lines_of(untouched[1], other),
                                          f'{other} is marked but its file is not touched')
+
+
+TODAY = date(2026, 10, 4)
+
+
+class DeferralRuleTest(unittest.TestCase):
+    """Unit: `deferral_findings` reads a deferral only where one is written, and a key by its own shape."""
+
+    def found(self, *lines):
+        return [(finding.line, finding.kind) for finding in docscan.deferral_findings('f.py', list(lines), TODAY)]
+
+    def test_the_word_is_a_deferral_as_the_first_word_of_a_comment_a_line_or_a_list_item(self):
+        lines = [f'# {DEFERRAL} fix the parser', f'{DEFERRAL}: drop this', f'- {DEFERRAL} write this',
+                 f'value = 1  // {DEFERRAL} after code', f'* [ ] {DEFERRAL} a box', f'- [x] {DEFERRAL} a ticked box',
+                 f'> {DEFERRAL} quoted', f'1. {DEFERRAL} numbered', f'  <!-- {DEFERRAL} html -->',
+                 f'-- {DEFERRAL} sql', f'/* {DEFERRAL} c */']
+        self.assertEqual(self.found(*lines), [(number, docscan.TODO_UNKEYED) for number in range(1, len(lines) + 1)])
+
+    def test_a_mention_in_the_middle_of_code_or_of_a_sentence_or_the_key_shape_is_not_one(self):
+        self.assertEqual(self.found(
+            f"pattern = re.compile(r'{DEFERRAL}\\(')", f'"""A sentence with no {DEFERRAL} key here."""',
+            f"owner = f'{DEFERRAL}(VK, revisit {{date}})'", f'# {DEFERRAL}(<owner>, revisit YYYY-MM-DD) is the shape',
+            f'# the note `{DEFERRAL}: later` is quoted'), [])
+
+    def test_a_key_with_a_date_that_is_not_real_counts_as_no_key(self):
+        self.assertEqual(self.found(f'# {DEFERRAL}(VK, revisit 2026-13-45): later'), [(1, docscan.TODO_UNKEYED)])
+
+    def test_a_key_is_overdue_only_before_today_and_is_read_wherever_it_stands(self):
+        self.assertEqual(self.found(
+            f'# {DEFERRAL}(VK, revisit 2026-09-01): old', f'# {DEFERRAL}(VK, revisit 2026-10-04): today',
+            f'# {DEFERRAL}(VK, revisit 2026-11-05): not yet', f'the key `{DEFERRAL}(VK, revisit 2026-09-01)` is old'),
+            [(1, docscan.TODO_OVERDUE), (4, docscan.TODO_OVERDUE)])
+
+
+class AdrRevisitTest(unittest.TestCase):
+    """Unit: `adr_findings` takes the revisit date from the status line, else from the front block."""
+
+    def found(self, *lines):
+        return [(finding.line, finding.kind) for finding in docscan.adr_findings('docs/adr/0001-x.md', list(lines), TODAY)]
+
+    def test_a_superseded_adr_is_skipped(self):
+        self.assertEqual(self.found('# ADR-0001: x', '', 'Status: Superseded by ADR-0009 · Revisit-by: 2026-09-01'), [])
+
+    def test_the_revisit_by_field_wins_over_the_front_block_line(self):
+        past, future = '2026-08-15', '2026-12-01'
+        with self.subTest('a future field and a past front-block line: not overdue'):
+            self.assertEqual(self.found('# ADR-0001: x', f'Status: Accepted · Revisit-by: {future}', '',
+                                        f'Revisit: {past}.'), [])
+        with self.subTest('a past field and a future front-block line: overdue at the status line'):
+            self.assertEqual(self.found('# ADR-0001: x', f'Status: Accepted · Revisit-by: {past}', '',
+                                        f'Revisit: {future}.'), [(2, docscan.ADR_OVERDUE)])
+
+    def test_a_revisit_line_below_the_first_heading_is_not_read(self):
+        self.assertEqual(self.found('# ADR-0001: x', 'Status: Accepted', '', '## Revisit', 'Revisit: 2026-08-15.'), [])
+
+
+class AdrPathsTest(unittest.TestCase):
+    """Unit: `adr_paths` finds `NNNN-*.md` in the ADR folder and in the adr/ of every unit folder."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name).resolve()
+        for relative in ('docs/adr/0001-a.md', 'docs/adr/notes.md', 'decisions/0005-e.md', '.anomaly/u/adr/0002-b.md',
+                         '.scratch/u/adr/0003-c.md', 'other/0004-d.md'):
+            write_text(self.root / relative, 'x\n')
+
+    def test_the_adr_folder_and_the_unit_adr_folders_are_read_and_nothing_else(self):
+        units = {'.anomaly/u/adr/0002-b.md', '.scratch/u/adr/0003-c.md'}
+        for adr_folder, expected in (('docs/adr/', {'docs/adr/0001-a.md'}), ('decisions/', {'decisions/0005-e.md'}),
+                                     ('https://wiki.example.invalid/adr', {'docs/adr/0001-a.md'})):
+            with self.subTest(adr_folder=adr_folder):
+                self.assertEqual(docscan.adr_paths(self.root, adr_folder), expected | units)
+
+
+class PathClaimTest(unittest.TestCase):
+    """Unit: `path_claims` reads the relative path claims of a line."""
+
+    def test_a_backticked_path_a_bare_file_and_a_link_target_are_claims(self):
+        self.assertEqual(docscan.path_claims('Use `src/a.py` and `README.md`, see [it](docs/b.md#top) and `a b/c`.'),
+                         ['src/a.py', 'README.md', 'docs/b.md'])
+
+    def test_urls_anchors_globs_placeholders_and_plain_words_are_not_claims(self):
+        self.assertEqual(docscan.path_claims(
+            'See [x](https://example.invalid/a/b.md), [y](#top), `src/*.py`, `<dir>/x.py`, `file:line`, `word`, '
+            '`/abs/p.py`, `python -m unittest`.'), [])
+
+    def test_a_trailing_line_number_or_range_is_cut_off_the_claim(self):
+        self.assertEqual(docscan.path_claims('Cites `src/gone.py:12` and `docs/b.md:3-9`.'),
+                         ['src/gone.py', 'docs/b.md'])
+
+
+class PathLivenessTest(unittest.TestCase):
+    """Unit: `dead_path_findings` calls a claim live beside the CLAUDE.md or at the root, or when a tracked file or
+    folder equals it or ends with `/<claim>`; a path git ignores is dead; a fenced block is not read."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = GitFixture(Path(tmp.name).resolve() / 'repo')
+        files = {'tools/scripts/tool.py': 'X = 1\n', 'docs/deep/GUIDE.md': '# Guide\n', 'lib/vendor/a.txt': 'a\n',
+                 'sub/helper.py': 'X = 1\n', 'top.py': 'X = 1\n', 'README.md': '# Demo\n'}
+        for relative, text in files.items():
+            self.repo.write(relative, text)
+        self.repo.commit(list(files), 'docs: plant', date(2026, 10, 1))
+
+    def dead(self, path, *lines):
+        tracked = gitrepo.tracked_files(self.repo.root)
+        return [finding.detail for finding in docscan.dead_path_findings(self.repo.root, path, list(lines), tracked)]
+
+    def test_a_tracked_file_or_folder_that_is_the_claim_or_ends_with_it_makes_it_live(self):
+        self.assertEqual(self.dead(
+            'CLAUDE.md', 'Use `scripts/tool.py`, read `GUIDE.md`, see `vendor/` and `lib/vendor`.'), [])
+
+    def test_a_claim_no_tracked_path_matches_by_whole_parts_is_dead(self):
+        self.assertEqual(self.dead('CLAUDE.md', 'Is `gone/missing.py`, `NOPE.md`, `cripts/tool.py`, `ool.py`.'),
+                         ['gone/missing.py does not exist', 'NOPE.md does not exist', 'cripts/tool.py does not exist',
+                          'ool.py does not exist'])
+
+    def test_a_claim_beside_the_claude_file_or_at_the_root_is_live(self):
+        self.assertEqual(self.dead('sub/CLAUDE.md', 'Uses `helper.py` and `top.py`.'), [])
+
+    def test_a_claim_inside_a_fenced_block_is_not_read(self):
+        self.assertEqual(self.dead('CLAUDE.md', '```', 'See `gone/missing.py`.', '```', 'After `NOPE.md`.'),
+                         ['NOPE.md does not exist'])
+
+    def test_a_path_that_git_ignores_is_dead_even_when_it_is_on_disk(self):
+        self.repo.write('.git/info/exclude', '.scratch/\n')
+        self.repo.write('.scratch/notes.md', 'x\n')
+        self.assertEqual(self.dead('CLAUDE.md', 'Work units: `.scratch/`, `.scratch/notes.md`, and `top.py`.'),
+                         ['.scratch/ does not exist', '.scratch/notes.md does not exist'])
 
 
 if __name__ == '__main__':
