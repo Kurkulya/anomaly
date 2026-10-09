@@ -1723,7 +1723,8 @@ decision.
 - `todo-overdue`: a keyed deferral whose revisit date is before today. It is read wherever the
   key with a real date stands in the line, in a comment or not.
 - `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
-  it exists beside that file or at the repository root, or when git ignores it (a folder that git
+  it is at or under `.anomaly/` or `.scratch/` (the folders of local work units: a clone has none,
+  so they are never reported), or exists beside that file or at the repository root, or when git ignores it (a folder that git
   ignores, such as a local work-unit folder, exists in one checkout only, so it is live whether or
   not it is on disk), or when a tracked file or folder equals it or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is
   live for `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md`

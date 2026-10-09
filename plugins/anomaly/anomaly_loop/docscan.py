@@ -20,8 +20,9 @@ repository-relative `path:line`:
   `1. `, also with a `[ ]` or `[x]` box); a mention in the middle of code or of a sentence is not reported,
   nor is the word followed by `(<`. A key whose date is not a real date counts as no key. `todo-overdue`: a
   key with a real date before today, wherever it stands in the line.
-- `dead-path`: in a tracked `CLAUDE.md`, a path claim that is not live. It is live when it exists beside that
-  file or at the repo root, or when git ignores it (an ignored folder, such as a local work-unit folder, exists
+- `dead-path`: in a tracked `CLAUDE.md`, a path claim that is not live. It is live when it is at or under a unit
+  home folder (check.OWNER_HOME_DIRS: `.anomaly`, `.scratch`; local work units, so a clone has none), or exists
+  beside that file or at the repo root, or when git ignores it (an ignored folder, such as a local work-unit folder, exists
   in one checkout only, so it is live on or off disk), or when a tracked file or folder is the claim or ends
   with `/<claim>`. A claim is a backticked word with no
   space or glob or placeholder character (a trailing `:12` or `:12-20` is cut off) that holds a `/` or is a
@@ -140,10 +141,12 @@ def is_ignored(repo, full, is_folder):
 
 
 def exists(repo, folder, tracked, target):
-    """True when `target` is live: it is beside the file (in `folder`) or at the repo root, or git ignores it (a
-    local folder such as a work-unit folder is in one checkout only, so a clone must not report it), or a tracked
-    path is the claim or ends with it."""
+    """True when `target` is live: it is at or under a unit home folder (check.OWNER_HOME_DIRS), or it is beside the
+    file (in `folder`) or at the repo root, or git ignores it (a local folder is in one checkout only, so a clone
+    must not report it), or a tracked path is the claim or ends with it."""
     clean = target.removeprefix('./').rstrip('/')
+    if clean.split('/', 1)[0] in check.OWNER_HOME_DIRS:
+        return True   # a local work-unit folder: a clone has none of them
     try:
         if any((base / clean).exists() or is_ignored(repo, base / clean, target.endswith('/'))
                for base in (folder, repo)):
