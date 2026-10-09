@@ -34,7 +34,8 @@ claude plugin install anomaly@anomaly-local
 
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
-listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review` and `anomaly:ship` beside them.
+listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review` and
+`anomaly:ship` beside them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
