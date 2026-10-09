@@ -2,7 +2,9 @@
 
   pre-merge   exit 0 only when `Reviewed:` and `Verified:` both name the head being merged and the
               acceptance test is unchanged since its red commit (or the ticket notes why)
-  stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
+  pre-push    exit 0 only when `Reviewed:` and `Verified:` both name the current head: in the mr.md of a
+              work-unit folder, or in an ad-hoc ticket; each stale or missing line is one line, exit 1
+  stories    exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
   slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
               a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN
@@ -41,15 +43,15 @@ from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, TICKET_ADHOC_DIR, TICKET
 from .records import is_date
 
 
-def head_problem(repo, key, value, head):
-    """One line when the ticket's `<key>:` value is not the head being merged, else None."""
+def head_problem(repo, key, value, head, what='merged'):
+    """One line when the ticket's `<key>:` value is not the head being `what` (merged, or pushed), else None."""
     if not value:
-        return f'{key}: no {key}: line; the head being merged ({gitrepo.short(head)}) has no record'
+        return f'{key}: no {key}: line; the head being {what} ({gitrepo.short(head)}) has no record'
     found = ticket.named_commit(repo, value)
     if found is None:
         return f'{key}: {ticket.not_a_commit(value)}'
     if found != head:
-        return f'{key}: {value} is not the head being merged ({gitrepo.short(head)})'
+        return f'{key}: {value} is not the head being {what} ({gitrepo.short(head)})'
     return None
 
 
@@ -89,6 +91,13 @@ def pre_merge(repo, parsed, head):
     problem, note = acceptance_test_result(repo, parsed, head)
     problems.append(problem)
     return [line for line in problems if line], [note] if note else []
+
+
+def pre_push(repo, gate_lines, head):
+    """The problems for the `(label, value)` gate lines and the head being pushed, one line each, in order;
+    [] when every value names the head."""
+    problems = [head_problem(repo, key, value, head, 'pushed') for key, value in gate_lines]
+    return [line for line in problems if line]
 
 
 # ---------- stories ----------
@@ -608,6 +617,19 @@ def register(commands, common):
                        help='the commit being merged: a commit id or a branch (default: HEAD of --repo)')
     merge.add_argument('--repo', help=gitrepo.REPO_HELP)
     merge.set_defaults(handler=run_pre_merge)
+    push = actions.add_parser(
+        'pre-push', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help='exit 0 only when the unit or ad-hoc ticket was reviewed and verified on the head; '
+             'name each stale line (exit 1)',
+        description=('Exit 0 only when Reviewed: and Verified: both name the current head of --repo. A work-unit\n'
+                     'folder keeps them in its mr.md (mr reviewed, mr verified), an ad-hoc ticket in the ticket\n'
+                     'itself (ticket reviewed, ticket verified). Each failed line is one line on stdout and the\n'
+                     'exit code is 1: a missing line, a value that is not a commit, or a head that moved. A\n'
+                     'missing or unreadable mr.md, or a target that is neither a work-unit folder nor an\n'
+                     'ad-hoc ticket, is one anomaly: line and exit 2. Nothing is written.'))
+    push.add_argument('target', help='a work-unit folder (reads mr.md in it) or an ad-hoc ticket file')
+    push.add_argument('--repo', help=gitrepo.REPO_HELP)
+    push.set_defaults(handler=run_pre_push)
     check_stories = actions.add_parser(
         'stories', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
@@ -679,4 +701,26 @@ def run_pre_merge(args, environ):
     for line in notes:
         print(line)
     print(f'pre-merge check passed for {Path(args.ticket).name} at {gitrepo.short(head)}')
+    return 0
+
+
+def run_pre_push(args, environ):
+    from . import mr   # inside the function: mr imports this module
+    found = mr.locate(args.target)
+    if found.unit:
+        if not found.state.is_file():
+            raise files.RecordError(f'{found.state}: no MR file; `mr reviewed` and `mr verified` write it')
+        state = mr.read_state(found.state)
+        gate_lines = [(label, state.get(label)) for label in (mr.REVIEWED_LABEL, mr.VERIFIED_LABEL)]
+    else:
+        _, parsed = ticket.load(args.target)
+        gate_lines = [(mr.REVIEWED_LABEL, parsed.reviewed), (mr.VERIFIED_LABEL, parsed.verified)]
+    repo = gitrepo.repo_for(args.repo)
+    head = gitrepo.require_commit(repo, 'HEAD')
+    problems = pre_push(repo, gate_lines, head)
+    if problems:
+        for line in problems:
+            print(line)
+        return 1
+    print(f'pre-push check passed for {Path(args.target).name} at {gitrepo.short(head)}')
     return 0

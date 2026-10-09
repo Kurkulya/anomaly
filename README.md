@@ -1293,13 +1293,15 @@ runs through `bench score`, with at most 1 false High per run.
 ## The pre-merge check and the seam ledger
 
 `check pre-merge` makes three rules of the pipeline checks instead of requests, from the ticket
-file and git. `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
+file and git. `check pre-push` holds a push to the review and the verify of the head.
+`check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
 `check slice` checks that its tickets can be run.
 `seams prune` and `seams add` keep the seam ledger true after a merge. None of them
 needs a home or a profile.
 
 ```
 python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py check pre-push  <work-unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder>
 python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder>
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
@@ -1327,6 +1329,15 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   lines when it records the first `Red:` line or a different sha: each reason covers only the
   edits after the red commit it was written for. A `Red-changed:` line never excuses a wrong `Reviewed:` or `Verified:`. A test path
   written with backslashes is read with forward slashes.
+- `check pre-push` exits 0 only when `Reviewed:` and `Verified:` both name the current head of
+  `--repo`. A work-unit folder keeps the two lines in its `mr.md` (`mr reviewed`, `mr verified`);
+  an ad-hoc ticket keeps them in the ticket itself (`ticket reviewed`, `ticket verified`). Every
+  failed line is one line on stdout, named by its label (`Reviewed:` or `Verified:`: no line, not a
+  commit id, not a commit of this repository, or not the head, so a head that moved after the
+  review names both lines), and the exit code is 1. A missing or unreadable `mr.md`, or a target
+  that is neither a work-unit folder nor an ad-hoc ticket, is one `anomaly:` line and exit 2.
+  Nothing is written, and the red commit and the test file are not checked (`check pre-merge`
+  does that).
 - `check stories` reads `stories.md`, `decisions.md` and `log.md` of a work-unit folder against the
   shapes in `plugins/anomaly/docs/formats.md`. Errors, each a line `<file>:<line>: ...` with the
   allowed shape: a duplicate `AC-<n>` id; an AC id that an earlier `specify:` line of `log.md` named
@@ -1629,7 +1640,7 @@ python plugins/anomaly/scripts/anomaly.py nudge     --home <dir> --data <dir> [-
 python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc|amend ...
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py bench     score <defects.json> <findings>...
-python plugins/anomaly/scripts/anomaly.py check     pre-merge|stories|slice ...
+python plugins/anomaly/scripts/anomaly.py check     pre-merge|pre-push|stories|slice ...
 python plugins/anomaly/scripts/anomaly.py seams     prune|add ...
 python plugins/anomaly/scripts/anomaly.py ci        watch|log <target> [--project <group/project>] [--repo <dir>] ...
 python plugins/anomaly/scripts/anomaly.py risk      <range> [--repo <dir>]
