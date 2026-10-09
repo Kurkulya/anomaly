@@ -1883,10 +1883,15 @@ the CLI.
   that asks you a question: parallel or sequential. Any other wave is sequential and starts without
   one. After a parallel pick, `PARALLEL.md` marks each ticket `par` or `seq` (disjoint touches, no
   shared `seams.md` owner, medium or larger, at most one UI check), builds a prep branch for a
-  shared helper, makes one plain worktree per ticket and sends one `implementer` agent per ticket
-  in one message with absolute paths. The agents stop at a branch tip; the close of `anomaly:build`
-  (review, verify, CI check, merge) then runs one branch at a time, each worktree is removed right
-  after its merge, and the push, CI watch and report follow as in a sequential wave.
+  shared helper (a `ticket adhoc` unit on `build`'s light path), and makes one plain worktree per
+  ticket with `command install` run once in it; a branch or worktree left by a stopped wave is
+  reused. `conduct` itself runs the red step: one message with one `test_writer` dispatch per
+  ticket, then it commits each red test and runs `ticket red`. One more message sends one
+  `implementer` agent per ticket with absolute paths; the agents only implement. Then, one branch
+  at a time, `conduct` removes the agent's worktree, switches its own worktree to the ticket
+  branch and runs the close of `anomaly:build` (review, verify, CI check, merge) there, so the
+  verify runs on the ticket's own code. The push, CI watch and report follow as in a sequential
+  wave.
 - **Go on or stop.** A sequential wave with no open decision and a tip that is not red goes straight
   on. It stops for a parallel pick, a scope change, a red tip and the ready gate. Past 200k tokens
   of context it stops after the report and offers a fresh session: in the desktop app a chip with the
