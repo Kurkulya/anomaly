@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import files, gitrepo, paths, ports, privacy, records
-from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, NO_START_WARNING, TICKET_ADHOC_DIR,TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
+from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
                         TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_START_UNKNOWN,
                         TICKET_NUMBER_DIGITS, TICKET_TIME_FORMAT, TICKET_TITLE_MAX_CHARS)
 from .files import RecordError

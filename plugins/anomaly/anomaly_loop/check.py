@@ -34,7 +34,7 @@ import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import files, gitrepo, paths, ports, ticket
-from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, TICKET_ADHOC_DIR,TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
+from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
                         TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
                         TICKET_STATUS_READY, TICKET_STATUS_WONTFIX)
 from .records import is_date
