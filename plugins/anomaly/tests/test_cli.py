@@ -1409,5 +1409,47 @@ class ShipSkillTest(unittest.TestCase):
         self.assertIsNotNone(self.DOMAIN_WORDS.search(example), 'no word of a made-up everyday domain')
 
 
+class ConductSkillTest(unittest.TestCase):
+    """Workflow-conduct ticket 12 (AC-15, AC-59 to AC-61, the conduct SKILL.md and KICKOFF.md half). The other
+    ACs of the ticket are checked by the rule trace of ticket 13; the PARALLEL.md checks are ticket 13's. The
+    all-skills checks (250-character description, folder set) and the `allowed-tools` and deny-shape checks
+    of test_pipeline_files.py cover the new folder through ALLOWED_TOOLS_SKILLS (AC-61)."""
+    SKILL = PLUGIN / 'skills' / 'conduct' / 'SKILL.md'
+    KICKOFF = SKILL.parent / 'KICKOFF.md'
+    SKILL_MAX_BYTES = 8 * 1024
+    KICKOFF_MAX_BYTES = 1024
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/conduct/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_conduct_skill_is_model_invocable_and_acts_only_on_an_explicit_request(self):
+        """AC-15, as the build skill's description check (the 250-character limit is the all-skills check)."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'conduct')
+        self.assertNotIn('disable-model-invocation', fields)
+        description = fields.get('description', '').lower()
+        self.assertIn('explicit', description)
+        self.assertIn('model-invocable', description)
+
+    def test_the_conduct_skill_fits_in_8_KB_and_its_kickoff_doc_in_1_KB(self):
+        """AC-59, conduct half (PARALLEL.md is ticket 13's)."""
+        self.text()
+        self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
+        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
+
+    def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
+        """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
+        heading above it says "chip". The check is on the text of the line, so the skill's step layout stays free."""
+        fields, body = frontmatter.split(self.text())
+        self.assertNotIn(self.KICKOFF.name, ' '.join(str(value) for value in fields.values()))
+        lines = body.splitlines()
+        named = [number for number, line in enumerate(lines) if self.KICKOFF.name in line]
+        self.assertEqual(len(named), 1, f'{self.KICKOFF.name} is named on {len(named)} lines, expected 1')
+        heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
+        self.assertRegex(f'{heading}\n{lines[named[0]]}', r'(?i)\bchip\b')
+
+
 if __name__ == '__main__':
     unittest.main()

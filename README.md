@@ -34,7 +34,8 @@ claude plugin install anomaly@anomaly-local
 
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
-listed, and the pipeline skills `anomaly:build`, `anomaly:review` and `anomaly:ship` beside them.
+listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review` and
+`anomaly:ship` beside them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -1850,6 +1851,41 @@ is read only at the ready gate. Its only pre-approved tool is the CLI.
   `origin` it skips the push and `ci watch`; on the `mr` core default or with no `origin`, it skips
   `mr ready` and `mr show`.
 - **End.** One line each offering `/anomaly:observe` and `/clear`, and one `ship` work-unit line.
+
+## The conduct skill
+
+`anomaly:conduct` drives every ticket of one work unit through `anomaly:build` on one integration
+branch, then takes the one MR to the ready gate. It is model-invocable but acts only on an explicit
+request from you. Its text is `plugins/anomaly/skills/conduct/SKILL.md` (8 KB or less); the
+kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode. Its only pre-approved tool is
+the CLI. This version runs sequential waves; the parallel path is a later addition.
+
+- **Start.** `worklog start`, `ports`, then `frontier` (its warnings are shown; blockers stop the
+  run; an `in-progress` ticket is resumed only after you confirm that no other session runs it).
+  The integration worktree is made once with `git worktree add`; the main checkout stays on the base
+  branch. With no `origin` there is no push, MR or CI step and no question about it: the `ports`
+  lines decide.
+- **Plan.** Before each wave, one agent on the `explore` model role checks the wave's code claims and
+  returns only the false or moved ones; each becomes a `ticket amend` line, and a claim that changes
+  the scope goes to you first. The wave plan is one line per ticket with its `Touches:` paths. A
+  ticket whose gate is closed waits. Research notes go to `research/NN-slug.md` in the unit folder,
+  and a `ticket amend` line puts their path on the ticket, so `build` passes it on.
+- **Run.** `anomaly:build` once per ticket, in `frontier` order. With an `origin`, one plain
+  `git push` after each merge (never forced, never to the base branch); the first push calls
+  `anomaly:ship` for the draft MR; a `ci` port that is not on its core default starts `ci watch` in
+  the background.
+- **Report.** `log add` events (a `wave <n>` line at the start of each wave, then merge, push and
+  stop; no cost numbers), `worklog add` once per run before the first `conduct status` (or at the
+  first stop, if that comes sooner), then the five lines of the wave report. With an MR, one more
+  line gives its size as a number.
+- **Go on or stop.** A sequential wave with no open decision and a tip that is not red goes straight
+  on. It stops for a parallel pick, a scope change, a red tip and the ready gate. Past 200k tokens
+  of context it stops after the report and offers a fresh session: in the desktop app a chip with the
+  kickoff text, in a plain CLI session the printed text.
+- **Finish.** `anomaly:review` in cumulative mode over the whole branch (skipped for a one-ticket
+  unit), one fix branch that also takes every open Low and Nit finding whose fix needs no decision,
+  one full verify and the `ui_check` port, `mr reviewed` and `mr verified` on the tip, then
+  `anomaly:ship` for the ready gate.
 
 ## Development
 
