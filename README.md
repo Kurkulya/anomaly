@@ -988,11 +988,11 @@ says UI, or a UI ticket with no `Tests:` line); `build` starts the dev server be
 walkthrough and stops it after, and the walkthrough agent never does. Its only pre-approved tool is the CLI. It reads only the ticket and `seams.md`,
 never the spec or stories file.
 
-- **Start.** Resolve the ticket from "build 01" or a path, `worklog start`, `ports`, `ticket gate`,
-  stop and ask on an under-specified ticket, `ticket set-status in-progress`. The integration
-  branch is the ticket's `Base:` line, else the `branch` port with the work-unit key as slug,
-  created once from the `repo base` branch (see Ports and the repo layer). The ticket branch
-  starts at the integration tip; nothing is committed on the base or the integration branch.
+- **Start.** Resolve "build 01" or a path, `worklog start`, `ports` (unresolved `command verify`:
+  stop and ask), `ticket gate`, stop and ask on an under-specified ticket, `ticket set-status
+  in-progress`. The integration branch is the ticket's `Base:` line, else the `branch` port with
+  the work-unit key as slug, created once from the `repo base` branch (see Ports and the repo
+  layer). The ticket branch starts at the integration tip; no commit on base or integration branch.
 - **Resume.** After a stop, run the same `build`. If the ticket's merge subject `merge <NN-slug>`
   is already in the first-parent log of the integration branch, `build` goes straight to the close
   with that merge; an existing ticket branch is reused, not created again.

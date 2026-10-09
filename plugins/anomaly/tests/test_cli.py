@@ -223,11 +223,11 @@ class SkillFileTest(unittest.TestCase):
         start = text.split('## Start', 1)[1].split('\n## ', 1)[0]
         rules = [line.lower() for line in start.splitlines() if 'command verify' in line]
         self.assertEqual(len(rules), 1, 'no Start rule names `command verify`')
-        rule = rules[0]
-        self.assertRegex(rule, r'unresolved|empty')
-        self.assertIn('verify:', rule)             # the repo override's key
-        self.assertRegex(rule, r'stop')            # stops before the red step ...
-        self.assertRegex(rule, r'ask')             # ... and asks the user for the command
+        self.assertIn('[i2]', rules[0], 'the new clause follows the [I2] step text')
+        clause = rules[0].split('[i2]', 1)[1]      # the new clause only, not the older step text
+        self.assertRegex(clause, r'unresolved|empty')
+        for part in ('stop', 'ask', 'command', 'repo override', 'verify:', 'never guess'):
+            self.assertIn(part, clause)
 
 
 class ReadmeTest(unittest.TestCase):
