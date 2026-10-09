@@ -168,11 +168,12 @@ class SkillFileTest(unittest.TestCase):
         section = text.split('## Delta rounds', 1)[1].split('\n## ', 1)[0]
         self.assertIn('worklog start', section)
 
-    def test_cumulative_mode_reads_spec_md_else_stories_md_and_decisions_md(self):
-        """AC-85."""
+    def test_cumulative_mode_reads_stories_md_and_decisions_md_and_not_spec_md(self):
+        """AC-85; the old layout's `spec.md` is no longer read (ADR-0011)."""
         text = self.review_text()
-        for name in ('spec.md', 'stories.md', 'decisions.md'):
+        for name in ('stories.md', 'decisions.md'):
             self.assertIn(name, text)
+        self.assertNotRegex(text, r'(?<![\w-])spec\.md')
 
     def build_text(self):
         """The build skill's SKILL.md text; fails while it is missing."""
@@ -603,14 +604,10 @@ class PlanningDocsTest(unittest.TestCase):
 
     def test_the_formats_doc_names_the_key_line_through_the_key_line_port_not_as_jira(self):
         """AC-11: the ticket shape and its key-line rule name the `key_line` port (core line `Key:`). A `Jira:`
-        line is still read until the switch-over, so the doc may say that, but never as the required line."""
+        line is no longer read (ADR-0017), so the doc does not name it."""
         text = self.doc_text(self.FORMATS)
         self.assertIn('key_line', text)
-        self.assertNotRegex(text, r'(?m)^Jira:')
-        for line in text.splitlines():
-            if 'Jira:' in line:
-                with self.subTest(line=line):
-                    self.assertRegex(line, r'(?i)still read|legacy|switch-over')
+        self.assertNotIn('Jira:', text)
 
     def test_the_formats_doc_repro_shape_is_the_runnable_command_without_a_red_now_suffix(self):
         """Adhoc 2026-10-08-durable-runnable-repro, AC-1: `Repro: <command>` runs as written."""

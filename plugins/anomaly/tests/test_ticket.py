@@ -1,5 +1,5 @@
-"""The ticket commands through the CLI, in-process, against a temp `.scratch` (the old layout) and a
-temp `.anomaly` (the new one, AC-88): show, gate, set-status, result, reviewed, verified, red and adhoc.
+"""The ticket commands through the CLI, in-process, against a temp `.anomaly`: show, gate, set-status, result,
+reviewed, verified, red and adhoc.
 Edits are checked as exact bytes: only the named lines change."""
 import contextlib
 import io
@@ -19,7 +19,7 @@ NOW_DATE = date(2026, 10, 4)
 SHARED_COMMITS = 3   # real commits of the one repository every test reads (no test changes it)
 TICKET_TEXT = """# 02: Ticket commands
 
-Jira: no-ticket
+Key: no-ticket
 Covers: AC-1, AC-2
 **Blocked by:** None (can start immediately)
 Status: ready-for-agent
@@ -60,10 +60,10 @@ class TicketTestCase(unittest.TestCase):
         self.root = Path(tmp.name)
         self.home = self.root / 'home'
         self.home.mkdir()
-        self.issues = self.root / '.scratch' / 'feature' / 'issues'
+        self.tickets_dir = self.root / '.anomaly' / 'unit' / 'tickets'
 
     def ticket_path(self, text=TICKET_TEXT, name='02-ticket-commands.md'):
-        path = self.issues / name
+        path = self.tickets_dir / name
         write_text(path, text)
         return path
 
@@ -97,7 +97,7 @@ class RegistryTest(TicketTestCase):
         self.assertEqual(sorted(listed), sorted(actions))
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
-        missing = self.issues / '99-none.md'
+        missing = self.tickets_dir / '99-none.md'
         result = self.run_ticket('show', str(missing))
         self.assert_error(result, '99-none.md')
         self.assertEqual(result[2].count('99-none.md'), 1, result[2])
@@ -129,7 +129,7 @@ class ShowTest(TicketTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertEqual(out.splitlines(), [
             'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
-            'Jira: no-ticket', 'Tests: unit', 'Base: feat/workflow-build', 'Reviewed: abc1234', 'Verified: def5678'])
+            'Key: no-ticket', 'Tests: unit', 'Base: feat/workflow-build', 'Reviewed: abc1234', 'Verified: def5678'])
 
     def test_reads_status_and_blocked_by_in_bold_form(self):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '**Status:** in-progress') \
@@ -153,10 +153,10 @@ class ShowTest(TicketTestCase):
         self.assertNotIn('Blocked by: ', ''.join(line for line in out.splitlines() if not line.startswith('warning')))
 
     def test_a_ticket_without_status_covers_or_tests_still_shows(self):
-        path = self.ticket_path('# 05: Old ticket\n\nJira: none\n**Blocked by:** 01\n')
+        path = self.ticket_path('# 05: Old ticket\n\nKey: none\n**Blocked by:** 01\n')
         code, out, err = self.run_ticket('show', str(path))
         self.assertEqual((code, err), (0, ''))
-        self.assertEqual(out.splitlines(), ['Blocked by: 01', 'Jira: none'])
+        self.assertEqual(out.splitlines(), ['Blocked by: 01', 'Key: none'])
 
     def test_prints_the_repro_line(self):
         """AC-26: a light-path ticket's `Repro:` line is shown, so `build` reads the command from `ticket show`."""
@@ -167,22 +167,24 @@ class ShowTest(TicketTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertIn(repro, out.splitlines())
 
-    def test_prints_the_key_line_that_a_ticket_has(self):
-        """AC-9: the core key line is `Key:`; a ticket with only a `Jira:` line shows as before (the first
-        test of this class)."""
-        path = self.ticket_path(TICKET_TEXT.replace('Jira: no-ticket', 'Key: ABC-1'))
+    def test_prints_the_key_line_that_a_ticket_has_and_not_a_jira_line(self):
+        """AC-9: the core key line is `Key:`. A `Jira:` line is no longer read in its place (ADR-0017)."""
+        path = self.ticket_path(TICKET_TEXT.replace('Key: no-ticket', 'Key: ABC-1'))
         code, out, err = self.run_ticket('show', str(path))
         self.assertEqual((code, err), (0, ''))
         self.assertIn('Key: ABC-1', out.splitlines())
-        self.assertFalse([line for line in out.splitlines() if line.startswith('Jira')], out)
+        jira = self.ticket_path(TICKET_TEXT.replace('Key: no-ticket', 'Jira: ABC-2'), name='03-jira.md')
+        code, out, err = self.run_ticket('show', str(jira))
+        self.assertEqual((code, err), (0, ''))
+        self.assertFalse([line for line in out.splitlines() if line.startswith(('Jira', 'Key'))], out)
 
-    def test_prints_the_line_that_the_key_line_port_names_and_still_a_jira_line(self):
-        """AC-9: the profile key `key_line` names the line; `Jira:` is still read until the switch-over."""
+    def test_prints_the_line_that_the_key_line_port_names(self):
+        """AC-9: the profile key `key_line` names the line; a `Key:` line is then not shown."""
         write_text(self.home / 'profile.md', '---\nkey_line: Story\n---\n')
-        story = self.ticket_path(TICKET_TEXT.replace('Jira: no-ticket', 'Story: ABC-3'))
-        self.assertIn('Story: ABC-3', self.run_ticket('show', str(story))[1].splitlines())
-        jira = self.ticket_path(TICKET_TEXT.replace('Jira: no-ticket', 'Jira: ABC-2'), name='03-jira.md')
-        self.assertIn('Jira: ABC-2', self.run_ticket('show', str(jira))[1].splitlines())
+        story = self.ticket_path(TICKET_TEXT.replace('Key: no-ticket', 'Story: ABC-3\nKey: ABC-1'))
+        out = self.run_ticket('show', str(story))[1].splitlines()
+        self.assertIn('Story: ABC-3', out)
+        self.assertNotIn('Key: ABC-1', out)
 
 
 class GateTest(TicketTestCase):
@@ -264,7 +266,7 @@ class GateTest(TicketTestCase):
         self.assertTrue(out.startswith('warning:'), out)
 
     def test_an_unreadable_blocker_status_counts_as_not_done(self):
-        self.ticket_path('# 01: No status\n\nJira: none\n', name='01-blocker.md')
+        self.ticket_path('# 01: No status\n\nKey: none\n', name='01-blocker.md')
         path = self.ticket_path(blocked_ticket('Blocked by: 01'))
         code, out, err = self.run_ticket('gate', str(path))
         self.assertEqual(code, 1, err)
@@ -322,7 +324,7 @@ class SetStatusTest(TicketTestCase):
 
     def test_crlf_line_endings_are_kept_byte_for_byte(self):
         crlf = TICKET_TEXT.replace('\n', '\r\n').encode('utf-8')
-        path = self.issues / '02-crlf.md'
+        path = self.tickets_dir / '02-crlf.md'
         path.parent.mkdir(parents=True)
         path.write_bytes(crlf)
         self.run_ticket('set-status', str(path), 'in-progress')
@@ -537,7 +539,7 @@ class ReviewedVerifiedTest(TicketTestCase):
 
     def test_crlf_files_get_crlf_lines(self):
         crlf = TICKET_TEXT.replace('\n', '\r\n').encode('utf-8')
-        path = self.issues / '02-crlf.md'
+        path = self.tickets_dir / '02-crlf.md'
         path.parent.mkdir(parents=True)
         path.write_bytes(crlf)
         (one,), repo = self.commits()
@@ -792,7 +794,7 @@ class ResultTest(TicketTestCase):
 
     def test_crlf_ticket_keeps_crlf(self):
         crlf = TICKET_TEXT.replace('\n', '\r\n').encode('utf-8')
-        path = self.issues / '02-crlf.md'
+        path = self.tickets_dir / '02-crlf.md'
         path.parent.mkdir(parents=True)
         path.write_bytes(crlf)
         self.run_ticket('result', str(path), '--branch', 'b', *self.merge_args(), '--changed-lines', '1')
@@ -1212,12 +1214,9 @@ class AdhocFromTest(TicketTestCase):
                 self.assertEqual(self.read(path), draft)
 
 
-LAYOUTS = (('.scratch', 'feature', 'issues'), ('.anomaly', 'unit', 'tickets'))   # the old layout, the new one
-
-
-class LayoutTest(TicketTestCase):
-    """AC-88: a ticket in `.scratch/<feature>/issues/` and one in `.anomaly/<work-unit>/tickets/` give the
-    same result in every ticket command, a blocker in the same folder included."""
+class SequenceTest(TicketTestCase):
+    """Every ticket command in turn on a ticket in `.anomaly/<work-unit>/tickets/`, a blocker in the same folder
+    included."""
 
     def play(self, folder):
         """Run every ticket command on tickets in `folder`; returns every result and the final files."""
@@ -1236,10 +1235,8 @@ class LayoutTest(TicketTestCase):
             ('show', str(main)))]
         return results, {path.name: self.read(path) for path in sorted(folder.iterdir())}
 
-    def test_every_ticket_command_gives_the_same_result_in_both_layouts(self):
-        old, new = (self.play(self.root.joinpath(f'layout-{number}', *layout)) for number, layout in enumerate(LAYOUTS))
-        self.assertEqual(new, old)
-        results, texts = new
+    def test_every_ticket_command_runs_in_turn(self):
+        results, texts = self.play(self.tickets_dir)
         self.assertEqual((results[1][0], results[3][:2]), (1, (0, '')))
         self.assertIn('03', results[1][1])
         self.assertEqual([code for code, _, err in results if err], [])
@@ -1248,8 +1245,8 @@ class LayoutTest(TicketTestCase):
 
 
 FENCE = '```'
-FENCED_TICKET = TICKET_TEXT.replace('Jira: no-ticket', (
-    f'{FENCE}\nStatus: fake\nBlocked by: 99\nReviewed: 0000000\n- [ ] AC-1: fenced copy\n{FENCE}\n\nJira: no-ticket'))
+FENCED_TICKET = TICKET_TEXT.replace('Key: no-ticket', (
+    f'{FENCE}\nStatus: fake\nBlocked by: 99\nReviewed: 0000000\n- [ ] AC-1: fenced copy\n{FENCE}\n\nKey: no-ticket'))
 
 
 class FencedTest(TicketTestCase):
@@ -1258,7 +1255,7 @@ class FencedTest(TicketTestCase):
     def test_show_reads_only_the_real_lines(self):
         out = self.run_ticket('show', str(self.ticket_path(FENCED_TICKET)))[1].splitlines()
         self.assertEqual(out, ['Status: ready-for-agent', 'Blocked by: None (can start immediately)',
-                               'Covers: AC-1, AC-2', 'Jira: no-ticket', 'Tests: unit (CLI in-process)'])
+                               'Covers: AC-1, AC-2', 'Key: no-ticket', 'Tests: unit (CLI in-process)'])
 
     def test_reviewed_adds_a_real_line_and_leaves_the_fenced_one(self):
         path = self.ticket_path(FENCED_TICKET)
@@ -1283,7 +1280,7 @@ class FencedTest(TicketTestCase):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '```\nStatus: ready-for-agent')
         path = self.ticket_path(text)
         shown = self.run_ticket('show', str(path))[1].splitlines()
-        self.assertEqual(shown, ['Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2', 'Jira: no-ticket'])
+        self.assertEqual(shown, ['Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2', 'Key: no-ticket'])
         self.assert_error(self.run_ticket('set-status', str(path), 'done'), 'Status:')
         self.assertEqual(self.read(path), text)
 
@@ -1296,14 +1293,14 @@ class FencedTest(TicketTestCase):
 
 class ByteOrderMarkTest(TicketTestCase):
     def bom_ticket(self):
-        path = self.issues / '02-bom.md'
+        path = self.tickets_dir / '02-bom.md'
         path.parent.mkdir(parents=True)
         path.write_bytes(b'\xef\xbb\xbf' + TICKET_TEXT.encode('utf-8'))
         return path
 
     def test_a_mark_before_the_first_line_does_not_hide_it(self):
         self.assertEqual(ticket.parse(chr(0xFEFF) + '# 02: The title\nStatus: done\n').title, 'The title')
-        path = self.issues / '02-bom-first.md'
+        path = self.tickets_dir / '02-bom-first.md'
         path.parent.mkdir(parents=True)
         path.write_bytes(b'\xef\xbb\xbfStatus: ready-for-agent\n# 02: T\n')
         self.assertEqual(self.run_ticket('show', str(path))[1].splitlines()[0], 'Status: ready-for-agent')
@@ -1316,7 +1313,7 @@ class ByteOrderMarkTest(TicketTestCase):
             'Status: ready-for-agent', f'Status: ready-for-agent\nReviewed: {one}').encode('utf-8'))
 
     def test_a_mark_on_a_first_line_that_is_a_state_line_stays_too(self):
-        path = self.issues / '02-bom-first.md'
+        path = self.tickets_dir / '02-bom-first.md'
         path.parent.mkdir(parents=True)
         path.write_bytes(b'\xef\xbb\xbfStatus: ready-for-agent\n')
         self.run_ticket('set-status', str(path), 'done')
@@ -1349,8 +1346,8 @@ class ParseTest(unittest.TestCase):
         self.assertFalse(ticket.parse('# 03: T\n').has_blocked_line)
         self.assertTrue(ticket.parse('# 03: T\n\nBlocked by: 01\n').has_blocked_line)
 
-    def test_key_is_read_from_the_key_line_or_a_jira_line(self):
-        self.assertEqual(ticket.parse('# 03: T\n\nJira: no-ticket\n').key, 'no-ticket')
+    def test_key_is_read_from_the_key_line_and_not_a_jira_line(self):
+        self.assertEqual(ticket.parse('# 03: T\n\nJira: no-ticket\n').key, '')
         self.assertEqual(ticket.parse('# 03: T\n').key, '')
         self.assertEqual(ticket.parse('# 03: T\n\nKey: ABC-1\n').key, 'ABC-1')
         self.assertEqual(ticket.parse('# 03: T\n\nStory: ABC-3\n', key_line='Story').key, 'ABC-3')

@@ -1,4 +1,4 @@
-"""`check pre-merge` through the CLI, in-process, against a temp git repository and a temp `.scratch` or `.anomaly`:
+"""`check pre-merge` through the CLI, in-process, against a temp git repository and a temp `.anomaly`:
 exit 0 only when `Reviewed:` and `Verified:` equal the head being merged and the acceptance test is
 unchanged since its red commit (or the ticket holds a `Red-changed:` line). Each failed invariant is
 one line on stdout and the exit code is 1; an error is one `anomaly:` line and exit 2."""
@@ -18,7 +18,7 @@ from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 TEST_PATH = 'tests/test_a.py'
 TICKET_TEXT = """# 06: A ticket
 
-Jira: no-ticket
+Key: no-ticket
 Covers: AC-1
 Blocked by: None
 Status: in-progress
@@ -39,7 +39,7 @@ class CheckTestCase(unittest.TestCase):
         self.red = self.repo.commit([TEST_PATH], 'test: red', date(2026, 10, 1))
         self.repo.write('src/a.py', 'code v1\n')
         self.code = self.repo.commit(['src/a.py'], 'feat: code', date(2026, 10, 2))
-        self.ticket = self.repo.root / '.scratch' / 'feature' / 'issues' / '06-a-ticket.md'
+        self.ticket = self.repo.root / '.anomaly' / 'unit' / 'tickets' / '06-a-ticket.md'
         write_text(self.ticket, TICKET_TEXT)
 
     def ticket_cmd(self, *argv, ticket=None):
@@ -87,7 +87,7 @@ class RegistryTest(CheckTestCase):
         self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'pre-push', 'stories', 'slice'])
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
-        assert_cli_error(self, self.check(ticket=self.repo.root / '.scratch' / '99-none.md'), '99-none.md')
+        assert_cli_error(self, self.check(ticket=self.repo.root / '.anomaly' / '99-none.md'), '99-none.md')
 
     def test_a_head_that_is_not_a_commit_is_an_error(self):
         self.record()
@@ -248,24 +248,6 @@ class PreMergeTest(CheckTestCase):
         before = (self.ticket.read_bytes(), self.repo.status(), self.repo.git('rev-parse', 'HEAD'))
         self.check()
         self.assertEqual((self.ticket.read_bytes(), self.repo.status(), self.repo.git('rev-parse', 'HEAD')), before)
-
-
-class LayoutTest(CheckTestCase):
-    """AC-88: a ticket in `.scratch/<feature>/issues/` and one in `.anomaly/<work-unit>/tickets/` give the
-    same result."""
-
-    def test_a_ticket_in_either_layout_gives_the_same_result(self):
-        passes, fails = [], []
-        for folder in (('.scratch', 'feature', 'issues'), ('.anomaly', 'unit', 'tickets')):
-            for name, reviewed, results in (('06-a-ticket.md', 'head', passes), ('07-b-ticket.md', None, fails)):
-                path = self.repo.root.joinpath(*folder, name)
-                write_text(path, TICKET_TEXT)
-                self.record(reviewed=reviewed, ticket=path)
-                results.append(self.check(ticket=path))
-        self.assertEqual(passes[0][0], 0, passes[0])
-        self.assertEqual(passes[1], passes[0])
-        self.assertEqual(fails[0][0], 1, fails[0])
-        self.assertEqual(fails[1], fails[0])
 
 
 class StatOnlyDirtyTest(CheckTestCase):
@@ -489,7 +471,7 @@ class CheckStoriesTest(unittest.TestCase):
 
     def test_a_bracketed_d_n_after_an_out_of_scope_owner_is_a_citation_not_an_error(self):
         """Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1: the owners resolve, so only the bracket is tested."""
-        (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
+        (self.root / '.anomaly' / 'workflow-conduct').mkdir(parents=True)
         owners = (
             'owner: phase 2 `workflow-conduct` (D-11)',
             'owner: a later work unit, TODO(VK, revisit 2026-11-05) (D-5)',
@@ -511,25 +493,22 @@ class CheckStoriesTest(unittest.TestCase):
         """Adhoc 2026-10-08-check-stories-owner-must-exist, AC-1: in stories.md and in decisions.md."""
         write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
         write_text(self.folder / 'adr' / '0005-y.md', '# 5\n')
-        (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
-        write_text(self.root / '.scratch' / 'workflow-conduct' / 'issues' / '01-a.md', '# 1\n')
         write_text(self.root / '.anomaly' / 'adhoc' / '2026-10-08-x.md', '# x\n')
-        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
+        write_text(self.root / '.anomaly' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
         owners = (
             'ticket 05',
             'ticket 03 of `workflow-conduct`',
-            'ticket 01 of `workflow-conduct`',
-            'ticket 3 of `.scratch/workflow-conduct`',
+            'ticket 3 of `.anomaly/workflow-conduct`',
             'ticket 5',
             'ticket 05, `.anomaly/unit/tickets/05-x.md`',
             'the `export` part of ticket 05',
             'ADR-0003',
             'ADR-0005',
             'workflow-conduct',
-            '`.scratch/workflow-conduct`',
+            '`.anomaly/workflow-conduct`',
             '.anomaly/unit/tickets/05-x.md',
             '`.anomaly/adhoc/2026-10-08-x.md`',
-            '.scratch/workflow-conduct/issues/01-a.md',
+            '.anomaly/workflow-conduct/tickets/03-z.md',
             'docs/adr/0003-x.md',
             '.anomaly/unit/adr/0005-y.md',
             'phase 2 `workflow-conduct` (D-11)',
@@ -547,7 +526,7 @@ class CheckStoriesTest(unittest.TestCase):
         write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
         write_text(self.root / 'README.md', '# readme\n')
         write_text(self.root / '.anomaly' / 'adhoc' / '2026-10-08-x.md', '# x\n')
-        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
+        write_text(self.root / '.anomaly' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
         write_text(self.root / 'plugins' / 'anomaly' / 'skills' / 'calibrate' / 'SKILL.md', '# calibrate\n')
         owners = (
             'OWNER-NEEDED (D-3)',
@@ -562,7 +541,7 @@ class CheckStoriesTest(unittest.TestCase):
             'ticket 05 of `workflow-conduct`',
             'adhoc',
             '`.anomaly/adhoc`',
-            '`.scratch/missing`',
+            '`.anomaly/missing`',
             '',
             '`.anomaly/../docs/adr/0003-x.md`',
             str(self.root / 'docs' / 'adr' / '0003-x.md'),
@@ -578,7 +557,7 @@ class CheckStoriesTest(unittest.TestCase):
     def test_a_unit_is_never_its_own_owner_but_another_existing_unit_is(self):
         """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `unit`, `.anomaly/unit` and a bare
         unit name all name the checked unit and fail; `workflow-conduct` is another unit and passes."""
-        (self.root / '.scratch' / 'workflow-conduct').mkdir(parents=True)
+        (self.root / '.anomaly' / 'workflow-conduct').mkdir(parents=True)
         for owner in ('`unit`', '`.anomaly/unit`', 'unit'):
             with self.subTest(owner=owner, file='stories.md'):
                 self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
@@ -589,34 +568,35 @@ class CheckStoriesTest(unittest.TestCase):
         self.put(stories=GOOD_STORIES.replace('ticket 05', '`workflow-conduct`'), decisions=GOOD_DECISIONS)
         self.assertEqual(self.stories(), ([], []))
 
-    def test_a_bare_unit_name_of_the_checked_unit_fails_even_when_another_home_has_that_name(self):
-        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `.scratch/unit` exists beside the checked
-        `.anomaly/unit`; the bare name `unit` still names the checked unit."""
+    def test_a_bare_unit_name_of_the_checked_unit_fails_even_when_the_old_home_has_that_name(self):
+        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `.scratch/unit` (the dropped old home)
+        exists beside the checked `.anomaly/unit`; the bare name `unit` still names the checked unit."""
         (self.root / '.scratch' / 'unit').mkdir(parents=True)
         for owner in ('`unit`', 'unit'):
             with self.subTest(owner=owner):
                 self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
                 self.assert_error(15, 'must exist', file_name='stories.md')
 
-    def test_issues_count_only_in_a_scratch_unit(self):
-        """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: `issues/` is the old `.scratch` layout;
-        a `.anomaly` unit keeps its tickets in `tickets/` only."""
+    def test_the_old_scratch_layout_names_no_owner(self):
+        """ADR-0011, old layout dropped: a `.scratch` unit, its `issues/` and `tickets/` files and its `adr/` are no
+        owner, and an `issues/` folder of a `.anomaly` unit holds no ticket."""
         write_text(self.root / '.anomaly' / 'other' / 'issues' / '01-a.md', '# 1\n')
         write_text(self.root / '.scratch' / 'old' / 'issues' / '01-a.md', '# 1\n')
-        for owner, passes in (('ticket 01 of `other`', False), ('ticket 01 of `old`', True)):
+        write_text(self.root / '.scratch' / 'old' / 'tickets' / '02-b.md', '# 2\n')
+        write_text(self.root / '.scratch' / 'old' / 'adr' / '0007-z.md', '# 7\n')
+        for owner in ('ticket 01 of `other`', 'ticket 01 of `old`', 'ticket 02 of `.scratch/old`', 'old',
+                      '`.scratch/old`', '.scratch/old/issues/01-a.md', '.scratch/old/tickets/02-b.md',
+                      '.scratch/old/adr/0007-z.md', 'ADR-0007'):
             with self.subTest(owner=owner):
                 self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
-                if passes:
-                    self.assertEqual(self.stories(), ([], []))
-                else:
-                    self.assert_error(15, 'must exist', file_name='stories.md')
+                self.assert_error(15, 'must exist', file_name='stories.md')
 
     def test_the_ticket_nn_in_unit_form_is_dropped(self):
         """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: only "ticket NN of `unit`" names a
         ticket of another unit; "in `unit`" fails even when that unit has the ticket, and also when the checked
         unit has ticket NN (`ticket 05`) and the named unit has not."""
-        write_text(self.root / '.scratch' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
-        for owner in ('ticket 03 in `workflow-conduct`', 'ticket 03 in `.scratch/workflow-conduct`',
+        write_text(self.root / '.anomaly' / 'workflow-conduct' / 'tickets' / '03-z.md', '# 3\n')
+        for owner in ('ticket 03 in `workflow-conduct`', 'ticket 03 in `.anomaly/workflow-conduct`',
                       'ticket 05 in `workflow-conduct`'):
             with self.subTest(owner=owner):
                 self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
@@ -646,7 +626,7 @@ class CheckStoriesTest(unittest.TestCase):
 
     def test_a_work_unit_folder_outside_the_known_layout_gets_one_layout_error(self):
         """Adhoc 2026-10-09-cumulative-review-fixes-eval-fixes-2, AC-1: a folder not at `<root>/.anomaly/<unit>`
-        or `<root>/.scratch/<unit>` gets one error that names both homes, not an error per owner. The copy
+        gets one error that names that home and not the dropped `.scratch`, not an error per owner. The copy
         names a missing unit as owner in both files, so a per-owner error would show."""
         import shutil
         from anomaly_loop import check
@@ -657,7 +637,7 @@ class CheckStoriesTest(unittest.TestCase):
         errors, _ = check.stories(stray)
         self.assertEqual(len(errors), 1, errors)
         self.assertIn('.anomaly', errors[0])
-        self.assertIn('.scratch', errors[0])
+        self.assertNotIn('.scratch', errors[0])
 
     def test_the_owner_value_ends_at_the_first_why_or_source(self):
         """Adhoc 2026-10-08-fix-the-10-findings-of-the-eval-fixes-cu, AC-1: a D-n in the Why or Source text
@@ -764,12 +744,12 @@ class CheckStoriesTest(unittest.TestCase):
         self.assertEqual(self.stories(), ([], []))
 
 
-def slice_ticket(number, covers='AC-1', blocked='none', status='ready-for-agent', jira='no-ticket',
-                 tests='unit tests', body='', key_line='Jira'):
+def slice_ticket(number, covers='AC-1', blocked='none', status='ready-for-agent', key='no-ticket',
+                 tests='unit tests', body='', key_line='Key'):
     """A ticket whose lines sit at fixed numbers: Covers 3, Blocked by 4, Status 5, key line 6, Tests 7.
-    The key line is `Jira:` unless `key_line` names another."""
+    The key line is `Key:` unless `key_line` names another."""
     return (f'# {number}: A ticket\n\nCovers: {covers}\nBlocked by: {blocked}\nStatus: {status}\n'
-            f'{key_line}: {jira}\nTests: {tests}\n{body}')
+            f'{key_line}: {key}\nTests: {tests}\n{body}')
 
 
 class CheckSliceTest(unittest.TestCase):
@@ -810,7 +790,7 @@ class CheckSliceTest(unittest.TestCase):
 
     def test_each_missing_ticket_line_is_an_error_naming_the_file_and_the_allowed_values(self):
         for key, fragment in (('Status', 'ready-for-agent'), ('Blocked by', '01, 03'), ('Covers', 'none'),
-                              ('Tests', 'Tests:'), ('Jira', 'no-ticket')):
+                              ('Tests', 'Tests:'), ('Key', 'no-ticket')):
             with self.subTest(key=key):
                 text = slice_ticket('01', covers='AC-1, AC-2')
                 self.put('01-first', ''.join(l for l in text.splitlines(True) if not l.startswith(f'{key}:')))
@@ -919,28 +899,38 @@ class CheckSliceTest(unittest.TestCase):
     def test_a_missing_folder_is_a_cli_error(self):
         assert_cli_error(self, run_cli('check', 'slice', str(self.folder / 'missing')), 'missing')
 
-    def test_an_empty_tests_or_jira_value_is_an_error_on_its_own_line(self):
-        for key, line in (('Tests', 7), ('Jira', 6)):
+    def test_an_empty_tests_or_key_value_is_an_error_on_its_own_line(self):
+        for key, line in (('Tests', 7), ('Key', 6)):
             with self.subTest(key=key):
                 self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', **{key.lower(): ''}))
                 self.assert_error(f'01-first.md:{line}:', f'{key}: is empty')
 
-    def test_the_key_line_is_key_in_core_or_the_line_the_key_line_port_names_and_a_jira_line_still_counts(self):
-        """AC-9, through the CLI: a `Jira:`-only set passes in the first test of this class."""
+    def test_the_key_line_is_key_in_core_or_the_line_the_key_line_port_names_and_a_jira_line_is_not_read(self):
+        """AC-9, through the CLI; the `Jira:` line is no longer read in place of the key line (ADR-0017)."""
         home = self.folder.parent / 'home'
         home.mkdir()
         run = lambda: run_cli('check', 'slice', str(self.folder), '--home', str(home))
-        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Key', jira='ABC-1'))
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key='ABC-1'))
         code, out, err = run()
         self.assertEqual((code, err), (0, ''), out)
-        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Story', jira='ABC-3'))
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Jira', key='ABC-1'))
+        code, out, err = run()
+        self.assertEqual(code, 1, out)
+        self.assertIn('no Key: line', out)
+        self.assertNotIn('Jira: line is read', out)
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Story', key='ABC-3'))
         code, out, err = run()
         self.assertEqual(code, 1, out)
         self.assertIn('no Key: line', out)
         write_text(home / 'profile.md', '---\nkey_line: Story\n---\n')
         code, out, err = run()
-        self.assertEqual((code, err), (0, ''), out)
-        self.put('02-second', slice_ticket('02', covers='AC-3', blocked='01', status='done', jira='ABC-2'))
+        self.assertEqual(code, 1, out)
+        self.assertEqual([line.split(':', 1)[0] for line in out.splitlines()],
+                         ['tickets/02-second.md', 'tickets/03-third.md'], out)
+        self.put('02-second', slice_ticket('02', covers='AC-3', blocked='01', status='done', key_line='Story',
+                                           key='ABC-2'))
+        self.put('03-third', slice_ticket('03', covers='none', status='ready-for-human (needs a key)',
+                                          key_line='Story'))
         code, out, err = run()
         self.assertEqual((code, err), (0, ''), out)
 
