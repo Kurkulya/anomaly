@@ -11,14 +11,16 @@ repository-relative `path:line`:
   above the first `## ` heading) when that line holds a date. An ADR whose status starts with `Superseded`
   is left out. The ADRs are `NNNN-*.md` in the folder of the `adr_folder` port (check.adr_folder_path, so a
   value outside the repo gives docs/adr) and in the adr/ of every unit folder (check.ADR_GLOBS).
-- `todo-unkeyed` and `todo-overdue`: in any tracked text file, a deferral note (the word in
-  DEFERRAL_WORD) that is not followed at once by the key `(<owner>, revisit YYYY-MM-DD)` is unkeyed; one whose
-  key date is before today is overdue. A key whose date is not a real date counts as no key. The word inside a
-  backtick code span, or followed by `(<`, mentions the key shape and is not reported.
+- `todo-unkeyed`: in any tracked text file, a deferral note (the word in DEFERRAL_WORD) that is not followed at
+  once by the key `(<owner>, revisit YYYY-MM-DD)`. It counts only as the first word of a comment (after `#`,
+  `//`, `--`, `/*` or `<!--`), of a line or of a list item (`- `, `* `, `1. `); a mention in the middle of
+  code or of a sentence is not reported, nor is the word followed by `(<`. A key whose date is not a real date
+  counts as no key. `todo-overdue`: a key with a real date before today, wherever it stands in the line.
 - `dead-path`: in a tracked `CLAUDE.md`, a path claim that exists neither beside that file, nor at the repo
-  root, nor as a tracked file or folder that is the claim or ends with `/<claim>`. A claim is a backticked word with no space or glob or placeholder character that holds a `/` or is a
-  bare file name with one of the extensions in BARE_FILE, or the target of a markdown link that is not a URL
-  or an anchor. Fenced code blocks are not read.
+  root, nor as a tracked file or folder that is the claim or ends with `/<claim>`. A claim is a backticked
+  word with no space or glob or placeholder character that holds a `/` or is a bare file name with one of the
+  extensions in BARE_FILE, or the target of a markdown link that is not a URL or an anchor. Fenced code
+  blocks are not read.
 
 A finding in a file the range changes ends with ` [touched]`. The command exits 1 when any finding is marked,
 else 0. Today is the CLI clock (args.today).
@@ -36,6 +38,8 @@ ADR_OVERDUE, TODO_UNKEYED, TODO_OVERDUE, DEAD_PATH = 'adr-overdue', 'todo-unkeye
 TOUCHED = ' [touched]'
 DEFERRAL_WORD = 'TO' + 'DO'   # joined, so that this file holds no bare deferral note of its own
 DEFERRAL = re.compile(rf'(?<!\w){DEFERRAL_WORD}(?!\w)')
+# The deferral word as the first word of a comment (after one of these markers), of a line or of a list item.
+POSITIONED = re.compile(rf'(?:^\s*(?:(?:[-*]|\d+\.)\s+)?|(?:#|//|--|/\*|<!--)\s*)(?P<word>{DEFERRAL_WORD})(?!\w)')
 PLACEHOLDER_KEY = '(<'   # the deferral word followed by this is the key shape written out with a placeholder owner
 ADR_NUMBER = '[0-9][0-9][0-9][0-9]'
 DATE = re.compile(r'\d{4}-\d{2}-\d{2}')
@@ -87,15 +91,14 @@ def adr_findings(path, lines, today):
 def deferral_findings(path, lines, today):
     findings = []
     for number, line in enumerate(lines, 1):
-        spans = [span.span() for span in SPAN.finditer(line)]
-        for word in DEFERRAL.finditer(line):
-            if line.startswith(PLACEHOLDER_KEY, word.end()) or any(start <= word.start() < end for start, end in spans):
-                continue   # a mention of the key shape, not a deferral
-            key =check.TODO_KEY.match(line, word.start())
-            if key is None or not is_date(key[1]):
-                findings.append(Finding(path, number, TODO_UNKEYED, f'no owner and revisit date: {check.TODO_KEY_SHAPE}'))
-            elif date.fromisoformat(key[1]) < today:
+        for word in DEFERRAL.finditer(line):   # a key with a real date is read wherever it stands
+            key = check.TODO_KEY.match(line, word.start())
+            if key is not None and is_date(key[1]) and date.fromisoformat(key[1]) < today:
                 findings.append(Finding(path, number, TODO_OVERDUE, f'revisit date {key[1]} has passed'))
+        for found in POSITIONED.finditer(line):   # a note without one counts only where a note is written
+            key = check.TODO_KEY.match(line, found.start('word'))
+            if (key is None or not is_date(key[1])) and not line.startswith(PLACEHOLDER_KEY, found.end('word')):
+                findings.append(Finding(path, number, TODO_UNKEYED, f'no owner and revisit date: {check.TODO_KEY_SHAPE}'))
     return findings
 
 

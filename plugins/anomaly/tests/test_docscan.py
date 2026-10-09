@@ -108,24 +108,33 @@ class ScanFindingsTest(DocsScanTestCase):
         with self.subTest('the existing path is not named'):
             self.assertNotIn('src/present.py', out)
 
-    def test_a_mention_of_the_deferral_shape_is_not_a_deferral_and_a_bare_one_is(self):
-        """A deferral word inside a backtick code span, or followed by `(<`, mentions the key shape and is not
-        reported; a bare note is, also on a line that holds a code span before it."""
-        shape = f"""# {DEFERRAL}(<owner>, revisit YYYY-MM-DD) is the key shape
+    def test_a_deferral_counts_only_as_the_first_word_of_a_comment_a_line_or_a_list_item(self):
+        """The word after a comment marker, at the start of a line or of a list item is a deferral note; a mention
+        in the middle of code or of a sentence, or the key shape with a placeholder owner, is not. A keyed note whose
+        literal date has passed is reported where it stands."""
+        notes = f"""pattern = re.compile(r'{DEFERRAL}\\(')
+\"\"\"A sentence with no {DEFERRAL} key here.\"\"\"
+owner = f'{DEFERRAL}(VK, revisit {{date}})'
+# {DEFERRAL}(<owner>, revisit YYYY-MM-DD) is the key shape
 # the note `{DEFERRAL}: later` is quoted in a span
 # {DEFERRAL} fix the parser
-# {DEFERRAL}: write this
-# `{DEFERRAL}` is quoted here, but {DEFERRAL} is bare here
+{DEFERRAL}: drop this
+- {DEFERRAL} write this
+value = 1  // {DEFERRAL} after code
+the key `{DEFERRAL}(VK, revisit 2026-09-01)` is old
+# {DEFERRAL}(VK, revisit 2026-11-05): not yet due
 """
-        base = self.commit({'src/shape.py': shape}, 'docs: plant', 1)
+        base = self.commit({'src/shape.py': notes}, 'docs: plant', 1)
         head = self.commit({'README.md': '# Demo\n'}, 'docs: readme', 2)
 
         result = self.scan(f'{base}..{head}')
 
-        expected = [location_of(shape, f'# {DEFERRAL} fix', 'src/shape.py'),
-                    location_of(shape, f'# {DEFERRAL}: write', 'src/shape.py'),
-                    location_of(shape, 'is bare here', 'src/shape.py')]
+        expected = [location_of(notes, needle, 'src/shape.py')
+                    for needle in (f'# {DEFERRAL} fix', f'{DEFERRAL}: drop', f'- {DEFERRAL} write', 'after code',
+                                   'is old')]
         self.assertEqual(self.locations(result), expected, result)
+        with self.subTest('the passed key is reported as overdue'):
+            self.assertIn('todo-overdue', [line for line in result[1].splitlines() if expected[-1] in line][0])
 
     def test_a_path_claim_is_live_when_a_tracked_path_equals_it_or_ends_with_it(self):
         """A claim found nowhere beside the CLAUDE.md or at the root is live when a tracked file or folder is the

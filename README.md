@@ -1711,11 +1711,14 @@ decision.
   files in the folder of the `adr_folder` port (read from the profile in `--home`; a value outside
   the repo gives `docs/adr`, as in `check stories`) and in the `adr/` of every work-unit folder.
 - `todo-unkeyed`: in any tracked text file, the word `TODO` that is not followed at once by the
-  key `(<owner>, revisit YYYY-MM-DD)`. A key whose date is not a real date counts as no key. One
-  finding for each line. The word inside a backtick code span, or followed by `(<`, mentions the
-  key shape and is not a deferral: it is not reported. A bare note such as `# TODO fix` or
-  `TODO: write this` is reported.
-- `todo-overdue`: a keyed deferral whose revisit date is before today.
+  key `(<owner>, revisit YYYY-MM-DD)`. A key whose date is not a real date counts as no key. The
+  word counts only where a deferral is written: as the first word of a comment (after `#`, `//`,
+  `--`, `/*` or `<!--`, spaces allowed), the first word of a line (after leading spaces) or the
+  first word of a list item (`- `, `* `, `1. `). A mention in the middle of code or of a sentence,
+  and the word followed by `(<` (the key shape written out), are not reported. One finding for
+  each line.
+- `todo-overdue`: a keyed deferral whose revisit date is before today. It is read wherever the
+  key with a real date stands in the line, in a comment or not.
 - `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
   it exists beside that file or at the repository root, or when a tracked file or folder equals it
   or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is live for
