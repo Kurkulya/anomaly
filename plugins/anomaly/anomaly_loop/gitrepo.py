@@ -25,6 +25,8 @@ from .constants import SHORT_SHA_CHARS
 
 REDIRECTING_ENV = ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE')
 NOISE_PREFIXES = ('warning:', 'hint:')
+# scheme, user and password, host, port (only before a `/`), then the project path up to an optional `.git`
+REMOTE_URL = re.compile(r'(?:[A-Za-z][A-Za-z0-9+.-]*://)?(?:[^@/]*@)?([^:/@]+)(?::\d+(?=/))?[:/]+(.+?)(?:\.git)?/*')
 REPO_HELP = 'a folder of the repository (default: the working folder)'   # every --repo option
 PLUGIN_REPO_SKIPPED = ('plugin repository not found: plugin-skill churn and unused-skill checks are '
                        'skipped (set plugin_repo in the profile)')
@@ -123,6 +125,19 @@ def origin_name(repo):
     url = origin_url(repo)
     name = re.split(r'[/\\:]', url.rstrip('/\\'))[-1].removesuffix('.git') if url else ''
     return name if name.strip('.') else None
+
+
+def origin_host_project(repo):
+    """(host, project path) of the `origin` remote, or None when there is no origin: the host in lower case, the
+    project as `owner/name` or `group/sub/name` without `.git`. Credentials in the URL are dropped and the URL is
+    never shown. A URL with no host (a local path) is a GitError. Reads the `https://`, `ssh://` and `git@host:path` shapes."""
+    url = origin_url(repo)
+    if not url:
+        return None
+    found = REMOTE_URL.fullmatch(url)
+    if found is None:
+        raise GitError('cannot read the host and project of the origin remote')
+    return found[1].lower(), found[2]
 
 
 def origin_default_branch(repo):

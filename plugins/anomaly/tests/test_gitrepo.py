@@ -334,6 +334,23 @@ class RepoIdentityTest(RepoCase):
                 self.repo.git('remote', 'set-url', 'origin', url)
                 self.assertIsNone(gitrepo.origin_name(self.repo.root))
 
+    def test_the_origin_host_and_project_are_read_from_every_url_shape_and_never_from_credentials(self):
+        self.assertIsNone(gitrepo.origin_host_project(self.repo.root))
+        self.repo.git('remote', 'add', 'origin', 'x')
+        for url, expected in (('git@github.com:owner/repo.git', ('github.com', 'owner/repo')),
+                              ('https://Host.example.com/owner/repo', ('host.example.com', 'owner/repo')),
+                              ('https://person:secret@example.com/group/sub/project.git/', ('example.com', 'group/sub/project')),
+                              ('ssh://git@git.example.invalid:2222/group/project.git', ('git.example.invalid', 'group/project'))):
+            with self.subTest(url=url):
+                self.repo.git('remote', 'set-url', 'origin', url)
+                self.assertEqual(gitrepo.origin_host_project(self.repo.root), expected)
+
+    def test_an_origin_url_with_no_host_is_a_git_error_that_does_not_show_the_url(self):
+        self.repo.git('remote', 'add', 'origin', str(self.root / 'upstream'))
+        with self.assertRaises(gitrepo.GitError) as caught:
+            gitrepo.origin_host_project(self.repo.root)
+        self.assertNotIn('upstream', str(caught.exception))
+
     def test_the_origin_default_branch_is_a_git_error_when_git_fails(self):
         """No origin HEAD gives None (the repo-layer base tests in test_ports cover it); any other git
         failure, here a folder outside a repository, is a GitError."""
