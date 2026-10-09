@@ -22,7 +22,7 @@ uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; t
 """
 from pathlib import Path
 
-from . import check, ticket
+from . import check, files, ticket
 from .constants import TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
 from .files import RecordError
 
@@ -88,7 +88,7 @@ def ac_warnings(folder, tickets):
     name = next((name for name in AC_FILES if (folder / name).is_file()), None)
     if name is None:
         return [f'warning: the unit has no {" or ".join(AC_FILES)}; the ACs are not checked']
-    text = check.read_optional(folder / name)
+    text = files.read_input(folder / name)
     return [f'warning: {name}:{number}: {ac} is in no ticket\'s Covers: line'
             for ac, number in check.uncovered_acs(text, (parsed for _, parsed in tickets))]
 
