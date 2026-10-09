@@ -149,7 +149,7 @@ def exists(repo, folder, tracked, target):
         return True   # a local work-unit folder: a clone has none of them
     try:
         if any((base / clean).exists() or is_ignored(repo, base / clean, target.endswith('/'))
-               for base in (folder, repo)):
+               for base in dict.fromkeys((folder, repo))):   # one base for a CLAUDE.md at the root
             return True
     except OSError:
         return False

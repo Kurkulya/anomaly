@@ -265,7 +265,7 @@ class PathClaimTest(unittest.TestCase):
 
 class PathLivenessTest(unittest.TestCase):
     """Unit: `dead_path_findings` calls a claim live beside the CLAUDE.md or at the root, or when a tracked file or
-    folder equals it or ends with `/<claim>`; a path git ignores is dead; a fenced block is not read."""
+    folder equals it or ends with `/<claim>`; a path git ignores is live; a fenced block is not read."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -303,9 +303,10 @@ class PathLivenessTest(unittest.TestCase):
                          ['.other/ does not exist'])
 
     def test_a_path_that_git_ignores_is_live_whether_or_not_it_is_on_disk(self):
-        """An ignored folder (a local work-unit folder) is in one checkout only: a clone must not report it."""
-        self.repo.write('.git/info/exclude', '.scratch/\n')
-        self.assertEqual(self.dead('CLAUDE.md', 'Work units: `.scratch/`, `.scratch/notes.md`, and `.other/`.'),
+        """An ignored folder that is not a unit home is in one checkout only: a clone must not report it. Without the
+        git check, `build/` and `build/out.js` are on no disk, in no unit home and in no tracked path, so dead."""
+        self.repo.write('.git/info/exclude', 'build/\n')
+        self.assertEqual(self.dead('CLAUDE.md', 'Local output: `build/`, `build/out.js`, and `.other/`.'),
                          ['.other/ does not exist'])
 
 
