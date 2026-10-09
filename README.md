@@ -106,7 +106,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
 | `models` | optional: the model per dispatch role, one `role: model` per indented line; roles `explore`, `implement`, `review`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
-| `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to (core default `docs/adr/`) |
+| `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
 After changing `ticket_key`, run `measure --full` so old rows are rescanned.
 
@@ -139,7 +139,7 @@ python plugins/anomaly/scripts/anomaly.py ports --home <dir> [--repo <dir>]
 | `commit`, `branch` | replace | `commit_style`, `branch_pattern` | `type(scope): summary`, `feat/<slug>` |
 | `ui_check` | replace | `verify_ui` | built-in browser walkthrough of the ticket's UI ACs; its app facts come from the repo layer |
 | `key_line` | replace | `key_line` | `Key`: the name of the ticket line that holds the key; a `Jira:` line is still read when a ticket has no such line |
-| `adr_folder` | replace | `adr_folder` | `docs/adr/`: the repo folder ADR drafts are moved to |
+| `adr_folder` | replace | `adr_folder` | `docs/adr/`: the repo folder ADR drafts are moved to; `check stories` looks up `ADR-NNNN` owners there |
 
 Replace: the adapter takes the core default's place. Add: the adapter's names (separated by
 commas or lines, optionally inside one pair of `[ ]`) are listed after the core default's.
@@ -1163,7 +1163,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   ``ticket NN of `<unit>` `` (that unit's `tickets/`, or its `issues/` in the old `.scratch` layout;
   the form "in `<unit>`" fails), the path of a ticket file or an ADR file, or `ADR-NNNN`
   (in the folder the `adr_folder` port names, core `docs/adr/`, read from the profile in `--home`, or in the
-  `adr/` of a unit folder); only the checkout
+  `adr/` of a unit folder; an `adr_folder` that is absolute, has `..`, is `.` or is a URL falls back to
+  `docs/adr/`); only the checkout
   counts, so an ADR on another branch fails, and any other file (a README, a skill) is no owner. A
   path with a root or a drive is no owner. A person or a skill needs the key. A work-unit folder
   that is not `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no
