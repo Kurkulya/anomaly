@@ -36,7 +36,7 @@ One line per entry, written after each round, settled items only. Numbers are ne
 - `- D-n: <decision>. Why: <one line>. Source: <where>`, where `<where>` is a file:line, a commit, an ADR
   or the text "user, <date>".
 - Add the tag ` ADR?` when the decision may need an ADR.
-- Prefixes: `Test seam:`, `Open:`, `Risk:`.
+- Prefixes: `Test seam:`, `Open:`, `Risk:`, `Breaking:` (a change that breaks a caller; `mr body` lists these in the MR body).
 - A changed line gets a second line `Amended <date>: <what changed>`.
 - `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
   the glossary.
