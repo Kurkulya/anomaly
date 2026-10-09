@@ -842,6 +842,7 @@ python plugins/anomaly/scripts/anomaly.py ticket verified   <ticket> <sha> [--re
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> <sha> <test path> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> --changed <reason>
 python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from <draft> [--slug <slug>] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n|D-n] '<text>'
 ```
 
 - A state line is plain (`Status: done`) or bold (`**Status:** done`); both are read, `Blocked
@@ -851,7 +852,7 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `Status`, `Metrics`, `Reviewed`, `Verified`, `Red`, `Red-changed`, `Result`. Lines inside a
   fenced code block (three backticks or tildes) are examples and are never read or changed. A
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
-  action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
+  action that writes a state line refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, the key line
   (under the name it has in the ticket), `Tests`, `Repro`, `Base` (the integration branch, which
   `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
@@ -917,6 +918,18 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   key line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
   the title unless `--slug` gives it.
+- `ticket amend` writes one dated `Amended <YYYY-MM-DD>: <text>` line, so a change to a ticket or a
+  planning file needs no hand edit. The date is today's, from the CLI clock. Without `--after` the
+  line goes at the end of the file (a ticket, or any markdown file). With `--after AC-n` (in
+  `stories.md`) or `--after D-n` (in `decisions.md`) it goes right below that list item, and below
+  the `Amended` lines already under it, so the dated lines stay in order; it is indented like those
+  lines, else by two spaces under a `D-n` and not at all under an `AC-n`. An id matches whole
+  (`AC-1` is not the line of `AC-10`), and the first match outside a fenced code block is used. The
+  text must be one line and pass the privacy check (no email address, credential, URL with a query,
+  pasted program output or long opaque identifier). It has no length limit, because real `Amended`
+  lines are long. An id that is not in the file, an id that is no `AC-n` or `D-n`, or a text that
+  fails a check is an error (exit 2) and the file is left byte for byte as it was. This action does
+  not need a `Status:` line.
 
 ## Benchmark
 
@@ -1447,7 +1460,7 @@ python plugins/anomaly/scripts/anomaly.py observe   list|apply ...
 python plugins/anomaly/scripts/anomaly.py assess    check|record ...
 python plugins/anomaly/scripts/anomaly.py calibrate plan|effort|declare|fix|verify|decide|close|merge ...
 python plugins/anomaly/scripts/anomaly.py nudge     --home <dir> --data <dir> [--user-config <dir>] [--plugin-root <dir>]
-python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc ...
+python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc|amend ...
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py bench     score <defects.json> <findings>...
 python plugins/anomaly/scripts/anomaly.py check     pre-merge|stories|slice ...
