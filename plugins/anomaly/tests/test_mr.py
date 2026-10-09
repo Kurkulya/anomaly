@@ -12,6 +12,8 @@ import unittest
 from datetime import date
 from pathlib import Path
 
+from anomaly_loop import mr
+from anomaly_loop.files import RecordError
 from tests.fixtures import GitFixture, run_cli, write_text
 from tests.test_check import slice_ticket
 
@@ -103,9 +105,12 @@ class UnitCase(MrCase):
                                  '--repo', str(self.repo.root), '--home', str(self.home))
         self.assertEqual((code, err), (0, ''), out)
 
-    def unit(self, open_items=(OPEN_ITEM, 'none'), breaking=BREAKING, long_text=False):
+    def unit(self, open_items=(OPEN_ITEM, 'none'), breaking=BREAKING, long_text=False, first_title=None,
+             decision_lines=()):
         """The unit folder: AC-1 to AC-4, tickets 01 and 02 merged and done (01 covers AC-1 and AC-2, 02 covers
-        AC-3), ticket 03 (AC-4) not merged. `long_text` gives the unit a long heading, Why and first ticket title."""
+        AC-3), ticket 03 (AC-4) not merged. `long_text` gives the unit a long heading, Why and first ticket title;
+        `first_title` sets that title; `decision_lines` are added to decisions.md. The word MERGE in an open item or
+        a breaking line becomes the id of the first merge commit."""
         folder = self.repo.root / '.anomaly' / UNIT
         heading = 'Make the widget list reliable and show it to every reader ' * (3 if long_text else 1)
         why = (WHY + ' and ') * (4 if long_text else 1) + 'then ship once'
@@ -113,14 +118,16 @@ class UnitCase(MrCase):
                                           'Rules for all stories: none\n\n## 1. As a dev, I want a, so that b.\n'
                                           '- AC-1: criterion AC-1\n- AC-2: criterion AC-2\n- AC-3: criterion AC-3\n'
                                           '- AC-4: criterion AC-4\n')
-        write_text(folder / 'decisions.md', '- D-1: pick x. Why: simple. Source: user, 2026-10-01\n'
-                   + ''.join(f'- Breaking: {line}\n' for line in breaking))
         first = self.ticket('01', 'alpha', 'AC-1, AC-2', ('AC-1', 'AC-2'), status='in-progress',
-                            title=TITLES['01'] + (' with a very long title that goes on and on and on' if long_text else ''))
+                            title=first_title or TITLES['01'] + (' with a very long title that goes on and on and on'
+                                                                 if long_text else ''))
         second = self.ticket('02', 'bravo', 'AC-3', ('AC-3',), status='in-progress')
         self.ticket('03', 'charlie', 'AC-4', ('AC-4',))
-        self.close(first, 'alpha', self.merge_ticket('01', 'alpha'), open_items[0])
-        self.close(second, 'bravo', self.merge_ticket('02', 'bravo'), open_items[1])
+        self.close(first, 'alpha', self.merge_ticket('01', 'alpha'), open_items[0].replace('MERGE', self.merges[0]))
+        self.close(second, 'bravo', self.merge_ticket('02', 'bravo'), open_items[1].replace('MERGE', self.merges[0]))
+        write_text(folder / 'decisions.md', '- D-1: pick x. Why: simple. Source: user, 2026-10-01\n'
+                   + ''.join(f'- Breaking: {line.replace("MERGE", self.merges[0])}\n' for line in breaking)
+                   + ''.join(f'{line}\n' for line in decision_lines))
         return folder
 
     def body_of(self, folder, *flags):
@@ -147,7 +154,8 @@ class BodyTest(UnitCase):
         self.assertNotIn('none', still_open)
         breaking = ' '.join(found['breaking changes'])
         self.assertTrue(all(line in breaking for line in BREAKING), breaking)
-        self.assertTrue(found['tested'])
+        tested = ' '.join(found['tested'])
+        self.assertIn('type-checks 2', tested)   # 1 on each of the two merged tickets
         self.assertTrue(found['how to review'])
         self.assertIn('no CI ran', body)
 
@@ -188,6 +196,49 @@ class BodyTest(UnitCase):
             self.assertFalse([line for line in text.splitlines() if line.count('|') >= 2], text)
             self.assertFalse([name for name in ATTRIBUTION if name in text.lower()], text)
 
+    def test_a_commit_id_or_a_pipe_in_an_open_item_or_a_breaking_line_is_scrubbed(self):
+        """AC-36: the full merge id, a 7-character id and `a|b` are written into an open item and a breaking line."""
+        short = '1a2b3c4'
+        folder = self.unit(open_items=(f'retry MERGE and {short} fails', 'a|b stays'),
+                           breaking=(f'drops MERGE and {short} for a|b',))
+        title, body = self.body_of(folder)
+        self.assertIn('retry', body)
+        self.assertIn('drops', body)
+        self.assertIn('a/b', body)
+        for text in (title, body):
+            self.assertNotIn(self.merges[0][:7], text)
+            self.assertNotIn(short, text)
+            self.assertNotIn('|', text)
+
+    def test_a_title_that_only_mentions_attribution_words_stays_in_what_changed(self):
+        """AC-36: only a line that starts as an attribution line is dropped."""
+        title = 'Show reports generated with the new engine'
+        _, body = self.body_of(self.unit(first_title=title))
+        self.assertIn(title, ' '.join(sections(body)['what changed']))
+
+    def test_the_docs_gate_result_is_in_tested(self):
+        """AC-33."""
+        _, body = self.body_of(self.unit(), '--docs-gate', 'no stale doc found')
+        self.assertIn('no stale doc found', ' '.join(sections(body)['tested']))
+
+    def test_a_decision_line_with_a_number_before_the_prefix_is_a_breaking_line(self):
+        """AC-33 and formats.md: a prefix may follow the D-n id; the fact is the decision, not its Why or Source."""
+        _, body = self.body_of(self.unit(breaking=(), decision_lines=(
+            '- D-4: Breaking: callers must pass the numbered flag. Why: tests. Source: user, 2026-10-01',)))
+        breaking = ' '.join(sections(body)['breaking changes'])
+        self.assertIn('callers must pass the numbered flag', breaking)
+        self.assertNotIn('Source:', breaking)
+
+    def test_a_target_inside_a_unit_ticket_folder_is_refused_and_writes_nothing(self):
+        """A file target is an ad-hoc ticket: a ticket of a unit never gets a sibling body file."""
+        folder = self.unit()
+        ticket = folder / 'tickets' / '01-alpha.md'
+        code, out, err = self.run_body(ticket)
+        self.assertEqual(code, 2, (out, err))
+        self.assertTrue(err.startswith('anomaly: '), err)
+        self.assertEqual(sorted(p.name for p in ticket.parent.iterdir()),
+                         ['01-alpha.md', '02-bravo.md', '03-charlie.md'])
+
     def test_a_body_over_2_5_kb_prints_a_warning_and_is_still_written(self):
         """AC-36."""
         breaking = [f'change number {n} that every caller of the widget api has to absorb before it upgrades'
@@ -215,6 +266,24 @@ class BodyTest(UnitCase):
         title, body = self.body_of(self.unit())
         for word in (DIFF_WORD, INNER_WORD):
             self.assertNotIn(word, title + body)
+
+
+class FactTest(unittest.TestCase):
+    def test_a_line_that_starts_as_an_attribution_line_is_dropped(self):
+        """AC-36."""
+        for text in ('Co-Authored-By: Helper <helper@example.invalid>', 'Generated with Some Tool', '  generated with x'):
+            with self.subTest(text=text):
+                self.assertEqual(mr.plain(text), '')
+
+    def test_a_word_of_digits_only_is_not_a_commit_id(self):
+        """AC-36: a commit id holds a digit and a letter a-f; a long count stays."""
+        self.assertEqual(mr.plain('raise the limit to 10000000 rows'), 'raise the limit to 10000000 rows')
+        self.assertEqual(mr.plain('fixed in 1a2b3c4 today'), 'fixed in today')
+
+    def test_a_summary_that_is_only_punctuation_has_no_title(self):
+        """AC-36."""
+        with self.assertRaises(RecordError):
+            mr.title_line('feat', KEY, '---')
 
 
 class AdhocCase(MrCase):
@@ -273,6 +342,28 @@ class AdhocBodyTest(AdhocCase):
         title, _ = self.read(other.with_name(other.stem + '.mr-body.md'))
         self.assertRegex(title, r'^[a-z]+\([^)\s]+\): \S')
         self.assertLess(len(title), 70, title)
+
+    def test_the_light_path_title_takes_its_type_from_the_branch_prefix(self):
+        """AC-36: branch `fix/widget-list`, a ticket with no key line."""
+        self.make(self.ticket)
+        title, _ = self.read(self.body_file())
+        self.assertTrue(title.startswith('fix(no-ticket): '), title)
+
+    def test_the_docs_gate_flag_is_refused_for_an_adhoc_ticket(self):
+        """The light-path body has no Tested section."""
+        code, out, err = self.run_body(self.ticket, '--docs-gate', 'clean')
+        self.assertEqual(code, 2, (out, err))
+        self.assertIn('--docs-gate', err)
+        self.assertFalse(self.body_file().exists())
+
+    def test_draft_writes_the_why_then_work_in_progress_for_an_adhoc_ticket(self):
+        """AC-34."""
+        self.make(self.ticket, '--draft')
+        lines = self.body_file().read_text(encoding='utf-8').splitlines()
+        self.assertEqual(lines[1], '')
+        self.assertEqual(len(lines[2:]), 2, lines)
+        self.assertIn(self.TASK, lines[2])
+        self.assertTrue(lines[3].startswith('Work in progress'), lines)
 
 
 if __name__ == '__main__':

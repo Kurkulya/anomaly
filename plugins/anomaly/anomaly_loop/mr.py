@@ -4,9 +4,9 @@
 
 Writes the MR body to a file (bodies go through files, ADR-0007). The file starts with `Title: <type>(<key>): <summary>`
 and a blank line; the body follows, in markdown (`## <Section>`). A work unit folder gives `<folder>/mr-body.md`; an
-ad-hoc ticket gives the sibling file `<ticket name>.mr-body.md` in `.anomaly/adhoc/`. Facts come only from the ticket
-files, `stories.md` (else `spec.md`), `decisions.md` and, for an ad-hoc ticket, the commit subjects of its branch;
-never the diff.
+ad-hoc ticket gives the sibling file `<ticket name>.mr-body.md` in `.anomaly/adhoc/`; a file target outside that
+folder is refused. Facts come only from the ticket files, the AC file (`spec.md` when the unit has one, else
+`stories.md`, ADR-0011), `decisions.md` and, for an ad-hoc ticket, the commit subjects of its branch; never the diff.
 
 The title: the type is `feat` (an ad-hoc ticket: the type before the first `/` of the branch name, when it is an
 Angular type); the key is the first ticket key of the unit (else `no-ticket`); the summary is the first heading of
@@ -14,8 +14,9 @@ the AC file, or the title of the ad-hoc ticket, cut at a word so the title is un
 
 A work unit body has these sections, each left out when it has no facts: Why (the `Why:` line of the AC file),
 What changed (the title of each ticket that is `done`), Acceptance criteria (`n of m covered` by those tickets,
-with the missing ids), Still open (their `Open:` items), Breaking changes (the `- Breaking:` lines of
-decisions.md), Tested, How to review. With `--draft` the body is two lines: the Why, then `Work in progress`.
+with the missing ids), Still open (their `Open:` items), Breaking changes (the `- Breaking:` and
+`- D-n: Breaking:` lines of decisions.md), Tested, How to review. With `--draft` the body is two lines: the Why,
+then `Work in progress` (one line when there is no Why).
 An ad-hoc ticket body has Why (the ticket's `What to build:`) and What changed (the subjects of the commits on the
 current branch that are not on the repo base).
 
@@ -27,7 +28,7 @@ import sys
 from pathlib import Path
 
 from . import check, files, frontier, gitrepo, paths, ports, privacy, records, ticket
-from .constants import TICKET_STATUS_DONE
+from .constants import TICKET_ADHOC_DIR, TICKET_STATUS_DONE
 from .files import RecordError
 
 BODY_FILE = 'mr-body.md'                 # in a work unit folder
@@ -39,11 +40,11 @@ BRANCH_TYPES = ('feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'bui
 NO_KEY = 'no-ticket'
 WIP_LINE = 'Work in progress'
 NO_CI_LINE = 'no CI ran'                 # said when the `ci` port is on its core default
-COUNTED = ('suites', 'reviewer_passes', 'high')   # the Metrics counts the Tested section sums (ticket.METRIC_COUNTS keys)
-ATTRIBUTION = ('co-authored-by', 'generated with')
+COUNTED = ('suites', 'type_checks', 'reviewer_passes', 'high')   # the Metrics counts the Tested section sums (ticket.METRIC_COUNTS keys)
+ATTRIBUTION = re.compile(r'\s*(?:co-authored-by:|generated with\b)', re.I)   # the start of an attribution line
 COMMIT_ID = re.compile(rf'\b(?:{privacy.COMMIT_ID.pattern})\b')
-BREAKING_LINE = re.compile(r'\s*[-*+]\s+Breaking:\s*(\S.*?)\s*$')
-ADHOC_TITLE = re.compile(r'Adhoc:\s*')   # the start of the heading `ticket adhoc` writes
+BREAKING_LINE = re.compile(r'\s*[-*+]\s+(?:D-\d+:\s*)?Breaking:\s*(\S.*?)\s*$')   # `- Breaking: x` or `- D-n: Breaking: x`
+DECISION_TAIL = re.compile(r'\.?\s+(?:Why|Source):.*$')   # the Why and Source of a `- D-n:` line, not part of the fact
 NO_OPEN = re.compile(r'none\.?', re.I)
 WHY_KEY = 'Why'
 WHAT_TO_BUILD_KEY = 'What to build'
@@ -65,11 +66,12 @@ def register(commands, common):
 
 
 def plain(text):
-    """A fact as the body shows it: one line, no commit id (a hex word with a digit, in the shapes of
-    privacy.COMMIT_ID), no `|` (so no table row); '' for a text with an attribution phrase."""
-    if any(phrase in text.lower() for phrase in ATTRIBUTION):
+    """A fact as the body shows it: one line, no commit id (a hex word with a digit and a letter a-f, in the
+    shapes of privacy.COMMIT_ID), no `|` (so no table row); '' for a text that starts as an attribution line."""
+    if ATTRIBUTION.match(text):
         return ''
-    text = COMMIT_ID.sub(lambda found: '' if re.search(r'\d', found.group()) else found.group(), text)
+    text = COMMIT_ID.sub(lambda found: '' if re.search(r'\d', found.group()) and re.search(r'[a-f]', found.group())
+                         else found.group(), text)
     return ' '.join(re.sub(r'\(\s*\)', '', text.replace('|', '/')).split())
 
 
@@ -83,33 +85,28 @@ def title_line(kind, key, summary):
     head = f'{kind}({key}): '
     room = TITLE_MAX_CHARS - 1 - len(head)
     summary = plain(summary)
-    if room < 1 or not summary:
-        raise RecordError(f'no title under {TITLE_MAX_CHARS} characters: the key "{key}" is too long, or there is '
-                          'no summary')
     cut = ''
     for word in summary.split():
         if len(f'{cut} {word}'.strip()) > room:
             break
         cut = f'{cut} {word}'.strip()
-    return head + (cut or summary[:room]).rstrip(' -—:,;')
-
-
-def metric_count(metrics, label):
-    """The number after `label` in a `Metrics:` value, or None when the line has no such count."""
-    found = re.search(rf'\b{re.escape(label)} (\d+)\b', metrics)
-    return int(found.group(1)) if found else None
+    text = (cut or summary[:max(room, 0)]).rstrip(' -—:,;')
+    if room < 1 or not text:
+        raise RecordError(f'no title under {TITLE_MAX_CHARS} characters: the key "{key}" is too long, or there is '
+                          'no summary')
+    return head + text
 
 
 def tested_lines(merged, docs_gate, resolution):
     """The facts of the Tested section: the counts summed over the merged tickets, the docs-gate result, and
     the no-CI line when the `ci` port is on its core default."""
     lines = []
-    labels = {key: label for label, key in ticket.METRIC_COUNTS}
+    each = [ticket.metric_counts(parsed) for _, parsed in merged]
     counts = []
-    for key in COUNTED:
-        found = [count for _, parsed in merged if (count := metric_count(parsed.metrics, labels[key])) is not None]
-        if found:
-            counts.append(f'{labels[key]} {sum(found)}')
+    for label, key in ticket.METRIC_COUNTS:
+        found = [count[key] for count in each if key in count]
+        if key in COUNTED and found:
+            counts.append(f'{label} {sum(found)}')
     if counts:
         lines.append('Over the merged tickets: ' + ', '.join(counts))
     if docs_gate:
@@ -140,7 +137,7 @@ def unit_parts(folder, resolution, key_line, docs_gate):
         ('Acceptance criteria', criteria),
         ('Still open', [f'- {fact} (ticket {path.name[:2]})' for path, parsed in merged
                         if not NO_OPEN.fullmatch(parsed.open.strip()) and (fact := plain(parsed.open))]),
-        ('Breaking changes', [f'- {fact}' for fact in facts(found.group(1) for found in breaking)]),
+        ('Breaking changes', [f'- {fact}' for fact in facts(DECISION_TAIL.sub('', found.group(1)) for found in breaking)]),
         ('Tested', [f'- {line}' for line in tested_lines(merged, docs_gate, resolution)]),
         ('How to review', [f'Review the merge commits one at a time, in order: {", ".join(p.stem for p, _ in merged)}.']
          if merged else []),
@@ -169,7 +166,7 @@ def adhoc_parts(path, repo, resolution, key_line):
     text, parsed = ticket.load(path, key_line)
     why = plain(ticket.value_of(ticket.split_lines(text), WHAT_TO_BUILD_KEY) or '')
     subjects = branch_subjects(repo, resolution.layer.base.value)
-    title = title_line(branch_type(repo), parsed.key or NO_KEY, ADHOC_TITLE.sub('', parsed.title, count=1))
+    title = title_line(branch_type(repo), parsed.key or NO_KEY, parsed.title.removeprefix(ticket.ADHOC_TITLE_PREFIX))
     return title, why, [('What changed', [f'- {fact}' for fact in facts(subjects)])]
 
 
@@ -195,6 +192,9 @@ def run_body(args, environ):
         parts = unit_parts(target, ports.resolve(home), key_line, docs_gate)
         out = target / BODY_FILE
     elif target.is_file():
+        if target.resolve().parent.name != TICKET_ADHOC_DIR.name:
+            raise RecordError(f'{target}: a ticket file must be an ad-hoc ticket (in {TICKET_ADHOC_DIR}); '
+                              'give the work-unit folder for a unit')
         if docs_gate is not None:
             raise RecordError('--docs-gate is for a work unit: the light-path body has no Tested section')
         repo = gitrepo.repo_for(args.repo)
