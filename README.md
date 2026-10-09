@@ -1868,13 +1868,15 @@ the CLI. This version runs sequential waves; the parallel path is a later additi
 - **Plan.** Before each wave, one agent on the `explore` model role checks the wave's code claims and
   returns only the false or moved ones; each becomes a `ticket amend` line, and a claim that changes
   the scope goes to you first. The wave plan is one line per ticket with its `Touches:` paths. A
-  ticket whose gate is closed waits.
+  ticket whose gate is closed waits. Research notes go to `research/NN-slug.md` in the unit folder,
+  and a `ticket amend` line puts their path on the ticket, so `build` passes it on.
 - **Run.** `anomaly:build` once per ticket, in `frontier` order. With an `origin`, one plain
   `git push` after each merge (never forced, never to the base branch); the first push calls
   `anomaly:ship` for the draft MR; a `ci` port that is not on its core default starts `ci watch` in
   the background.
-- **Report.** `log add` events (merge, push, stop; no cost numbers), `worklog add` once per run
-  before the first `conduct status`, then the five lines of the wave report. With an MR, one more
+- **Report.** `log add` events (a `wave <n>` line at the start of each wave, then merge, push and
+  stop; no cost numbers), `worklog add` once per run before the first `conduct status` (or at the
+  first stop, if that comes sooner), then the five lines of the wave report. With an MR, one more
   line gives its size as a number.
 - **Go on or stop.** A sequential wave with no open decision and a tip that is not red goes straight
   on. It stops for a parallel pick, a scope change, a red tip and the ready gate. Past 200k tokens
