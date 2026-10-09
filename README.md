@@ -94,7 +94,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `branch_pattern` | how branches are named |
 | `commit_style` | how commit messages are written |
 | `implementers` | the agent that writes code, per stack (one `stack: agent` per indented line, with a space after the colon) |
-| `mr_tool` | the skill or command that opens a merge request |
+| `mr_tool` | the MR tool: `glab` or `gh` (the adapter of the `mr` port, see MR) |
 | `verify_ui` | the skill or tool that checks a user interface |
 | `issue_source` | where requirements come from, and whether they are read-only |
 | `build_skills` | optional: skills that mark a session as build work, as a comma or line list. The plugin ships no default list: without this key no session counts as build. The digest and `calibrate` read it (see Session kind) |
@@ -1052,6 +1052,46 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
 - Facts come only from the ticket files, the AC file, `decisions.md` and, for an ad-hoc ticket,
   commit subjects; the diff is never read.
 
+## MR
+
+The **MR** of a work unit (a pull request on GitHub) is opened and kept by the CLI, so no skill writes a
+tool call by hand. `mr put`, `ready` and `show` work on the MR; `mr reviewed` and `mr verified` record
+the gate lines.
+
+```
+python plugins/anomaly/scripts/anomaly.py mr put      <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr ready    <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr show     <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr reviewed <work unit folder | ad-hoc ticket> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder | ad-hoc ticket> <ref> [--repo <dir>] [--home <dir>]
+```
+
+- **Adapter.** The `mr` port (profile key `mr_tool`) names the tool: `glab` or `gh`
+  (`constants.MR_ADAPTERS`). Any other value is one `anomaly:` line naming the accepted ones, before any
+  call. The tool runs for the project of the `origin` remote, which must be on the tool's host: `gh`
+  works with `github.com` only and `glab` with `gitlab.com` only. Any other host, a self-hosted one
+  too, is an error that names the host; the host is never guessed. `gh` is called only through
+  `anomaly_loop/gh.py` and `glab` through `anomaly_loop/glab.py`, with argument lists and no shell.
+  The body reaches `gh` on its standard input (`--body-file -`) and `glab api` as one argument; a write
+  is tried once, and a failed call prints the tool's message (exit 2).
+- **put.** Reads the title from the first `Title:` line of the body file (`mr-body.md`, or the sibling
+  `<name>.mr-body.md` of an ad-hoc ticket) and the body from the lines after the blank line that follows
+  it; a missing file says to run `mr body` first. With no `MR:` line in the MR file it opens a draft MR
+  from the current branch to the repo base (`ports` prints it as `repo base`) and writes the link as
+  the `MR:` line. With an `MR:` line it replaces the body of that MR; the title and the draft state stay.
+  It prints the link.
+- **Core default.** With the `mr` port on its core default, or a repository with no `origin`, `put`
+  prints the title and the body (and a `note:` line on standard error) and calls nothing. `ready` and
+  `show` are errors then, since there is no tool to call.
+- **ready, show.** Act on the MR of the `MR:` line; without one they say to run `mr put` first. `ready`
+  takes the draft state off. `show` prints the link, then `state: open|closed|merged`, with `, draft`
+  when it is a draft.
+- **The MR file.** `mr.md` in a work unit folder, or `<name>.mr.md` beside an ad-hoc ticket, holds the
+  lines `MR: <link>`, `Reviewed: <sha>` and `Verified: <sha>`, in this order. Only the CLI writes it:
+  `put` sets the first line, `reviewed` and `verified` set the other two, and each action keeps the
+  others. `<ref>` is a commit id, branch or tag; the file holds the full commit id, and a ref that
+  names no commit is an error that writes nothing.
+
 ## Benchmark
 
 Each reviewer agent has one small seeded-defect fixture under `plugins/anomaly/tests/bench/`
@@ -1594,6 +1634,8 @@ python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage>
 python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
 python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        put|ready|show <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder | ad-hoc ticket> <ref> [--repo <dir>] [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1621,7 +1663,7 @@ python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-
 - `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
 - `frontier` takes a work-unit folder and prints the tickets that can start now; see Frontier.
 - `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
-- `mr` takes the action `body`, which writes the MR body of a work unit or an ad-hoc ticket to a file; see MR body.
+- `mr` takes the actions `body` (writes the MR body of a work unit or an ad-hoc ticket to a file), `put`, `ready`, `show`, `reviewed` and `verified`; see MR body and MR.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.

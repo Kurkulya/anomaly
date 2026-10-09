@@ -22,17 +22,46 @@ current branch that are not on the repo base).
 
 A body holds no commit id, no table row and no attribution line (`plain`). A body over 2.5 KB prints one
 `warning:` line and is still written. The file path is printed.
+
+  mr put <work unit folder | ad-hoc ticket> [--repo <dir>]
+  mr ready <work unit folder | ad-hoc ticket> [--repo <dir>]
+  mr show <work unit folder | ad-hoc ticket> [--repo <dir>]
+  mr reviewed <work unit folder | ad-hoc ticket> <ref> [--repo <dir>]
+  mr verified <work unit folder | ad-hoc ticket> <ref> [--repo <dir>]
+
+`put` reads the title from the first `Title:` line of the body file and the body from the lines after the blank line,
+and opens a draft MR from the current branch to the base branch, or, when the MR file already has an `MR:` line,
+replaces the body of that MR (the title stays). `ready` takes the draft state off and `show` prints the link and the
+state. The tool is the adapter the `mr` port names (constants.MR_ADAPTERS; an unknown value is an error naming
+them), run for the project of the `origin` remote, which must be on the host of the adapter (`gh`: github.com,
+`glab`: gitlab.com; any other host is an error, never guessed). With the port on its core default, or a repository
+with no `origin`, `put` only prints the title and body and nothing leaves the machine; `ready` and `show` are
+errors then. Without an `MR:` line, `ready` and `show` say to run `mr put` first.
+
+The MR file holds the lines `MR: <link>`, `Reviewed: <sha>` and `Verified: <sha>`, in this order, and is written
+only here: `put` sets the first, `reviewed` and `verified` set the others (the ref is resolved to a full commit id
+through git), and each leaves the other lines as they were. A work unit folder keeps it as `<folder>/mr.md`; an
+ad-hoc ticket as the sibling `<ticket name>.mr.md` in `.anomaly/adhoc/`.
 """
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
-from . import check, files, frontier, gitrepo, paths, ports, privacy, records, ticket
+from . import check, constants, files, frontier, gh, gitrepo, glab, paths, ports, privacy, records, ticket
 from .constants import TICKET_ADHOC_DIR, TICKET_STATUS_DONE
 from .files import RecordError
 
 BODY_FILE = 'mr-body.md'                 # in a work unit folder
 ADHOC_SUFFIX = '.mr-body.md'             # after the name of an ad-hoc ticket, beside it
+STATE_FILE = 'mr.md'                     # the MR link and the gate lines, in a work unit folder
+ADHOC_STATE_SUFFIX = '.mr.md'            # after the name of an ad-hoc ticket, beside it
+MR_LABEL, REVIEWED_LABEL, VERIFIED_LABEL = 'MR', 'Reviewed', 'Verified'
+STATE_LABELS = (MR_LABEL, REVIEWED_LABEL, VERIFIED_LABEL)   # the lines of the MR file, in file order
+ADAPTERS = {'glab': glab, 'gh': gh}      # by constants.MR_ADAPTERS name; each has HOST and create_mr, update_mr, ready_mr, view_mr
+ADAPTER_ERRORS = (glab.CiError, gh.GhError)
+TITLE_LINE = re.compile(r'Title:[ \t]*(\S.*?)[ \t]*')
+MR_NUMBER = re.compile(r'.*/(\d+)/?')    # the end of a link: .../pull/7 or .../-/merge_requests/7
 TITLE_MAX_CHARS = 70                     # a title is under this
 BODY_WARN_BYTES = 2560                   # 2.5 KB
 DEFAULT_TYPE = 'feat'
@@ -63,6 +92,23 @@ def register(commands, common):
                       help='the docs-gate result for the Tested section, one line (work unit only)')
     body.add_argument('--repo', help=gitrepo.REPO_HELP)
     body.set_defaults(handler=run_body)
+    for name, handler, help_text in (
+            ('put', run_put, 'open the draft MR from the body file, or replace the body of the MR in mr.md; '
+                             'prints the link (the core default prints the title and body)'),
+            ('ready', run_ready, 'mark the MR of mr.md ready for review'),
+            ('show', run_show, 'print the link and the state of the MR of mr.md')):
+        action = actions.add_parser(name, parents=[common], help=help_text)
+        action.add_argument('target', help='a work-unit folder (mr-body.md and mr.md in it) or an ad-hoc ticket file '
+                                           '(<name>.mr-body.md and <name>.mr.md beside it)')
+        action.add_argument('--repo', help=gitrepo.REPO_HELP)
+        action.set_defaults(handler=handler)
+    for label, handler in ((REVIEWED_LABEL, run_reviewed), (VERIFIED_LABEL, run_verified)):
+        gate = actions.add_parser(label.lower(), parents=[common],
+                                  help=f'write the {label}: line of mr.md with the full commit id of a ref')
+        gate.add_argument('target', help='a work-unit folder or an ad-hoc ticket file (as for put)')
+        gate.add_argument('ref', help='a commit id, branch or tag; written as the full commit id')
+        gate.add_argument('--repo', help=gitrepo.REPO_HELP)
+        gate.set_defaults(handler=handler)
 
 
 def plain(text):
@@ -148,10 +194,14 @@ def unit_parts(folder, resolution, key_line, docs_gate):
     return title_line(DEFAULT_TYPE, key, summary), why, sections
 
 
+def current_branch(repo):
+    """The name of the current branch, '' on a detached head."""
+    return gitrepo.run(repo, 'branch', '--show-current').stdout.strip()
+
+
 def branch_type(repo):
     """The type before the first `/` of the current branch name when it is one of BRANCH_TYPES, else `feat`."""
-    branch = gitrepo.run(repo, 'branch', '--show-current').stdout.strip()
-    kind, slash, _ = branch.partition('/')
+    kind, slash, _ = current_branch(repo).partition('/')
     return kind if slash and kind in BRANCH_TYPES else DEFAULT_TYPE
 
 
@@ -180,6 +230,27 @@ def render(title, why, sections, draft):
     return f'Title: {title}\n\n{body}\n', len(body.encode('utf-8'))
 
 
+class Target(NamedTuple):
+    """What an action works on: `unit` is True for a work unit folder, False for an ad-hoc ticket; `body` is the
+    MR body file and `state` the MR file (mr.md) of that unit or ticket."""
+    unit: bool
+    body: Path
+    state: Path
+
+
+def locate(target):
+    """The Target of a work unit folder or an ad-hoc ticket file (a file outside `.anomaly/adhoc/` is refused)."""
+    target = Path(target)
+    if target.is_dir():
+        return Target(True, target / BODY_FILE, target / STATE_FILE)
+    if not target.is_file():
+        raise RecordError(f'{target}: not a work-unit folder or a ticket file')
+    if target.resolve().parent.name != TICKET_ADHOC_DIR.name:
+        raise RecordError(f'{target}: a ticket file must be an ad-hoc ticket (in {TICKET_ADHOC_DIR}); '
+                          'give the work-unit folder for a unit')
+    return Target(False, target.with_name(target.stem + ADHOC_SUFFIX), target.with_name(target.stem + ADHOC_STATE_SUFFIX))
+
+
 def run_body(args, environ):
     home = paths.resolve_home(args.home, environ)
     key_line = ports.key_line(home)
@@ -188,23 +259,166 @@ def run_body(args, environ):
     if args.docs_gate is not None:
         docs_gate = records.require_one_line('--docs-gate', args.docs_gate)
         privacy.check_text('mr body', '--docs-gate', docs_gate)
-    if target.is_dir():
+    found = locate(target)
+    if found.unit:
         parts = unit_parts(target, ports.resolve(home), key_line, docs_gate)
-        out = target / BODY_FILE
-    elif target.is_file():
-        if target.resolve().parent.name != TICKET_ADHOC_DIR.name:
-            raise RecordError(f'{target}: a ticket file must be an ad-hoc ticket (in {TICKET_ADHOC_DIR}); '
-                              'give the work-unit folder for a unit')
+    else:
         if docs_gate is not None:
             raise RecordError('--docs-gate is for a work unit: the light-path body has no Tested section')
         repo = gitrepo.repo_for(args.repo)
         parts = adhoc_parts(target, repo, ports.resolve(home, repo), key_line)
-        out = target.with_name(target.stem + ADHOC_SUFFIX)
-    else:
-        raise RecordError(f'{target}: not a work-unit folder or a ticket file')
     text, size = render(*parts, args.draft)
-    files.write_text(out, text)
-    print(out)
+    files.write_text(found.body, text)
+    print(found.body)
     if size > BODY_WARN_BYTES:
         print(f'warning: the body is {size} bytes, over 2.5 KB ({BODY_WARN_BYTES}); shorten it', file=sys.stderr)
     return 0
+
+
+# ---------- put, ready, show, reviewed and verified ----------
+
+def read_state(path):
+    """{label: value} of the lines of the MR file that have a value; {} when the file is absent."""
+    if not path.is_file():
+        return {}
+    lines = ticket.split_lines(ticket.read_text(path, 'MR file'))
+    return {label: value for label in STATE_LABELS if (value := ticket.value_of(lines, label))}
+
+
+def write_state(path, state):
+    """The MR file: the lines of `state` in STATE_LABELS order."""
+    files.write_text(path, ''.join(f'{label}: {state[label]}\n' for label in STATE_LABELS if label in state))
+
+
+def read_title_and_body(path, target):
+    """(title, body) of an MR body file: the title from the first `Title:` line, the body from the lines after the
+    blank line that follows it."""
+    if not path.is_file():
+        raise RecordError(f'{path}: no MR body file; run `mr body {target}` first')
+    lines = files.read_input(path).splitlines()
+    title = TITLE_LINE.fullmatch(lines[0]) if lines else None
+    if title is None or len(lines) < 2 or lines[1].strip():
+        raise RecordError(f'{path}: the file does not start with a `Title: <text>` line and a blank line; '
+                          f'run `mr body {target}` again')
+    return title[1], '\n'.join(lines[2:]).strip()
+
+
+def adapter_name(resolution):
+    """The name of the MR tool the `mr` port names (checked against constants.MR_ADAPTERS), or None on the core default."""
+    adapter = ports.port(resolution, 'mr')
+    if adapter.is_default:
+        return None
+    if adapter.value not in constants.MR_ADAPTERS:
+        raise RecordError(f'profile key mr_tool: unknown MR adapter {adapter.value!r} '
+                          f'(accepted: {", ".join(constants.MR_ADAPTERS)})')
+    return adapter.value
+
+
+def project_of(repo, name):
+    """The project of the `origin` remote for the adapter `name`, or None when there is no origin. An origin on
+    another host than the adapter's (a self-hosted one too) is an error naming the host."""
+    found = gitrepo.origin_host_project(repo)
+    if found is None:
+        return None
+    host, project = found
+    if host != ADAPTERS[name].HOST:
+        raise RecordError(f'the origin remote is on {host}, but the {name} adapter works with {ADAPTERS[name].HOST} only')
+    return project
+
+
+def call(function, *args):
+    """function(*args), with the error of an MR tool as a RecordError."""
+    try:
+        return function(*args)
+    except ADAPTER_ERRORS as error:
+        raise RecordError(str(error)) from None
+
+
+def mr_number(link, state_file):
+    found = MR_NUMBER.fullmatch(link)
+    if found is None:
+        raise RecordError(f'{state_file}: the MR line has no merge request number at the end of its link')
+    return found[1]
+
+
+def print_only(title, body, reason):
+    """The core-default `put`: the title and the body for the user to paste; nothing leaves the machine."""
+    print(f'Title: {title}\n\n{body}')
+    print(f'note: nothing was sent: {reason}', file=sys.stderr)
+
+
+def run_put(args, environ):
+    home = paths.resolve_home(args.home, environ)
+    found = locate(args.target)
+    repo = gitrepo.repo_for(args.repo)
+    resolution = ports.resolve(home, repo)
+    name = adapter_name(resolution)
+    title, body = read_title_and_body(found.body, args.target)
+    if name is None:
+        print_only(title, body, 'the mr port is on its core default')
+        return 0
+    project = project_of(repo, name)
+    if project is None:
+        print_only(title, body, 'the repository has no origin remote')
+        return 0
+    tool = ADAPTERS[name]
+    state = read_state(found.state)
+    if MR_LABEL in state:
+        call(tool.update_mr, project, mr_number(state[MR_LABEL], found.state), body)
+    else:
+        branch = current_branch(repo)
+        if not branch:
+            raise RecordError('the head is detached: check out the branch of the work to open its MR')
+        state[MR_LABEL] = call(tool.create_mr, project, title, body, branch, resolution.layer.base.value)
+        write_state(found.state, state)
+    print(state[MR_LABEL])
+    return 0
+
+
+def existing_mr(args, environ):
+    """(adapter module, project, number, link) of the MR in the MR file, for `ready` and `show`."""
+    home = paths.resolve_home(args.home, environ)
+    found = locate(args.target)
+    repo = gitrepo.repo_for(args.repo)
+    name = adapter_name(ports.resolve(home, repo))
+    if name is None:
+        raise RecordError('the mr port is on its core default: there is no MR tool to call (set mr_tool in the profile)')
+    link = read_state(found.state).get(MR_LABEL)
+    if link is None:
+        raise RecordError(f'{found.state}: no MR line; run `mr put {args.target}` first')
+    project = project_of(repo, name)
+    if project is None:
+        raise RecordError('the repository has no origin remote: there is no MR to call')
+    return ADAPTERS[name], project, mr_number(link, found.state), link
+
+
+def run_ready(args, environ):
+    tool, project, number, link = existing_mr(args, environ)
+    call(tool.ready_mr, project, number)
+    print(f'{link}\nstate: ready for review')
+    return 0
+
+
+def run_show(args, environ):
+    tool, project, number, _ = existing_mr(args, environ)
+    link, state, draft = call(tool.view_mr, project, number)
+    print(f'{link}\nstate: {state}{", draft" if draft else ""}')
+    return 0
+
+
+def write_gate(args, label):
+    found = locate(args.target)
+    sha = gitrepo.require_commit(gitrepo.repo_for(args.repo), args.ref)
+    state = read_state(found.state)
+    state[label] = sha
+    write_state(found.state, state)
+    print(f'{label}: {sha}')
+    return 0
+
+
+def run_reviewed(args, environ):
+    return write_gate(args, REVIEWED_LABEL)
+
+
+def run_verified(args, environ):
+    return write_gate(args, VERIFIED_LABEL)

@@ -1,0 +1,83 @@
+"""Cases of `mr put`, `ready`, `show`, `reviewed` and `verified` that the acceptance tests of ticket 07 (test_mr.py)
+leave open: the order and the keeping of the lines of mr.md, and the errors that say what to run first. The fakes
+and the fixtures are those of test_mr.py; no test runs `gh` or `glab`."""
+from tests.fixtures import assert_cli_error
+from tests.test_mr import (LINKS, MR_BODY_FILE, ORIGINS, UNIT, AdhocCase, MrCase, PutSetup, write_text)
+
+
+class StateLinesTest(PutSetup, MrCase):
+    ADAPTER = 'gh'
+    SHA_A, SHA_B = 'a' * 40, 'b' * 40
+
+    def test_put_keeps_the_gate_lines_and_writes_the_lines_in_the_order_mr_reviewed_verified(self):
+        folder = self.unit()
+        write_text(folder / 'mr.md', f'Verified: {self.SHA_B}\nReviewed: {self.SHA_A}\n')
+        self.assertEqual(self.run_mr('put', folder)[0], 0)
+        self.assertEqual(self.mr_md_lines(folder / 'mr.md'),
+                         [f'MR: {self.link}', f'Reviewed: {self.SHA_A}', f'Verified: {self.SHA_B}'])
+
+    def test_a_second_reviewed_replaces_the_line_and_leaves_the_others(self):
+        folder = self.unit(link=self.link)
+        head = self.repo.git('rev-parse', 'HEAD').strip()
+        write_text(folder / 'mr.md', f'MR: {self.link}\nReviewed: {self.SHA_A}\nVerified: {self.SHA_B}\n')
+        code, out, err = self.run_mr('reviewed', folder, 'HEAD')
+        self.assertEqual(code, 0, (out, err))
+        self.assertEqual(self.mr_md_lines(folder / 'mr.md'),
+                         [f'MR: {self.link}', f'Reviewed: {head}', f'Verified: {self.SHA_B}'])
+
+
+class WhatToRunFirstTest(PutSetup, MrCase):
+    ADAPTER = 'gh'
+
+    def test_ready_and_show_without_an_mr_line_say_to_run_put_first(self):
+        folder = self.unit()
+        for action in ('ready', 'show'):
+            with self.subTest(action=action):
+                assert_cli_error(self, self.run_mr(action, folder), 'mr put')
+        self.assert_no_tool_call()
+
+    def test_put_without_a_body_file_says_to_run_body_first(self):
+        folder = self.repo.root / '.anomaly' / UNIT
+        folder.mkdir(parents=True)
+        assert_cli_error(self, self.run_mr('put', folder), 'mr body')
+        self.assert_no_tool_call()
+
+    def test_put_with_a_body_file_that_has_no_title_line_is_an_error(self):
+        folder = self.unit()
+        write_text(folder / 'mr-body.md', '## Why\n\nno title here\n')
+        assert_cli_error(self, self.run_mr('put', folder), 'Title:')
+        self.assert_no_tool_call()
+
+    def test_ready_and_show_on_the_core_default_are_errors_that_call_nothing(self):
+        self.set_port('')
+        folder = self.unit(link=self.link)
+        for action in ('ready', 'show'):
+            with self.subTest(action=action):
+                assert_cli_error(self, self.run_mr(action, folder), 'core default')
+        self.assert_no_tool_call()
+
+
+class AdapterHostTest(PutSetup, MrCase):
+    def test_each_adapter_refuses_the_origin_of_the_other_and_names_the_host(self):
+        for adapter, other in (('gh', 'glab'), ('glab', 'gh')):
+            with self.subTest(adapter=adapter):
+                self.use(adapter, origin=ORIGINS[other])
+                folder = self.unit(link=LINKS[adapter])
+                for action in ('put', 'ready', 'show'):
+                    assert_cli_error(self, self.run_mr(action, folder), ORIGINS[other].split('@')[1].split(':')[0])
+        self.assert_no_tool_call()
+
+
+class AdhocActionsTest(PutSetup, AdhocCase):
+    ADAPTER = 'gh'
+
+    def test_ready_and_show_read_the_sibling_mr_file(self):
+        sibling = self.ticket.with_name(self.ticket.stem + '.mr.md')
+        write_text(sibling, f'MR: {self.link}\n')
+        write_text(self.body_file(), MR_BODY_FILE)
+        for action in ('ready', 'show'):
+            with self.subTest(action=action):
+                code, out, err = self.run_mr(action, self.ticket)
+                self.assertEqual(code, 0, (out, err))
+                self.assertIn(self.link, out)
+        self.assertEqual(len(self.calls('ready')), 1)
