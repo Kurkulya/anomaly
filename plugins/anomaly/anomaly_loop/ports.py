@@ -90,8 +90,9 @@ def port(resolution, name, stack=''):
 
 
 def key_line(home):
-    """The name of the ticket line that holds the key: the `key_line` port of the profile in `home`."""
-    return port(resolve(home), 'key_line').value
+    """The name of the ticket line that holds the key: the `key_line` port of the profile in `home`,
+    without one trailing colon (a profile `key_line: Jira:` names the line `Jira`)."""
+    return port(resolve(home), 'key_line').value.removesuffix(':')
 
 
 def core_default(name):
