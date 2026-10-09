@@ -84,7 +84,7 @@ class RegistryTest(CheckTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['check', '--help'], environ={})
-        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'stories', 'slice'])
+        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'pre-push', 'stories', 'slice'])
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
         assert_cli_error(self, self.check(ticket=self.repo.root / '.scratch' / '99-none.md'), '99-none.md')
@@ -322,6 +322,77 @@ class AdhocTicketTest(CheckTestCase):
         self.assertTrue(self.problems(self.check())[0].startswith('Test:'))
         self.ticket_cmd('red', '--changed', 'why')
         self.assertEqual(self.check()[0], 0)
+
+
+class PrePushTest(CheckTestCase):
+    """AC-47, AC-48: `check pre-push <unit folder or ad-hoc ticket>`. A unit keeps its `Reviewed:` and `Verified:`
+    lines in `mr.md` (written by `mr reviewed` and `mr verified`), the light path in the ad-hoc ticket itself
+    (written by `ticket reviewed` and `ticket verified`); the check passes only when both name the current head.
+    Each failed line is one stdout line that starts with its label, and the exit code is 1."""
+
+    def setUp(self):
+        super().setUp()
+        self.unit = self.repo.root / '.anomaly' / 'demo-unit'
+        write_text(self.unit / 'stories.md', '# A unit\n')
+
+    def unit_record(self, reviewed='head', verified='head'):
+        """Write the unit's mr.md lines through `mr reviewed` and `mr verified`; 'head' means the current head."""
+        head = self.repo.git('rev-parse', 'HEAD').strip()
+        for action, value in (('reviewed', reviewed), ('verified', verified)):
+            if value:
+                code, out, err = run_cli('mr', action, str(self.unit), head if value == 'head' else value,
+                                         '--repo', str(self.repo.root), '--home', str(self.home))
+                self.assertEqual((code, err), (0, ''), out)
+
+    def adhoc_record(self):
+        """An ad-hoc ticket with its own Reviewed and Verified lines on the head; returns its path."""
+        code, out, err = run_cli('ticket', 'adhoc', 'a small task', '--repo', str(self.repo.root),
+                                 '--home', str(self.home))
+        self.assertEqual((code, err), (0, ''), out)
+        path = Path(out.strip())
+        self.record(red=False, ticket=path)
+        return path
+
+    def push_check(self, target):
+        return run_cli('check', 'pre-push', str(target), '--repo', str(self.repo.root), '--home', str(self.home))
+
+    def move_head(self):
+        """Commit after the review; returns the new head."""
+        self.repo.write('src/b.py', 'code v2\n')
+        return self.repo.commit(['src/b.py'], 'feat: more code', date(2026, 10, 3))
+
+    def test_a_unit_whose_mr_md_has_reviewed_and_verified_on_the_head_passes(self):
+        self.unit_record()
+        code, out, err = self.push_check(self.unit)
+        self.assertEqual((code, err), (0, ''), out)
+
+    def test_an_adhoc_ticket_with_its_own_reviewed_and_verified_on_the_head_passes(self):
+        path = self.adhoc_record()
+        code, out, err = self.push_check(path)
+        self.assertEqual((code, err), (0, ''), out)
+
+    def test_a_missing_reviewed_or_verified_line_fails_and_names_that_line(self):
+        for missing, kept in (('Reviewed', {'reviewed': None}), ('Verified', {'verified': None})):
+            with self.subTest(missing=missing):
+                (self.unit / 'mr.md').unlink(missing_ok=True)
+                self.unit_record(**kept)
+                lines = self.problems(self.push_check(self.unit))
+                self.assertEqual([line.split(':')[0] for line in lines], [missing], lines)
+
+    def test_a_head_that_moved_after_the_review_fails_and_names_both_stale_lines(self):
+        path = self.adhoc_record()
+        self.unit_record()
+        self.move_head()
+        for name, target in (('unit', self.unit), ('light path', path)):
+            with self.subTest(layout=name):
+                lines = self.problems(self.push_check(target))
+                self.assertEqual(sorted(line.split(':')[0] for line in lines), ['Reviewed', 'Verified'], lines)
+
+    def test_a_target_that_cannot_be_checked_is_an_error_not_a_failed_line(self):
+        for name, target, fragment in (('unit without mr.md', self.unit, 'mr.md'),
+                                       ('ticket outside the ad-hoc folder', self.ticket, 'ad-hoc ticket')):
+            with self.subTest(case=name):
+                assert_cli_error(self, self.push_check(target), fragment)
 
 
 GOOD_STORIES = """# A unit
