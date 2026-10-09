@@ -1416,8 +1416,10 @@ class ConductSkillTest(unittest.TestCase):
     of test_pipeline_files.py cover the new folder through ALLOWED_TOOLS_SKILLS (AC-61)."""
     SKILL = PLUGIN / 'skills' / 'conduct' / 'SKILL.md'
     KICKOFF = SKILL.parent / 'KICKOFF.md'
+    PARALLEL = SKILL.parent / 'PARALLEL.md'
     SKILL_MAX_BYTES = 8 * 1024
     KICKOFF_MAX_BYTES = 1024
+    PARALLEL_MAX_BYTES = 3 * 1024
 
     def text(self):
         self.assertTrue(self.SKILL.is_file(), 'skills/conduct/SKILL.md is missing')
@@ -1432,12 +1434,14 @@ class ConductSkillTest(unittest.TestCase):
         self.assertIn('explicit', description)
         self.assertIn('model-invocable', description)
 
-    def test_the_conduct_skill_fits_in_8_KB_and_its_kickoff_doc_in_1_KB(self):
-        """AC-59, conduct half (PARALLEL.md is ticket 13's)."""
+    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3_KB(self):
+        """AC-59, conduct half (the ship caps live in ShipSkillTest)."""
         self.text()
         self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
+        self.assertTrue(self.PARALLEL.is_file(), 'skills/conduct/PARALLEL.md is missing')
         self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
         self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
+        self.assertLessEqual(self.PARALLEL.stat().st_size, self.PARALLEL_MAX_BYTES)
 
     def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
         """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
@@ -1449,6 +1453,19 @@ class ConductSkillTest(unittest.TestCase):
         self.assertEqual(len(named), 1, f'{self.KICKOFF.name} is named on {len(named)} lines, expected 1')
         heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
         self.assertRegex(f'{heading}\n{lines[named[0]]}', r'(?i)\bchip\b')
+
+    def test_the_parallel_doc_is_named_once_and_only_in_the_parallel_pick_step(self):
+        """AC-60, PARALLEL half: one line of SKILL.md names it, outside the frontmatter, and that line or the
+        heading above it is about the parallel pick (the words "parallel" and "pick" or "picks")."""
+        fields, body = frontmatter.split(self.text())
+        self.assertNotIn(self.PARALLEL.name, ' '.join(str(value) for value in fields.values()))
+        lines = body.splitlines()
+        named = [number for number, line in enumerate(lines) if self.PARALLEL.name in line]
+        self.assertEqual(len(named), 1, f'{self.PARALLEL.name} is named on {len(named)} lines, expected 1')
+        heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
+        about = f'{heading}\n{lines[named[0]]}'
+        self.assertRegex(about, r'(?i)\bparallel\b')
+        self.assertRegex(about, r'(?i)\bpicks?\b')
 
 
 if __name__ == '__main__':
