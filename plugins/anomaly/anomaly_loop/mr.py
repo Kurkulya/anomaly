@@ -21,7 +21,8 @@ An ad-hoc ticket body has Why (the ticket's `What to build:`) and What changed (
 current branch that are not on the repo base).
 
 A body holds no commit id, no table row and no attribution line (`plain`). A body over 2.5 KB prints one
-`warning:` line and is still written. The file path is printed.
+`warning:` line and is still written. The file path is printed. A body line with a privacy problem
+(`privacy.privacy_problems`) is an error that names its section (`check_privacy`); no file is written.
 
   mr put <work unit folder | ad-hoc ticket> [--repo <dir>]
   mr ready <work unit folder | ad-hoc ticket> [--repo <dir>]
@@ -31,8 +32,9 @@ A body holds no commit id, no table row and no attribution line (`plain`). A bod
 
 `put` reads the title from the first `Title:` line of the body file and the body from the lines after the blank line,
 and opens a draft MR from the current branch to the base branch, or, when the MR file already has an `MR:` line,
-replaces the body of that MR (the title stays). `ready` takes the draft state off and `show` prints the link and the
-state. The tool is the adapter the `mr` port names (constants.MR_ADAPTERS; an unknown value is an error naming
+replaces the body of that MR (the title stays). `put` runs `check_privacy` on the body file first. Before it replaces a
+body, and before `ready` acts, the MR is viewed and must have the link of the `MR:` line and the current branch as its
+source (`check_same_mr`). `ready` takes the draft state off and `show` prints the link and the state. The tool is the adapter the `mr` port names (constants.MR_ADAPTERS; an unknown value is an error naming
 them), run for the project of the `origin` remote, which must be on the host of the adapter (`gh`: github.com,
 `glab`: gitlab.com; any other host is an error, never guessed). With the port on its core default, or a repository
 with no `origin`, `put` only prints the title and body and nothing leaves the machine; `ready` and `show` are

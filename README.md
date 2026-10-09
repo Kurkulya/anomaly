@@ -859,7 +859,10 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
   the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
   `ticket gate`).
-- `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
+- `ticket gate` exits 1 for a ticket that waits for a person (`Status: ready-for-human`,
+  `needs-info` or `wontfix`, whatever its blockers are) and prints `<status>, waits for a person`:
+  only a `ready-for-agent` ticket starts (`ticket.waits_for_person`, the rule `frontier` uses).
+  It looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
   each blocker that is not done (a missing file counts as not done) and exits 1. `None` and
   titles in parentheses are not blockers. A ticket with no `Blocked by:` line gets the same
@@ -946,13 +949,19 @@ python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
   and `ticket.is_blocked`), so a blocker that is not `done` and an unreadable `Blocked by:` value (for
   example `TBD`) make a ticket blocked in both commands. A blocker with no ticket file is also not
   done, but `frontier` reports it as an error (see below).
-- A **startable** ticket is not `done`, not `in-progress`, and has every blocker `done`. It is one
+- A **startable** ticket is not `done`, not `in-progress`, does not wait for a person (next item),
+  and has every blocker `done`. It is one
   line, `<ticket>: <status>`, in ticket order. An `in-progress` ticket is one line too, `<ticket>: in
   progress`; it is neither startable nor blocked, so a ticket that waits for it is not printed while
   another ticket is startable. A `Blocked by:` of `none` or `None` is no blocker.
-- With no startable ticket, `frontier` prints each in-progress ticket and each waiting ticket with
+- A ticket that is `ready-for-human`, `needs-info` or `wontfix` **waits for a person**, whatever its
+  blockers are (`ticket.waits_for_person`, the rule `ticket gate` uses). It always gets one line,
+  `<ticket>: <status>, waits for a person`; it is neither startable nor blocked. A unit whose open
+  tickets all wait for a person prints those lines and exits 0 with nothing startable. `conduct
+  status` counts such a ticket as open.
+- With no startable ticket, `frontier` prints each in-progress ticket and each blocked ticket with
   its unfinished blockers (`<ticket>: blocked by <NN> (<status>)`). It exits 1 only when nothing is
-  in progress and at least one open ticket waits; while a ticket is in progress it exits 0, so
+  in progress and at least one open ticket is blocked; while a ticket is in progress it exits 0, so
   `conduct` can offer to resume it. With every ticket `done` it prints one line that says the unit
   is finished and exits 0. A work unit with no ticket file is an error (exit 2).
 - A ticket that is not `done` and has no `Blocked by:` line, or names a blocker number with no
@@ -1052,6 +1061,10 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   standard error and is still written.
 - Facts come only from the ticket files, the AC file, `decisions.md` and, for an ad-hoc ticket,
   commit subjects; the diff is never read.
+- **Privacy.** Every body line goes through `privacy.privacy_problems` (a URL with a query string,
+  an email address, a credential, pasted program output, a long opaque identifier). A problem is
+  an error (exit 2) that names the section it is in, and no file is written. `mr put` runs the same
+  check on the body file before any tool call, since the file can be edited by hand.
 
 ## MR
 
@@ -1071,16 +1084,24 @@ python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [
   (`constants.MR_ADAPTERS`). Any other value is one `anomaly:` line naming the accepted ones, before any
   call. The tool runs for the project of the `origin` remote, which must be on the tool's host: `gh`
   works with `github.com` only and `glab` with `gitlab.com` only. Any other host, a self-hosted one
-  too, is an error that names the host; the host is never guessed. `gh` is called only through
+  too, is an error that names the host; the host is never guessed. `gh` also refuses an origin
+  project that is not exactly `owner/name` (a group path such as `a/b/c` is a GitLab shape), before
+  any call. `gh` is called only through
   `anomaly_loop/gh.py` and `glab` through `anomaly_loop/glab.py`, with argument lists and no shell.
   The body reaches `gh` on its standard input (`--body-file -`) and `glab api` as one argument; a write
   is tried once, and a failed call prints the tool's message (exit 2).
+  TODO(VK, revisit 2026-12-01): verify mr put, ready and show against a live gitlab.com project — see ADR-0017
 - **put.** Reads the title from the first `Title:` line of the body file (`mr-body.md`, or the sibling
   `<name>.mr-body.md` of an ad-hoc ticket) and the body from the lines after the blank line that follows
   it; a missing file says to run `mr body` first. With no `MR:` line in the MR file it opens a draft MR
   from the current branch to the repo base (`ports` prints it as `repo base`) and writes the link as
   the `MR:` line. With an `MR:` line it replaces the body of that MR; the title and the draft state stay.
-  It prints the link.
+  It prints the link. It refuses the body file when a line has a privacy problem (see MR body).
+- **The MR link check.** Before `put` replaces a body and before `ready` acts, the CLI views the MR
+  that the origin project has under the number of the `MR:` link. It refuses (exit 2, no change)
+  when that MR has another link than the line, which is the case for a link of another project, or
+  when its source branch is not the current branch. `view_mr` of both adapters returns the source
+  branch (`gh`: `headRefName`, `glab`: `source_branch`). `show` only views.
 - **Core default.** With the `mr` port on its core default, or a repository with no `origin`, `put`
   prints the title and the body (and a `note:` line on standard error) and calls nothing. `ready` and
   `show` are errors then, since there is no tool to call.
@@ -1309,13 +1330,14 @@ file and git. `check pre-push` holds a push to the review and the verify of the 
 `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
 `check slice` checks that its tickets can be run.
 `seams prune` and `seams add` keep the seam ledger true after a merge. None of them
-needs a home or a profile.
+needs a home or a profile; `check stories` and `check slice` read the `key_line` and `adr_folder`
+ports from the profile in `--home` when there is one.
 
 ```
 python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>] [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py check pre-push  <work-unit folder | ad-hoc ticket> [--repo <dir>]
-python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder>
-python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder>
+python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder> [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder> [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
 python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name> --owner <owner file> --replaces <old way> --ticket <NN>
 ```
@@ -1712,6 +1734,11 @@ this command's. It reads the working folder and writes nothing. The range is `A.
 or `A...B` (a range that does not resolve is an error, exit 2); it only decides which findings
 are marked, not what is scanned. Today is the command's clock.
 
+The first line is `adr folder: <folder>`, the ADR folder the scan reads, resolved by
+`check.adr_folder_path` (for example `adr folder: docs/adr`). A port value that names no folder of
+the repo (a URL, `..`) reads as `docs/adr`, and the line shows it. The docs agent gets this line,
+not the raw `ports` value.
+
 Each finding is one line, `<path>:<line>: <kind>: <detail>`, with the path relative to the
 repository, in the order of path and line. A finding in a file the range changes ends with
 ` [touched]`. The last line counts the findings, or says there are none. The exit code is 1 when
@@ -1744,7 +1771,8 @@ decision.
   space, glob, placeholder or colon character (a trailing `:12` or `:12-20` line cite is cut off
   first) and either holds a `/` or is a bare file name ending in `.md`, `.py`, `.json`, `.toml`,
   `.yml`, `.yaml`, `.sh` or `.txt`; or the target of a markdown link that is relative (a URL, an
-  anchor and a `#fragment` are skipped). Fenced code blocks are not read. A git ref such as
+  anchor and a `#fragment` are skipped). A claim that climbs out of the repo (`..`; refused by
+  `check.relative_parts`) cannot be checked against it and is skipped. Fenced code blocks are not read. A git ref such as
   `origin/main` also looks like a claim: this is a known limit.
 
 The scan covers the files git tracks (`git ls-files`, read at the working folder, so an
