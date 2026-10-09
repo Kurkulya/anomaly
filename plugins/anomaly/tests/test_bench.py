@@ -690,5 +690,60 @@ class FixtureShapeTest(unittest.TestCase):
         self.assertNotIn('query[', window)
 
 
+class DocsFixtureTest(ScoreCase):
+    """AC-53: the docs fixture plants one unrecorded decision commit and one drifted ADR claim. It is not a row of
+    FIXTURES: the briefed number of decoys is not set, and the decoy checks need at least one. It reuses the
+    shared reader, the perfect-run builder and the place resolver."""
+    PATH = BENCH / 'docs' / 'defects.json'
+
+    def spec(self):
+        self.assertTrue(self.PATH.is_file(), self.PATH.relative_to(BENCH.parent).as_posix())
+        return json.loads(self.PATH.read_text(encoding='utf-8'))
+
+    def test_the_fixture_loads_and_plants_two_defects_a_decision_commit_and_a_drifted_adr_claim(self):
+        spec = self.spec()
+        self.assertEqual(bench.load_fixture(self.PATH).name, 'docs')
+        self.assertEqual(spec['fixture'], 'docs')
+        self.assertEqual(len(spec['defects']), 2)
+        kinds = [('commit' if re.search(r'commit', item['what'], re.I) else
+                  'drift' if re.search(r'drift|no longer', item['what'], re.I) else '?')
+                 for item in spec['defects']]
+        self.assertEqual(sorted(kinds), ['commit', 'drift'])
+
+    def test_each_planted_place_points_at_real_text_and_the_two_windows_do_not_overlap(self):
+        window = constants.BENCH_WINDOW
+        found = []
+        for item in self.spec()['defects']:
+            for place in item.get('places', []):
+                with self.subTest(item=item['id']):
+                    target = head_file(self.PATH.parent, place['file'])
+                    self.assertIsNotNone(target, place['file'])
+                    lines = target.read_text(encoding='utf-8').splitlines()
+                    first, last = place['lines']
+                    self.assertTrue(1 <= first <= last <= len(lines), (place, len(lines)))
+                    self.assertTrue(any(line.strip() for line in lines[first - 1:last]))
+                found.append((item['id'], place['file'], first - window, last + window))
+        for number, (first_id, file, start, end) in enumerate(found):
+            for other_id, other_file, other_start, other_end in found[number + 1:]:
+                if file == other_file and first_id != other_id:
+                    self.assertTrue(end < other_start or other_end < start, (first_id, other_id))
+
+    def test_a_run_that_names_both_defects_finds_2_of_2_and_each_defect_alone_finds_1_of_2(self):
+        spec = self.spec()
+        both = fixture_run(spec)
+        result = block(self.score(self.PATH, self.write_run(*both))[1])
+        self.assertEqual((result['found'], result['found at min severity'], result['missed'], result['false High']),
+                         ('2 of 2', '2 of 2', '0 of 2', '0'))
+        for number, line in enumerate(both):
+            with self.subTest(defect=spec['defects'][number]['id']):
+                alone = block(self.score(self.PATH, self.write_run(line, name=f'alone{number}.txt'))[1])
+                self.assertEqual((alone['found'], alone['missed']), ('1 of 2', '1 of 2'))
+
+    def test_a_run_that_names_neither_defect_finds_0_of_2(self):
+        self.spec()
+        result = block(self.score(self.PATH, self.write_run('fine: nothing to report'))[1])
+        self.assertEqual((result['found'], result['missed'], result['false High']), ('0 of 2', '2 of 2', '0'))
+
+
 if __name__ == '__main__':
     unittest.main()
