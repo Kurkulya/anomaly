@@ -853,9 +853,10 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, the key line
-  (under the name it has in the ticket), `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`,
-  `Verified`, `Red`, `Red-changed`) and a `warning:` line when the ticket
-  has no `Blocked by:` line or its value is not only two-digit ticket numbers (see `ticket gate`).
+  (under the name it has in the ticket), `Tests`, `Repro`, `Base` (the integration branch, which
+  `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
+  the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
+  `ticket gate`).
 - `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
   each blocker that is not done (a missing file counts as not done) and exits 1. `None` and
@@ -913,7 +914,7 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
   `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
-  `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
+  key line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
   the title unless `--slug` gives it.
 
@@ -1178,7 +1179,7 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
   `Covers:`, `Tests:` or key line, or one with an empty value (the key line is the line the
   `key_line` port names, core `Key:`, read from the profile in `--home`; a `Jira:` line is read
-  when the ticket has no such line; it accepts any word for now); a `Status:`
+  when the ticket has no such line; it accepts any word for now, see ADR-0017, Revisit); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
   (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
