@@ -85,10 +85,10 @@ def classify(tickets_dir, tickets):
 def ac_warnings(folder, tickets):
     """One warning line per AC of the unit's AC file that no ticket's `Covers:` names. The file is `spec.md` when
     the unit has one, else `stories.md` (ADR-0011)."""
-    name = next((name for name in AC_FILES if (folder / name).is_file()), AC_FILES[-1])
+    name = next((name for name in AC_FILES if (folder / name).is_file()), None)
+    if name is None:
+        return [f'warning: the unit has no {" or ".join(AC_FILES)}; the ACs are not checked']
     text = check.read_optional(folder / name)
-    if text is None:
-        return [f'warning: {name} is missing; the ACs are not checked']
     return [f'warning: {name}:{number}: {ac} is in no ticket\'s Covers: line'
             for ac, number in check.uncovered_acs(text, (parsed for _, parsed in tickets))]
 

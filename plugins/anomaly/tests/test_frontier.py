@@ -71,15 +71,37 @@ class FrontierTest(unittest.TestCase):
                 self.assertLess(output.index('bravo'), output.index('delta'))
                 self.assertLess(output.index('delta'), output.index('echo'))
 
-    def test_blocked_by_none_in_either_case_is_no_blocker(self):
-        """Notes of the ticket: `Blocked by: none` and `Blocked by: None` both mean no blocker."""
-        tickets = {'01-alpha': slice_ticket('01', blocked='none'), '02-bravo': slice_ticket('02', blocked='None')}
+    def test_blocked_by_none_in_lower_case_is_no_blocker(self):
+        """Notes of the ticket: `Blocked by: none` means no blocker (the `None` case is in the first test)."""
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root):
+                code, output = self.frontier(self.unit(layout, {'01-alpha': slice_ticket('01', blocked='none')}))
+                self.assertEqual(code, 0, output)
+                self.assertEqual(len(self.lines_naming(output, 'alpha')), 1, output)
+
+    def test_a_blocked_by_value_that_holds_no_ticket_number_is_not_startable(self):
+        """`Blocked by: TBD` cannot be read, so the ticket is blocked, as `ticket gate` treats it: it is not listed
+        while another ticket is startable."""
+        tickets = {'01-alpha': slice_ticket('01', status='done'), '02-bravo': slice_ticket('02', blocked='TBD'),
+                   '03-charlie': slice_ticket('03', blocked='01')}
         for layout in LAYOUTS:
             with self.subTest(layout=layout.root):
                 code, output = self.frontier(self.unit(layout, tickets))
                 self.assertEqual(code, 0, output)
-                self.assertEqual(len(self.lines_naming(output, 'alpha')), 1, output)
-                self.assertEqual(len(self.lines_naming(output, 'bravo')), 1, output)
+                self.assertEqual(self.lines_naming(output, 'bravo'), [], output)
+                self.assertEqual(len(self.lines_naming(output, 'charlie')), 1, output)
+
+    def test_a_ticket_with_an_unreadable_blocked_by_is_named_with_the_value_when_it_is_the_only_open_one(self):
+        """The same unreadable ticket with nothing else open: no startable ticket, so it is named with its value
+        and the exit code is 1."""
+        tickets = {'01-alpha': slice_ticket('01', status='done'), '02-bravo': slice_ticket('02', blocked='TBD')}
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root):
+                code, output = self.frontier(self.unit(layout, tickets))
+                self.assertEqual(code, 1, output)
+                waiting = self.lines_naming(output, 'bravo')
+                self.assertEqual(len(waiting), 1, output)
+                self.assertIn('TBD', waiting[0])
 
     def test_an_in_progress_ticket_is_a_marked_line_of_its_own_and_not_startable(self):
         """AC-1 (Amended): the in-progress ticket is printed marked in progress; the startable one is not marked;
@@ -184,6 +206,35 @@ class FrontierTest(unittest.TestCase):
                 self.assertIn('finished', output.lower())
                 for slug in ('alpha', 'bravo'):
                     self.assertEqual(self.lines_naming(output, slug), [], (slug, output))
+
+    def test_a_missing_stories_file_is_one_warning_naming_it_and_the_tickets_are_still_listed(self):
+        """A unit with no AC file (stories.md, or spec.md in the old layout): the tickets are read, one `warning:` line
+        names the files that are missing (spec.md or stories.md), and the exit code is the one the tickets give."""
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root):
+                folder = self.unit(layout, {'01-alpha': slice_ticket('01')})
+                (folder / layout.stories).unlink()
+                code, output = self.frontier(folder)
+                self.assertEqual(code, 0, output)
+                self.assertEqual(len(self.lines_naming(output, 'alpha')), 1, output)
+                warnings = self.lines_naming(output, 'stories.md')
+                self.assertEqual(len(warnings), 1, output)
+                self.assertTrue(warnings[0].startswith('warning:'), warnings)
+
+    def test_a_unit_with_no_ticket_file_is_an_error_naming_the_folder_and_exits_2(self):
+        """A unit with no tickets folder, or an empty one, has nothing to list: not "finished"."""
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root, tickets='no folder'):
+                folder = self.unit(layout, {})
+                code, output = self.frontier(folder)
+                self.assertEqual(code, 2, output)
+                self.assertIn(str(folder), output)
+            with self.subTest(layout=layout.root, tickets='empty folder'):
+                folder = self.unit(layout, {})
+                (folder / layout.tickets).mkdir()
+                code, output = self.frontier(folder)
+                self.assertEqual(code, 2, output)
+                self.assertIn(str(folder), output)
 
     def test_a_ticket_with_no_blocked_by_line_is_an_error_naming_it_and_exits_2(self):
         """AC-4: the ticket with no line is named even when other tickets are startable."""
