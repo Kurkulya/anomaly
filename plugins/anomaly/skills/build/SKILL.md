@@ -32,7 +32,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work-un
 
 1. Resolve "build 01" to `tickets/01-*.md` in `.anomaly/<work unit>/`, or `issues/01-*.md` in `.scratch/<feature>/`; or a path. Work-unit key = that folder's name. `worklog start`. [I1]
 2. `ports`. If its `commit` or `branch` value holds `<key>`, use the ticket key (key line of `ticket show`); stop if missing or a placeholder. [I2] Unresolved `command verify`: stop here and ask the user for the command, naming the `repo override` path and its `verify:` key; never guess.
-3. `ticket gate`: exit 1 blocked, 2 error: stop. Already `Status: done`: stop. Resume: `git log --first-parent --format=%H%x20%s <integration>` (step 6) lists `merge <NN-slug>`: skip to the Close with that sha, after Merge step 5 if the branch exists. Skip a step whose ticket line exists (`Red:`; `Reviewed:`, `Verified:` only if it names the ticket tip). [I5, I6]
+3. `ticket gate`: exit 1 blocked, 2 error: stop. Already `Status: done`: stop. Resume: `git log --first-parent --format=%H%x20%s <integration>` (step 6) lists `merge <NN-slug>`: skip to the Close with that sha, after Merge step 5 if the branch exists. Skip a step whose ticket line exists (`Red:`; `Reviewed:`, `Verified:` only if it names the current ticket tip). [I5, I6]
 4. Under-specified ticket: stop and ask; never widen scope. [I37] Stack and size come from the ticket, else ask. [K2]
 5. `ticket set-status in-progress`. [I7]
 6. Integration branch = `Base:` from `ticket show`, else the `branch` pattern with the work-unit key as slug. Create it once: fetch, then branch from `origin/<repo base>` (no origin: the local base). [I3, I4]
@@ -43,8 +43,8 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work-un
 Start as above, but:
 1. `ticket adhoc` prints the ticket's path. Work-unit key = that file name without `.md`. `worklog start`/`add` take no `--ticket` or `--docs`. Resume by that path.
 2. A `branch` or `commit` value that holds `<key>`: ask the user; never guess. [I2]
-3. Start branch = the head's branch; read it for the integration branch, `<integration>` and `<checkout>` below (no step 6). Detached head, head on the base branch, or (resuming) off the start branch: ask the user. [I8] Ticket-branch slug and merge subject use the adhoc file stem.
-4. Red first, Implement and the Shared close, with a combined-mode review and no `seams prune` or `seams add`.
+3. Start branch = the head's branch; read it for the integration branch, `<integration>` and `<checkout>` below (no step 6). Detached head, head on the base branch, or (resuming) off the start branch: ask the user. [I8] Ticket-branch slug and merge subject use the adhoc stem.
+4. Red first, Implement and the Shared close, with a combined review and no `seams prune` or `seams add`.
 
 ## Red first, always [N7, AC-32]
 
@@ -62,7 +62,7 @@ Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled
 
 Review → verify → CI check → merge → close. `conduct`'s parallel path enters here with a branch. [P7]
 
-**Review** [I20, I21]. `anomaly:review` in ticket mode (combined if docs-only) on `<integration>...<ticket tip>`, with its inputs, the open tickets calling this code, and "last review of the session" if so. The same implementer fixes Blocker and High, then a delta round, until none is open.
+**Review** [I20, I21]. `anomaly:review` in ticket mode (combined if docs-only) on `<integration>...<ticket tip>`, with its inputs, the open tickets calling this code, and "last review of the session" if so. The same implementer fixes Blocker and High, then a delta round, until none open.
 
 **Verify**, after the last review fix (pending verdict, I15). Each step that applies:
 1. The agent's touched tests.
@@ -92,4 +92,4 @@ Only these ticket lines and `seams.md` change. [O47]
 
 ## Commits [I28, P14, P16, O24]
 
-The `commit` port format, atomic, no AI trailers. Write each commit or merge message with the Write tool to `msg-<NN>-<n>.txt` (light path: the adhoc stem for `<NN>`) in the scratchpad, then `-F <file>`. Never `--no-verify`.
+The `commit` port format, atomic, no AI trailers. Write each commit or merge message with the Write tool to `msg-<NN>-<n>.txt` (light path: the adhoc stem for `<NN>`) in the session scratchpad, then `-F <file>`. Never `--no-verify`.
