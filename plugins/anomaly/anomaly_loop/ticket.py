@@ -14,6 +14,7 @@ the same way. Its state lives in header lines, each plain (`Status: x`) or bold
   red         write `Red: <sha> · <test path>` (the first one, or a different sha, removes the earlier
               `Red-changed:` lines), or add `Red-changed: <reason>`  (additive lines)
   adhoc       write `.anomaly/adhoc/<date>-<slug>.md` under the main checkout from a task text or --from a checked draft
+  amend       add `Amended <date>: <text>` at the end of a file, or --after an AC-n / D-n line of stories.md / decisions.md
 
 Writing is a text edit: only the named lines change, every other byte (line endings, a missing
 final newline) stays. A new line goes after the nearest line that comes before it in LINE_ORDER
@@ -50,6 +51,8 @@ NUMBERED_TITLE = re.compile(rf'#\s*[0-9]{{{TICKET_NUMBER_DIGITS}}}:\s*(.+?)\s*$'
 HEADING = re.compile(r'#\s+(\S.*?)\s*$')
 STATUS_WORD = re.compile(r'[\w-]+')
 AC_ID = re.compile(r'AC-\d+')
+AMEND_TARGET = re.compile(r'(?:AC|D)-\d+')
+AMENDED_LINE = re.compile(r'(\s*)Amended\b')
 CHECKBOX = re.compile(r'(\s*[-*+]\s+\[)([ xX])(\]\s*\**AC-(\d+)(?!\d))')
 STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
@@ -408,6 +411,36 @@ def close(text, branch, merge, open_items, now, counts, acs=()):
     return join_lines(lines)
 
 
+def amend(text, today, note, after=None):
+    """The text with one `Amended <date>: <note>` line. Without `after` it goes at the end of the file.
+    With `after` (AC-n or D-n) it goes below that list item and below any `Amended` lines already under
+    it, indented like them (else two spaces under a D-n, none under an AC-n, as in the planning files).
+    The note and the id are checked before anything is changed."""
+    note = require_one_line('the amend text', note)
+    problems = privacy.privacy_problems(note)
+    if problems:
+        raise RecordError(f'the amend text holds {" and ".join(problems)}; describe it in your own words')
+    line = f'Amended {today.isoformat()}: {note}'
+    lines = split_lines(text)
+    if after is None:
+        if lines:
+            insert_after(lines, len(lines) - 1, line)
+        else:
+            lines.append([line, '\n'])
+        return join_lines(lines)
+    if not AMEND_TARGET.fullmatch(after):
+        raise RecordError(f'--after names an AC or a decision like AC-12 or D-3, got: {after}')
+    item, skip = re.compile(rf'\s*[-*+]\s+\**{re.escape(after)}(?!\d)'), fenced(lines)
+    target = next((index for index, (body, _) in enumerate(lines) if index not in skip and item.match(body)), None)
+    if target is None:
+        raise RecordError(f'no {after} line in the file')
+    last, indent = target, '  ' if after.startswith('D-') else ''
+    while last + 1 < len(lines) and last + 1 not in skip and (older := AMENDED_LINE.match(lines[last + 1][0])):
+        last, indent = last + 1, older.group(1)
+    insert_after(lines, last, indent + line)
+    return join_lines(lines)
+
+
 def slugify(text):
     plain = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
     return re.sub(r'[^a-z0-9]+', '-', plain.lower()).strip('-')[:TICKET_SLUG_MAX_CHARS].rstrip('-') or 'task'
@@ -484,6 +517,10 @@ def register(commands, common):
     red.add_argument('path', nargs='?', help='the acceptance test file')
     red.add_argument('--repo', help=gitrepo.REPO_HELP)
     red.add_argument('--changed', help='the reason the test file changed after its red commit')
+    amended = action('amend', run_amend, 'add Amended <date>: <text> at the end of the file, or below an AC-n / D-n line')
+    amended.add_argument('text', help='the note, one line (checked for private content)')
+    amended.add_argument('--after', metavar='ID', help='an AC-n of stories.md or a D-n of decisions.md; the line goes '
+                                                       'below it and below the Amended lines already under it')
     adhoc = actions.add_parser('adhoc', parents=[common],
                                help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text '
                                     'or --from a checked draft')
@@ -591,6 +628,11 @@ def draft_ticket(path, slug, today):
     check_slug(slug)
     name = f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md'
     return name, text, check.draft_warnings(text)
+
+
+def run_amend(args, environ):
+    edit(args.ticket, lambda text: amend(text, args.today, args.text, args.after))
+    return 0
 
 
 def run_adhoc(args, environ):
