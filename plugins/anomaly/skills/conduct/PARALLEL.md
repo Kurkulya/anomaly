@@ -1,6 +1,6 @@
 # Parallel wave
 
-Read after the user picks parallel. Steps 9 to 14 of SKILL.md still run; this file replaces the `anomaly:build` call per ticket in step 9. CLI calls here use the form of build's. [O44, AC-19]
+Read after the user picks parallel. Steps 9 to 14 of SKILL.md still run; this file replaces the `anomaly:build` call per ticket in step 9. CLI calls here use build's form. [O44, AC-19]
 
 1. Checklist, one line per ticket: `<NN-slug> | touches: <paths> | par`, or `| seq: <reason>`. A ticket is `par` only when all hold: its touches share no path with another `par` ticket; no `seams.md` owner is edited by two of them; it is medium or larger (ticket size); at most one `par` ticket needs the `ui_check` port. The rest are `seq`: `anomaly:build` runs them after the parallel close. Fewer than two `par`: say so and run the wave sequentially, no second question. [P1, P2, P17, N7, AC-19]
 2. Shared owner: two `par` tickets that need one new or changed helper get a prep branch. It opens with `ticket adhoc '<task>' --repo <wt>`, runs build's light path through the `implementer` port, and merges first. The agents start from the new tip. [N8]

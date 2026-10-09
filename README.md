@@ -1055,10 +1055,11 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
     time. No commit id is printed. It is left out when no ticket is merged.
 - `--draft` writes a two-line body: the Why, then `Work in progress`. With no Why, the draft is the one
   line `Work in progress`. It works for an ad-hoc ticket too.
-- **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's `What to build:`, with the same capital first letter) and What
-  changed (the subjects of the commits on the current branch of `--repo` that are not on the repo base,
-  oldest first, merge commits left out). The repo base is the one `ports` prints (`repo base`). Git is
-  read only here; `--docs-gate` is refused, since the body has no Tested section.
+- **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's
+  `What to build:`, with the same capital first letter) and What changed (the subjects of the commits
+  on the current branch of `--repo` that are not on the repo base, oldest first, merge commits left
+  out). The repo base is the one `ports` prints (`repo base`). Git is read only here; `--docs-gate` is
+  refused, since the body has no Tested section.
 - The body holds no commit id, no table row and no attribution line: a hex word (the id shapes of
   `privacy.COMMIT_ID`) that has a digit and a letter a-f loses that word, a `|` becomes `/`, and a
   fact that starts with `Co-Authored-By:` or `Generated with` is dropped. A body over 2.5 KB (2560 bytes, not counting the Title line) prints one `warning:` line on

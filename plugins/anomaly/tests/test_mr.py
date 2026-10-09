@@ -107,6 +107,8 @@ class UnitCase(MrCase):
     def ticket(self, number, slug, covers, ac_ids, status='ready-for-agent', title=None, key=KEY):
         text = slice_ticket(number, covers=covers, status=status, jira=key, key_line='Key',
                             body='\n' + ''.join(f'- [ ] {ac}: criterion {ac}\n' for ac in ac_ids))
+        if key is None:   # a ticket with no key line at all
+            text = text.replace('Key: None\n', '', 1)
         path = self.repo.root / '.anomaly' / UNIT / 'tickets' / f'{number}-{slug}.md'
         write_text(path, text.replace(': A ticket\n', f': {title or TITLES[number]}\n', 1))
         return path
@@ -331,8 +333,9 @@ class BodyTest(UnitCase):
         title, _ = self.body_of(self.unit(keys=keys))
         self.assertTrue(title.startswith(f'feat({expected}): '), title)
 
-    def test_the_title_key_is_the_key_every_ticket_shares(self):
-        self.assert_title_key((KEY, KEY, KEY), KEY)
+    def test_the_title_key_is_the_key_every_keyed_ticket_shares(self):
+        """Ticket 01 has no key line: a ticket without a key is skipped, the other two share the key."""
+        self.assert_title_key((None, KEY, KEY), KEY)
 
     def test_the_title_key_is_the_unit_folder_name_when_the_keyed_tickets_have_different_keys(self):
         self.assert_title_key((KEY, 'ABC-9', KEY), UNIT)
