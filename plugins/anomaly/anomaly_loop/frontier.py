@@ -11,12 +11,14 @@ one line each, in ticket order:
 
 Exit 0 when a ticket is startable, or a ticket is in progress (the unit is not stuck; the blocked lines are
 printed when nothing is startable), or every ticket is done (one `finished` line). Exit 1 when no ticket is
-startable, none is in progress and one waits for a blocker. Exit 2 (one `anomaly:` line naming each ticket) when a ticket that is not done has
-no `Blocked by:` line or names a blocker with no ticket file. A `warning:` line follows for each AC of the unit's
-stories file (`stories.md`; `spec.md` in an old `.scratch` unit) that no ticket's `Covers:` names.
+startable, none is in progress and one waits for a blocker. Exit 2 (one `anomaly:` line naming each ticket)
+when a ticket that is not done has no `Blocked by:` line or names a blocker with no ticket file. A `warning:`
+line follows for each AC of the unit's AC file (`spec.md` when the unit has one, else `stories.md`) that no
+ticket's `Covers:` names.
 
 The rule "every blocker is done" is `ticket.unfinished_blockers` and `ticket.is_blocked`, the one `ticket gate`
-uses; the AC lines are read by `check.ac_ids`; the ticket folders are `check.TICKET_FOLDERS`.
+uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; the ticket folders are
+`check.TICKET_FOLDERS`.
 """
 from pathlib import Path
 
@@ -24,8 +26,7 @@ from . import check, ticket
 from .constants import TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
 from .files import RecordError
 
-AC_FILES = {'.anomaly': 'stories.md', '.scratch': 'spec.md'}   # the file that holds the ACs, by the home folder of the unit
-AC_FILE_DEFAULT = 'stories.md'
+AC_FILES = ('spec.md', 'stories.md')   # the files that hold the ACs, the first one that exists is read (ADR-0011)
 START, RUNNING, BLOCKED = 'start', 'running', 'blocked'
 
 
@@ -81,15 +82,15 @@ def classify(tickets_dir, tickets):
     return entries, errors
 
 
-def uncovered_acs(folder, tickets):
-    """One warning line per AC of the unit's stories file that no ticket's `Covers:` names."""
-    name = AC_FILES.get(unit_home(folder), AC_FILE_DEFAULT)
+def ac_warnings(folder, tickets):
+    """One warning line per AC of the unit's AC file that no ticket's `Covers:` names. The file is `spec.md` when
+    the unit has one, else `stories.md` (ADR-0011)."""
+    name = next((name for name in AC_FILES if (folder / name).is_file()), AC_FILES[-1])
     text = check.read_optional(folder / name)
     if text is None:
         return [f'warning: {name} is missing; the ACs are not checked']
-    covered = {ac for _, parsed in tickets for ac in parsed.covers}
     return [f'warning: {name}:{number}: {ac} is in no ticket\'s Covers: line'
-            for ac, number in check.ac_ids(text)[0].items() if ac not in covered]
+            for ac, number in check.uncovered_acs(text, (parsed for _, parsed in tickets))]
 
 
 def look(folder):
@@ -114,7 +115,7 @@ def look(folder):
     lines = [line for kind, line in entries if kind in shown]
     if not entries:
         lines = [f'{folder.resolve().name}: finished, every ticket is done']
-    return lines + uncovered_acs(folder, tickets), code
+    return lines + ac_warnings(folder, tickets), code
 
 
 def register(commands, common):
