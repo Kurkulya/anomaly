@@ -36,7 +36,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 
 ## Write the tickets
 
-Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the shape of [formats.md](../../docs/formats.md), the `Jira:` line included. [T12, T16, C1]
+Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the shape of [formats.md](../../docs/formats.md), the key line included (the line the `key_line` port names). [T12, T16, C1]
 
 - Self-contained: `build` reads only the ticket and `seams.md`. Copy every AC it covers, verbatim, and the `D-n` lines it needs. [N1, C4]
 - Every `Covers:` AC has a `Tests:` level; every story AC is in some `Covers:`. [N2, P5]

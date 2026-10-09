@@ -71,7 +71,7 @@ Append `D-n` lines to `decisions.md`, each citing its `Source:` (shape in format
 - A prototype snippet that encodes a decision goes in its `D-n`. [TS13]
 - A defect found in code is not written as `Open:`. The digest names it with its `file:line`; the user's answer becomes a plain `D-n` with `Source: user, <date>`. [FC12]
 - This skill never writes a `T-n` line or a row of `CONTEXT.md`; terms are the interview's.
-- For each `D-n` tagged ` ADR?` that the user agrees is an ADR, draft `.anomaly/<work unit>/adr/<NNNN>-<slug>.md` from the repo's ADR template, with the front block. With no `docs/adr/` folder in the repo, raise that with the user before the first draft. [C24] The number must be free on every branch: `git log --all -- docs/adr/<NNNN>*` is empty and no draft in any `.anomaly/*/adr/` holds it. An ADR cites commits on the main branch, not lines of scratch files. [N1, N2]
+- For each `D-n` tagged ` ADR?` that the user agrees is an ADR, draft `.anomaly/<work unit>/adr/<NNNN>-<slug>.md` from the repo's ADR template, with the front block. The ADR folder is the one the `adr_folder` port names; with no such folder in the repo, raise that with the user before the first draft. [C24] The number must be free on every branch: `git log --all -- <adr_folder>/<NNNN>*` is empty and no draft in any `.anomaly/*/adr/` holds it. An ADR cites commits on the main branch, not lines of scratch files. [N1, N2]
 
 ## The checks and the gate
 

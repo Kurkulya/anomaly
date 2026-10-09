@@ -1162,7 +1162,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `ticket NN` (`tickets/NN-*.md` of the unit, or `issues/` in a `.scratch` unit) or
   ``ticket NN of `<unit>` `` (that unit's `tickets/`, or its `issues/` in the old `.scratch` layout;
   the form "in `<unit>`" fails), the path of a ticket file or an ADR file, or `ADR-NNNN`
-  (`docs/adr/` or the `adr/` of a unit folder); only the checkout
+  (in the folder the `adr_folder` port names, core `docs/adr/`, read from the profile in `--home`, or in the
+  `adr/` of a unit folder); only the checkout
   counts, so an ADR on another branch fails, and any other file (a README, a skill) is no owner. A
   path with a root or a drive is no owner. A person or a skill needs the key. A work-unit folder
   that is not `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no
