@@ -191,7 +191,7 @@ class Ticket:
     blockers: tuple              # ticket numbers ('01', '02'); none for `None`
     blockers_unreadable: bool    # a Blocked by: value that is not `none` and holds no ticket number, or a
                                  # number outside the parentheses that is not two digits
-    jira: str
+    key: str                     # the first word of the key line (key_name)
     covers: tuple                # AC ids, each once; none for `none`
     has_covers_line: bool
     tests: str
@@ -222,7 +222,7 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
     blockers = () if says_none else tuple(BLOCKER_NUMBER.findall(without_titles))
     other_numbers = not says_none and any(len(number) != TICKET_NUMBER_DIGITS
                                            for number in re.findall(r'\b[0-9]+\b', without_titles))
-    jira = (value_of(lines, key_name(lines, key_line)) or '').split(None, 1)
+    key = (value_of(lines, key_name(lines, key_line)) or '').split(None, 1)
     covers = value_of(lines, 'Covers') or ''
     covered = () if re.match(r'none\b', covers, re.I) else tuple(dict.fromkeys(AC_ID.findall(covers)))
     red = value_of(lines, 'Red')
@@ -234,7 +234,7 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
     return Ticket(
         title=title, status=status.group(0) if status else TICKET_STATUS_UNKNOWN, blocked_by=blocked or '',
         has_blocked_line=blocked is not None, blockers=blockers,
-        blockers_unreadable=not says_none and (not blockers or other_numbers), jira=jira[0] if jira else '',
+        blockers_unreadable=not says_none and (not blockers or other_numbers), key=key[0] if key else '',
         covers=covered, has_covers_line=bool(covers.strip()), tests=value_of(lines, 'Tests') or '',
         reviewed=value_of(lines, 'Reviewed') or '', verified=value_of(lines, 'Verified') or '',
         red=(sha, path) if red is not None else None, red_changed=values_of(lines, 'Red-changed'),

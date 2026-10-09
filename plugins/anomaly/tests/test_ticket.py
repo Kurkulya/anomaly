@@ -1229,9 +1229,11 @@ class ParseTest(unittest.TestCase):
         self.assertFalse(ticket.parse('# 03: T\n').has_blocked_line)
         self.assertTrue(ticket.parse('# 03: T\n\nBlocked by: 01\n').has_blocked_line)
 
-    def test_jira_key(self):
-        self.assertEqual(ticket.parse('# 03: T\n\nJira: no-ticket\n').jira, 'no-ticket')
-        self.assertEqual(ticket.parse('# 03: T\n').jira, '')
+    def test_key_is_read_from_the_key_line_or_a_jira_line(self):
+        self.assertEqual(ticket.parse('# 03: T\n\nJira: no-ticket\n').key, 'no-ticket')
+        self.assertEqual(ticket.parse('# 03: T\n').key, '')
+        self.assertEqual(ticket.parse('# 03: T\n\nKey: ABC-1\n').key, 'ABC-1')
+        self.assertEqual(ticket.parse('# 03: T\n\nStory: ABC-3\n', key_line='Story').key, 'ABC-3')
 
     def test_covers_each_id_once_and_none_means_no_coverage(self):
         parsed = ticket.parse('# 03: T\n\nCovers: AC-1, AC-3 and AC-1 again\n')

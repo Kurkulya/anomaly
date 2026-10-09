@@ -832,6 +832,7 @@ class CheckSliceTest(unittest.TestCase):
         self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Story', jira='ABC-3'))
         code, out, err = run()
         self.assertEqual(code, 1, out)
+        self.assertIn('no Key: line', out)
         write_text(home / 'profile.md', '---\nkey_line: Story\n---\n')
         code, out, err = run()
         self.assertEqual((code, err), (0, ''), out)
