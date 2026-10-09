@@ -5,6 +5,9 @@ claim the code has moved away from) are the docs agent's, not this command's.
 
   docs scan <range> [--repo DIR] [--home DIR]    print the findings, one line each; nothing is written
 
+The first line is `adr folder: <folder>`, the folder the scan reads (check.adr_folder_path), so a port value that
+names no folder of the repo, which reads as `docs/adr`, is not silent.
+
 The range is `A..B` or `A...B` (resolved through risk.resolve_range); it only decides which findings are
 marked. The scan itself reads the working folder, not the range. Four kinds of finding, each with the
 repository-relative `path:line`:
@@ -27,7 +30,8 @@ repository-relative `path:line`:
   with `/<claim>`. A claim is a backticked word with no
   space or glob or placeholder character (a trailing `:12` or `:12-20` is cut off) that holds a `/` or is a
   bare file name with one of the extensions in BARE_FILE, or the target of a markdown link that is not a URL
-  or an anchor. Fenced code blocks are not read. A ref such as `origin/main` is a claim (a known limit).
+  or an anchor. Fenced code blocks are not read. A ref such as `origin/main` is a claim (a known limit). A claim
+  that climbs out of the repo (`..`, check.relative_parts) cannot be checked against it and is left out.
 
 A finding in a file the range changes ends with ` [touched]`. The command exits 1 when any finding is marked,
 else 0. Today is the CLI clock (args.today).
@@ -164,7 +168,8 @@ def dead_path_findings(repo, path, lines, tracked):
             fenced = not fenced
         elif not fenced:
             findings += [Finding(path, number, DEAD_PATH, f'{target} does not exist')
-                         for target in path_claims(line) if not exists(repo, folder, tracked, target)]
+                         for target in path_claims(line)
+                         if check.relative_parts(target) and not exists(repo, folder, tracked, target)]
     return findings
 
 
@@ -219,8 +224,10 @@ def run_scan(args, environ):
     home = paths.resolve_home(args.home, environ)
     repo = gitrepo.repo_for(args.repo)
     touched = {change.path for change in gitrepo.changed_files(repo, risk.resolve_range(repo, args.range))}
-    findings = scan(repo, ports.adr_folder(home), args.today)
+    adr_folder = ports.adr_folder(home)
+    findings = scan(repo, adr_folder, args.today)
     marked = [finding.path in touched for finding in findings]
+    print(f'adr folder: {check.adr_folder_path(adr_folder)}')
     for finding, is_touched in zip(findings, marked):
         print(f'{finding.path}:{finding.line}: {finding.kind}: {finding.detail}{TOUCHED if is_touched else ""}')
     print(f'docs scan: {len(findings)} finding{"" if len(findings) == 1 else "s"}, {sum(marked)} in files the range changes'
