@@ -23,6 +23,7 @@ FIXTURES = (   # (name, defect list, planted defects, decoys)
     ('feature rules mode', BENCH / 'feature' / 'rules' / 'defects.json', 5, 2),
     ('feature cumulative mode', BENCH / 'feature' / 'cumulative' / 'defects.json', 1, 1),
     ('security', BENCH / 'security' / 'defects.json', 10, 3),
+    ('docs', BENCH / 'docs' / 'defects.json', 2, 1),
 )
 
 
@@ -688,6 +689,33 @@ class FixtureShapeTest(unittest.TestCase):
                                  place['lines'][1] + constants.BENCH_WINDOW])
         self.assertNotIn('webhook', window)
         self.assertNotIn('query[', window)
+
+
+class DocsFixtureTest(ScoreCase):
+    """AC-53: the docs fixture plants one unrecorded decision commit and one drifted ADR claim, with one decoy.
+    It is a row of FIXTURES, so the shared tests cover its shape, places, perfect run and clean run; these two
+    pin what is special to it."""
+    PATH = BENCH / 'docs' / 'defects.json'
+
+    def spec(self):
+        self.assertTrue(self.PATH.is_file(), self.PATH.relative_to(BENCH.parent).as_posix())
+        return json.loads(self.PATH.read_text(encoding='utf-8'))
+
+    def test_the_fixture_loads_and_plants_two_defects_a_decision_commit_and_a_drifted_adr_claim(self):
+        spec = self.spec()
+        self.assertEqual(len(spec['defects']), 2)
+        kinds = [('commit' if re.search(r'commit', item['what'], re.I) else
+                  'drift' if re.search(r'drift|no longer|does not match', item['what'], re.I) else '?')
+                 for item in spec['defects']]
+        self.assertEqual(sorted(kinds), ['commit', 'drift'])
+
+    def test_each_defect_alone_finds_1_of_2(self):
+        """The two defects are scored apart: a finding on one never credits the other."""
+        spec = self.spec()
+        for number, line in enumerate(fixture_run(spec)):
+            with self.subTest(defect=spec['defects'][number]['id']):
+                alone = block(self.score(self.PATH, self.write_run(line, name=f'alone{number}.txt'))[1])
+                self.assertEqual((alone['found'], alone['missed']), ('1 of 2', '1 of 2'))
 
 
 if __name__ == '__main__':

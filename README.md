@@ -34,7 +34,8 @@ claude plugin install anomaly@anomaly-local
 
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
-listed, and the pipeline skills `anomaly:build` and `anomaly:review` beside them.
+listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review` and
+`anomaly:ship` beside them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -94,7 +95,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `branch_pattern` | how branches are named |
 | `commit_style` | how commit messages are written |
 | `implementers` | the agent that writes code, per stack (one `stack: agent` per indented line, with a space after the colon) |
-| `mr_tool` | the skill or command that opens a merge request |
+| `mr_tool` | the MR tool: `glab` or `gh` (the adapter of the `mr` port, see MR) |
 | `verify_ui` | the skill or tool that checks a user interface |
 | `issue_source` | where requirements come from, and whether they are read-only |
 | `build_skills` | optional: skills that mark a session as build work, as a comma or line list. The plugin ships no default list: without this key no session counts as build. The digest and `calibrate` read it (see Session kind) |
@@ -105,11 +106,13 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
 | `models` | optional: the model per dispatch role, one `role: model` per indented line; roles `explore`, `implement`, `review`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse` |
+| `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
+| `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
 After changing `ticket_key`, run `measure --full` so old rows are rescanned.
 
-There are nine required keys (`tracker` to `issue_source`) and eight optional ones
-(`build_skills` to `models`). The pipeline reads some of them as ports (see Ports and the
+There are nine required keys (`tracker` to `issue_source`) and ten optional ones
+(`build_skills` to `adr_folder`). The pipeline reads some of them as ports (see Ports and the
 repo layer).
 
 ## Ports and the repo layer
@@ -136,6 +139,8 @@ python plugins/anomaly/scripts/anomaly.py ports --home <dir> [--repo <dir>]
 | `mr` | replace | `mr_tool` | print the MR body to paste |
 | `commit`, `branch` | replace | `commit_style`, `branch_pattern` | `type(scope): summary`, `feat/<slug>` |
 | `ui_check` | replace | `verify_ui` | built-in browser walkthrough of the ticket's UI ACs; its app facts come from the repo layer |
+| `key_line` | replace | `key_line` | `Key`: the name of the ticket line that holds the key; a `Jira:` line is still read when a ticket has no such line |
+| `adr_folder` | replace | `adr_folder` | `docs/adr/`: the repo folder ADR drafts are moved to; `check stories` looks up `ADR-NNNN` owners there |
 
 Replace: the adapter takes the core default's place. Add: the adapter's names (separated by
 commas or lines, optionally inside one pair of `[ ]`) are listed after the core default's.
@@ -237,6 +242,8 @@ port mr = print the MR body to paste [core default]
 port commit = type(scope): summary [core default]
 port branch = feat/<slug> [core default]
 port ui_check = built-in browser walkthrough of the ticket's UI ACs [core default]
+port key_line = Key [core default]
+port adr_folder = docs/adr/ [core default]
 repo name = demo [checkout]
 repo override = <home>/repos/demo.md [absent]
 repo base = main [core default]
@@ -836,6 +843,7 @@ python plugins/anomaly/scripts/anomaly.py ticket verified   <ticket> <sha> [--re
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> <sha> <test path> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket red        <ticket> --changed <reason>
 python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from <draft> [--slug <slug>] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n|D-n] '<text>'
 ```
 
 - A state line is plain (`Status: done`) or bold (`**Status:** done`); both are read, `Blocked
@@ -845,12 +853,17 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `Status`, `Metrics`, `Reviewed`, `Verified`, `Red`, `Red-changed`, `Result`. Lines inside a
   fenced code block (three backticks or tildes) are examples and are never read or changed. A
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
-  action that writes refuses a file with no `Status:` line: it is not a ticket (a wrong path).
-- `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, `Jira`,
-  `Tests`, `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`,
-  `Verified`, `Red`, `Red-changed`) and a `warning:` line when the ticket
-  has no `Blocked by:` line or its value is not only two-digit ticket numbers (see `ticket gate`).
-- `ticket gate` looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
+  action that writes a state line refuses a file with no `Status:` line: it is not a ticket (a wrong path).
+- `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, the key line
+  (under the name it has in the ticket), `Tests`, `Repro`, `Base` (the integration branch, which
+  `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
+  the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
+  `ticket gate`).
+- `ticket gate` exits 1 for a ticket that waits (`ticket.waits`, the rule `frontier` uses): only a
+  `ready-for-agent` ticket starts, an `in-progress` one (a resume) passes, and any other status waits,
+  whatever its blockers are. It prints `<status>, waits for a person` for `ready-for-human`,
+  `needs-info` and `wontfix`, and `status <x> is not ready-for-agent` for any other (a typo, no `Status:` line).
+  It looks up each blocker as `<NN>-*.md` beside the ticket and exits 0 only when
   all have `Status: done`. Otherwise it prints one `blocked by <NN>: <status> (<file>)` line for
   each blocker that is not done (a missing file counts as not done) and exits 1. `None` and
   titles in parentheses are not blockers. A ticket with no `Blocked by:` line gets the same
@@ -907,14 +920,217 @@ python plugins/anomaly/scripts/anomaly.py ticket adhoc      <task text> | --from
   `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
   `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
   is refused with each problem named and nothing is written; a valid one is written unchanged, a
-  `Jira:` line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
+  key line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
   the title unless `--slug` gives it.
+- `ticket amend` writes one dated `Amended <YYYY-MM-DD>: <text>` line, so a change to a ticket or a
+  planning file needs no hand edit. The date is today's, from the CLI clock. Without `--after` the
+  line goes at the end of the file (a ticket, or any markdown file). With `--after AC-n` (in
+  `stories.md`) or `--after D-n` (in `decisions.md`) it goes right below that list item, and below
+  the `Amended` lines already under it, so the dated lines stay in order; it is indented like those
+  lines, else by two spaces under a `D-n` and not at all under an `AC-n`. An id matches whole
+  (`AC-1` is not the line of `AC-10`), and the first match outside a fenced code block is used. The
+  text must be one line and pass the privacy check (no email address, credential, URL with a query,
+  pasted program output or long opaque identifier). It has no length limit, because real `Amended`
+  lines are long. An id that is not in the file, an id that is no `AC-n` or `D-n`, or a text that
+  fails a check is an error (exit 2) and the file is left byte for byte as it was. This action does
+  not need a `Status:` line.
+
+## Frontier
+
+`frontier` reads the tickets of one work unit and says which of them can start now. It needs no home
+and no profile; the work unit is named by its folder.
+
+```
+python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
+```
+
+- It reads the numbered ticket files (`NN-*.md`) of `tickets/`, or of `issues/` in an old `.scratch`
+  unit, and decides "every blocker is done" with the rule `ticket gate` uses (`ticket.unfinished_blockers`
+  and `ticket.is_blocked`), so a blocker that is not `done` and an unreadable `Blocked by:` value (for
+  example `TBD`) make a ticket blocked in both commands. A blocker with no ticket file is also not
+  done, but `frontier` reports it as an error (see below).
+- A **startable** ticket has `Status: ready-for-agent` (an allow list: nothing else starts) and
+  every blocker `done`. It is one
+  line, `<ticket>: <status>`, in ticket order. An `in-progress` ticket is one line too, `<ticket>: in
+  progress`; it is neither startable nor blocked, so a ticket that waits for it is not printed while
+  another ticket is startable. A `Blocked by:` of `none` or `None` is no blocker.
+- A ticket that is not `done`, not `in-progress` and not `ready-for-agent` **waits**, whatever its
+  blockers are (`ticket.waits`, the rule `ticket gate` uses). It always gets one line:
+  `<ticket>: <status>, waits for a person` for `ready-for-human`, `needs-info` and `wontfix`, and
+  `<ticket>: status <x> is not ready-for-agent` for any other status (a typo, no `Status:` line). It is
+  neither startable nor blocked. A unit whose open tickets all wait prints those lines and exits 0
+  with nothing startable. `conduct status` counts such a ticket as open.
+- With no startable ticket, `frontier` prints each in-progress ticket and each blocked ticket with
+  its unfinished blockers (`<ticket>: blocked by <NN> (<status>)`). It exits 1 only when nothing is
+  in progress and at least one open ticket is blocked; while a ticket is in progress it exits 0, so
+  `conduct` can offer to resume it. With every ticket `done` it prints one line that says the unit
+  is finished and exits 0. A work unit with no ticket file is an error (exit 2).
+- A ticket that is not `done` and has no `Blocked by:` line, or names a blocker number with no
+  ticket file, is an error: one `anomaly:` line names each such ticket, nothing else is printed, and
+  the exit code is 2.
+- After the ticket lines, one `warning:` line names each AC of the unit's AC file that no ticket's
+  `Covers:` names. The file is `spec.md` when the unit has one, else `stories.md` (ADR-0011); the AC
+  lines are read as `check stories` reads them (`- AC-n:`), and the uncovered ACs are found by the
+  same function as in `check slice`. A unit with neither file gets one `warning:` line, not an error.
+
+## Wave report
+
+`conduct status` prints the **wave report**: where a work unit stands after a wave of tickets, in
+five lines. It reads the tickets of the unit like `frontier` and the cost like `worklog report`, and
+writes nothing.
+
+```
+python plugins/anomaly/scripts/anomaly.py conduct status <work unit folder> [--home <dir>]
+```
+
+```
+done: 1
+failed: 1 (02-bravo)
+open: 2 (03-charlie, 04-delta)
+next: 03-charlie
+cost: weighted tokens 3,000, weighted tokens per merged ticket 1,000, minutes per merged ticket 40.0
+```
+
+- The lines come in this order, and the label opens each line. The three counts split the tickets:
+  `done` is the tickets with `Status: done`; `failed` is the tickets that are `in-progress` with no
+  `Result:` line (a run that stopped without a merge); `open` is every other ticket, which means
+  startable, blocked, and `in-progress` with a `Result:` line. `failed` and `open` give the ticket
+  names after the count. An empty group says `0` and no names.
+- `next` is the startable tickets, as `frontier` finds them (the `start` entries of
+  `frontier.classify`), in ticket order, and `none` when nothing can start. It names tickets only:
+  the `warning:` lines and the finished line of `frontier` are not part of it.
+- `cost` is the cost line of `worklog report` for the unit, built by the one function both commands
+  call (`worklog.cost_line`). The work-unit key is the name of the folder, as in `worklog add`,
+  and `--home` is read as in `worklog report`. A unit with no work-unit line is an error of
+  `worklog report`, so it is one here too. Its merged tickets come from the `build` lines of the
+  work log, not from `Status:`, so `done` and the merged tickets of the cost line can differ.
+- When `--home` is an unfilled placeholder, the CLI prints one `home:` notice line before the five
+  lines (the same notice every command prints). Read the lines by their label, not by position.
+- The rule for tickets is `frontier`'s: a ticket that is not `done` and has no `Blocked by:` line,
+  or names a blocker with no ticket file, is an error. One `anomaly:` line names each such ticket,
+  nothing else is printed, and the exit code is 2.
+
+## MR body
+
+`mr body` writes the body of a merge request to a file, from the files of the work, so the `ship` skill
+never writes it by hand (bodies go through files, ADR-0007). It writes the file and prints its path; it
+does not create or update the MR.
+
+```
+python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
+```
+
+- The file starts with `Title: <type>(<key>): <summary>` and a blank line, then the body in markdown
+  with `## <Section>` headings. A work unit folder gives `<folder>/mr-body.md`; an ad-hoc ticket gives
+  the sibling file `.anomaly/adhoc/<date>-<slug>.mr-body.md`. A ticket file outside `.anomaly/adhoc/`
+  (for example a ticket of a unit) is refused, so a unit never gets a body file beside its tickets.
+- **Title.** `<type>` is, for a work unit and an ad-hoc ticket alike, the part of the current
+  branch name before the first `/` when that is an Angular type (`fix/widget` gives `fix`), else
+  `feat`. The branch is read from the repository of `--repo`, so `mr body` needs a git repository for
+  both kinds of target. `<key>` of a unit is the key line (the line the `key_line` port names;
+  `ticket.load(path, ports.key_line(home))`) that every keyed ticket shares; when the keyed tickets
+  have different keys it is the unit folder name. A key of `no-ticket` counts as no key, and a unit
+  with no key at all gets `no-ticket`. `<summary>` is the first heading of
+  the AC file or the title of the ad-hoc ticket. The summary is cut at a word so the whole title is
+  under 70 characters; a summary with no word left after the cut is an error. The AC file is `spec.md`
+  when the unit has one, else `stories.md` (ADR-0011), as in `frontier`.
+- **Work unit sections.** Each is left out when it has no facts, and they come in this order. Only the
+  tickets with `Status: done` count as merged.
+  - Why: the `Why:` line of the AC file, its first letter a capital (the rest as written).
+  - What changed: one line per merged ticket, from its title (the merge subjects hold only
+    `merge <NN-slug>`, so they add nothing).
+  - Acceptance criteria: `n of m covered`, where m is the AC lines of the AC file and n those that a
+    merged ticket's `Covers:` names (`check.uncovered_acs`, the rule `frontier` uses); the missing ids
+    follow as `missing: AC-4`.
+  - Still open: the `Open:` text of each merged ticket's `Result:` line, except `none`, with the ticket
+    number.
+  - Breaking changes: the `- Breaking:` lines of `decisions.md` and the numbered form
+    `- D-n: Breaking: ...` (see `docs/formats.md`); for the numbered form the fact stops before its
+    `Why:` or `Source:`.
+  - Tested: the `full suites`, `type-checks`, `reviewer passes` and `High` counts of the merged tickets'
+    `Metrics:` lines, summed (`ticket.metric_counts` reads them); `Docs gate: <text>` when
+    `--docs-gate '<text>'` is given (one line, checked for private content); and `no CI ran` when the
+    `ci` port is on its core default.
+  - How to review: one line that names the merged tickets, in order, to review one merge commit at a
+    time. No commit id is printed. It is left out when no ticket is merged.
+- `--draft` writes a two-line body: the Why, then `Work in progress`. With no Why, the draft is the one
+  line `Work in progress`. It works for an ad-hoc ticket too.
+- **Ad-hoc ticket.** The light-path body has two sections: Why (the ticket's
+  `What to build:`, with the same capital first letter) and What changed (the subjects of the commits
+  on the current branch of `--repo` that are not on the repo base, oldest first, merge commits left
+  out). The repo base is the one `ports` prints (`repo base`). `--docs-gate` is
+  refused, since the body has no Tested section.
+- The body holds no commit id, no table row and no attribution line: a hex word (the id shapes of
+  `privacy.COMMIT_ID`) that has a digit and a letter a-f loses that word, a `|` becomes `/`, and a
+  fact that starts with `Co-Authored-By:` or `Generated with` is dropped. A body over 2.5 KB (2560 bytes, not counting the Title line) prints one `warning:` line on
+  standard error and is still written.
+- Facts come only from the ticket files, the AC file, `decisions.md` and, for an ad-hoc ticket,
+  commit subjects; the diff is never read.
+- **Privacy.** The `Title:` line (section `title`) and every body line go through `privacy.privacy_problems` (a URL with a query string,
+  an email address, a credential, pasted program output, a long opaque identifier). A problem is
+  an error (exit 2) that names the section it is in, and no file is written. `mr put` runs the same
+  check on the title and body of the file before any tool call, since the file can be edited by hand.
+
+## MR
+
+The **MR** of a work unit (a pull request on GitHub) is opened and kept by the CLI, so no skill writes a
+tool call by hand. `mr put`, `ready` and `show` work on the MR; `mr reviewed` and `mr verified` record
+the gate lines.
+
+```
+python plugins/anomaly/scripts/anomaly.py mr put      <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr ready    <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr show     <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr reviewed <work unit folder> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
+```
+
+- **Adapter.** The `mr` port (profile key `mr_tool`) names the tool: `glab` or `gh`
+  (`constants.MR_ADAPTERS`). Any other value is one `anomaly:` line naming the accepted ones, before any
+  call. The tool runs for the project of the `origin` remote, which must be on the tool's host: `gh`
+  works with `github.com` only and `glab` with `gitlab.com` only. Any other host, a self-hosted one
+  too, is an error that names the host; the host is never guessed. `gh` also refuses an origin
+  project that is not exactly `owner/name` (a group path such as `a/b/c` is a GitLab shape), before
+  any call. `gh` is called only through
+  `anomaly_loop/gh.py` and `glab` through `anomaly_loop/glab.py`, with argument lists and no shell.
+  The body reaches `gh` on its standard input (`--body-file -` for `gh pr create`, `-F body=@-` for the
+  REST call `gh api -X PATCH repos/<project>/pulls/<number>` that replaces a body, since `gh pr edit`
+  fails on gh 2.46 with the deprecated Projects classic query) and `glab api` as one argument; a write
+  is tried once, and a failed call prints the tool's message (exit 2).
+  TODO(VK, revisit 2026-12-01): verify mr put, ready and show against a live gitlab.com project
+- **put.** Reads the title from the first `Title:` line of the body file (`mr-body.md`, or the sibling
+  `<name>.mr-body.md` of an ad-hoc ticket) and the body from the lines after the blank line that follows
+  it; a missing file says to run `mr body` first. With no `MR:` line in the MR file it opens a draft MR
+  from the current branch to the repo base (`ports` prints it as `repo base`) and writes the link as
+  the `MR:` line. With an `MR:` line it replaces the body of that MR; the title and the draft state stay.
+  It prints the link. It refuses the body file when its title or a line has a privacy problem (see MR body).
+- **The MR link check.** Before `put` replaces a body and before `ready` acts, the CLI views the MR
+  that the origin project has under the number of the `MR:` link. It refuses (exit 2, no change)
+  when that MR has another link than the line, which is the case for a link of another project, or
+  when its source branch is not the current branch. `view_mr` of both adapters returns the source
+  branch (`gh`: `headRefName`, `glab`: `source_branch`). `show` only views.
+- **Core default.** With the `mr` port on its core default, or a repository with no `origin`, `put`
+  prints the title and the body (and a `note:` line on standard error) and calls nothing. `ready` and
+  `show` are errors then, since there is no tool to call.
+- **ready, show.** Act on the MR of the `MR:` line; without one they say to run `mr put` first. `ready`
+  takes the draft state off. `show` prints the link, then `state: open|closed|merged|locked` (`locked`
+  is glab's), with `, draft` when it is a draft.
+- **The MR file.** `mr.md` in a work unit folder, or `<name>.mr.md` beside an ad-hoc ticket, holds the
+  lines `MR: <link>`, `Reviewed: <sha>` and `Verified: <sha>`, in this order. Only the CLI writes it:
+  `put` sets the first line, `reviewed` and `verified` set the other two, and each action keeps the
+  others. `<ref>` is a commit id, branch or tag; the file holds the full commit id, and a ref that
+  names no commit is an error that writes nothing.
+- **Targets.** A folder target must be a work unit folder: a folder in `.anomaly/` or `.scratch/`, not
+  `.anomaly/adhoc/`; any other folder is refused. `reviewed` and `verified` take a work unit folder
+  only: an ad-hoc ticket keeps its own `Reviewed:` and `Verified:` lines (`ticket reviewed`,
+  `ticket verified`), so its `<name>.mr.md` holds only the `MR:` line, and the two actions refuse it
+  and name those commands.
 
 ## Benchmark
 
 Each reviewer agent has one small seeded-defect fixture under `plugins/anomaly/tests/bench/`
-(`code/`, `feature/`, `security/`). A reviewer change is judged by running the agent on the
+(`code/`, `feature/`, `security/`, and `docs/` for the docs agent). A reviewer change is judged by running the agent on the
 fixture by hand and scoring what it printed with `bench score`; it needs no home and no profile.
 
 ```
@@ -942,7 +1158,7 @@ by a finding marked unverified; the feature fixture's F-D8). A decoy is correct 
 wrong: an `id` and `places` or a `rule`. Planted defects: code 10 (3 decoys; D9, a new check
 that repeats an existing one, and D10, a check deleted with no cover, plant the test rules),
 feature 8 (3 decoys), 5 in rules mode (2 decoys) and 1 in cumulative mode (F-D9, a
-characterization check that mocks internals; 1 decoy), security 10 (3 decoys).
+characterization check that mocks internals; 1 decoy), security 10 (3 decoys), docs 2 (1 decoy, an ADR claim the code still holds).
 
 Each findings file is the text of one run. A finding is one line in the shape every agent prints:
 
@@ -1065,8 +1281,8 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships four read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones and `anomaly:plan`, the planning
-gate's. Only the `review` skill dispatches them, and it passes the model: no agent file pins
+The plugin ships five read-only agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
+gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model: no agent file pins
 one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
 characters or fewer and a file of 6 KB or less.
 
@@ -1076,6 +1292,17 @@ characters or fewer and a file of 6 KB or less.
 | `anomaly:feature` | the diff does what its ticket or spec asks and no more: the AC coverage table, scope, visible changes, docs drift, deferral targets, claims against their sources, known items; in cumulative mode a keep, rewrite or delete verdict per characterization test file | ticket, delta, cumulative, rules (loads `skills/review/rules-mode.md`, 2 KB or less, in that mode only) |
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
 | `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
+| `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
+
+`anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
+does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
+checks 1 to 3 (overdue ADR revisit dates, unkeyed deferrals, dead paths in `CLAUDE.md`): `docs scan`
+owns them, and the agent may be passed that output. It reads ADRs from the ADR folder
+the caller passes, already resolved through the CLI (so the folder fallback of `docs scan` has one
+owner), and from the `adr/` of each unit folder. For a commit finding, `<path>:<line>` is the first changed line of the main file the commit
+touched; for an ADR claim, the ADR line that holds the claim. The `docs/` fixture has no diff to
+review: its `commits.md` gives the two commit messages to use when you build the repository (first
+`base/`, then `change/`), and the agent reviews the whole history.
 
 Each agent prints one finding per line in the shape above, with the fix always after ` — fix: `
 and nothing after the closing `observed` or `unverified`; then a `fine: <class> — ...` line for
@@ -1107,15 +1334,18 @@ runs through `bench score`, with at most 1 false High per run.
 ## The pre-merge check and the seam ledger
 
 `check pre-merge` makes three rules of the pipeline checks instead of requests, from the ticket
-file and git. `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
+file and git. `check pre-push` holds a push to the review and the verify of the head.
+`check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
 `check slice` checks that its tickets can be run.
 `seams prune` and `seams add` keep the seam ledger true after a merge. None of them
-needs a home or a profile.
+needs a home or a profile; `check stories` and `check slice` read the `key_line` and `adr_folder`
+ports from the profile in `--home` when there is one.
 
 ```
 python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>] [--repo <dir>]
-python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder>
-python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder>
+python plugins/anomaly/scripts/anomaly.py check pre-push  <work-unit folder | ad-hoc ticket> [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder> [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder> [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
 python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name> --owner <owner file> --replaces <old way> --ticket <NN>
 ```
@@ -1141,6 +1371,15 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   lines when it records the first `Red:` line or a different sha: each reason covers only the
   edits after the red commit it was written for. A `Red-changed:` line never excuses a wrong `Reviewed:` or `Verified:`. A test path
   written with backslashes is read with forward slashes.
+- `check pre-push` exits 0 only when `Reviewed:` and `Verified:` both name the current head of
+  `--repo`. A work-unit folder keeps the two lines in its `mr.md` (`mr reviewed`, `mr verified`);
+  an ad-hoc ticket keeps them in the ticket itself (`ticket reviewed`, `ticket verified`). Every
+  failed line is one line on stdout, named by its label (`Reviewed:` or `Verified:`: no line, not a
+  commit id, not a commit of this repository, or not the head, so a head that moved after the
+  review names both lines), and the exit code is 1. A missing or unreadable `mr.md`, or a target
+  that is neither a work-unit folder nor an ad-hoc ticket, is one `anomaly:` line and exit 2.
+  Nothing is written, and the red commit and the test file are not checked (`check pre-merge`
+  does that).
 - `check stories` reads `stories.md`, `decisions.md` and `log.md` of a work-unit folder against the
   shapes in `plugins/anomaly/docs/formats.md`. Errors, each a line `<file>:<line>: ...` with the
   allowed shape: a duplicate `AC-<n>` id; an AC id that an earlier `specify:` line of `log.md` named
@@ -1155,7 +1394,9 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `ticket NN` (`tickets/NN-*.md` of the unit, or `issues/` in a `.scratch` unit) or
   ``ticket NN of `<unit>` `` (that unit's `tickets/`, or its `issues/` in the old `.scratch` layout;
   the form "in `<unit>`" fails), the path of a ticket file or an ADR file, or `ADR-NNNN`
-  (`docs/adr/` or the `adr/` of a unit folder); only the checkout
+  (in the folder the `adr_folder` port names, core `docs/adr/`, read from the profile in `--home`, or in the
+  `adr/` of a unit folder; an `adr_folder` that is absolute, has `..`, is `.` or is a URL falls back to
+  `docs/adr/`); only the checkout
   counts, so an ADR on another branch fails, and any other file (a README, a skill) is no owner. A
   path with a root or a drive is no owner. A person or a skill needs the key. A work-unit folder
   that is not `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no
@@ -1170,8 +1411,9 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   that `build` cannot run is caught by code before the plan gate. Errors, each a line
   `<file>:<line>: ...` with the allowed shape or values: an `- AC-<n>:` line of `stories.md` in no
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
-  `Covers:`, `Tests:` or `Jira:` line, or one with an empty value (`Jira:` accepts any word for now:
-  the key is not checked until the tracker port names the key line, phase 2, D-11); a `Status:`
+  `Covers:`, `Tests:` or key line, or one with an empty value (the key line is the line the
+  `key_line` port names, core `Key:`, read from the profile in `--home`; a `Jira:` line is read
+  when the ticket has no such line; it accepts any word for now, see ADR-0017, Revisit); a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
   (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
@@ -1437,16 +1679,22 @@ python plugins/anomaly/scripts/anomaly.py observe   list|apply ...
 python plugins/anomaly/scripts/anomaly.py assess    check|record ...
 python plugins/anomaly/scripts/anomaly.py calibrate plan|effort|declare|fix|verify|decide|close|merge ...
 python plugins/anomaly/scripts/anomaly.py nudge     --home <dir> --data <dir> [--user-config <dir>] [--plugin-root <dir>]
-python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc ...
+python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc|amend ...
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py bench     score <defects.json> <findings>...
-python plugins/anomaly/scripts/anomaly.py check     pre-merge|stories|slice ...
+python plugins/anomaly/scripts/anomaly.py check     pre-merge|pre-push|stories|slice ...
 python plugins/anomaly/scripts/anomaly.py seams     prune|add ...
 python plugins/anomaly/scripts/anomaly.py ci        watch|log <target> [--project <group/project>] [--repo <dir>] ...
 python plugins/anomaly/scripts/anomaly.py risk      <range> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py lens      tally add|sum ...
 python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
+python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
+python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        put|ready|show <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1472,9 +1720,72 @@ python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage>
 - `worklog` takes `start`, `add` or `report`; `add` appends one work-unit line to home and `report`
   prints what one work unit cost; the options are in the same section.
 - `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
+- `frontier` takes a work-unit folder and prints the tickets that can start now; see Frontier.
+- `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
+- `mr` takes the actions `body` (writes the MR body of a work unit or an ad-hoc ticket to a file), `put`, `ready`, `show`, `reviewed` and `verified`; see MR body and MR.
+- `docs` takes the action `scan`, which prints the overdue ADRs, the deferral notes without an owner and date, and the dead paths of `CLAUDE.md` files; see Docs scan.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
+
+## Docs scan
+
+```
+python plugins/anomaly/scripts/anomaly.py docs scan <range> [--repo <dir>] [--home <dir>]
+```
+
+`docs scan` runs the three checks of the docs audit that need no judgment: it reports the ADRs
+whose revisit date has passed, the deferral notes without an owner and a revisit date, and the
+paths in `CLAUDE.md` files that no longer exist. The other two checks (a commit that decided
+something no ADR records, and an ADR claim the code has moved away from) are the docs agent's, not
+this command's. It reads the working folder and writes nothing. The range is `A..B`
+or `A...B` (a range that does not resolve is an error, exit 2); it only decides which findings
+are marked, not what is scanned. Today is the command's clock.
+
+The first line is `adr folder: <folder>`, the ADR folder the scan reads, resolved by
+`check.adr_folder_path` (for example `adr folder: docs/adr`). A port value that names no folder of
+the repo (a URL, `..`) reads as `docs/adr`, and the line shows it. The docs agent gets this line,
+not the raw `ports` value.
+
+Each finding is one line, `<path>:<line>: <kind>: <detail>`, with the path relative to the
+repository, in the order of path and line. A finding in a file the range changes ends with
+` [touched]`. The last line counts the findings, or says there are none. The exit code is 1 when
+any finding is marked `[touched]` and 0 otherwise; whether that blocks anything is the caller's
+decision.
+
+- `adr-overdue`: the date is the `Revisit-by:` field of the ADR's status line; an ADR with no such
+  field uses its `Revisit:` front-block line (a line that starts with `Revisit:` above the first
+  `## ` heading) when that line holds a date. A date before today is overdue; the day itself is
+  not. An ADR whose status starts with `Superseded` is left out. The ADRs are the `NNNN-*.md`
+  files in the folder of the `adr_folder` port (read from the profile in `--home`; a value outside
+  the repo gives `docs/adr`, as in `check stories`) and in the `adr/` of every work-unit folder.
+- `todo-unkeyed`: in any tracked text file, the word `TODO` that is not followed at once by the
+  key `(<owner>, revisit YYYY-MM-DD)`. A key whose date is not a real date counts as no key. The
+  word counts only where a deferral is written: as the first word of a comment (after `#`, `//`,
+  `--`, `/*` or `<!--`, spaces allowed), the first word of a line (after leading spaces or `> `
+  quote marks) or the first word of a list item (`- `, `* `, `1. `, also with a `[ ]` or `[x]` box).
+  A mention in the middle of code or of a sentence,
+  and the word followed by `(<` (the key shape written out), are not reported. One finding for
+  each line.
+- `todo-overdue`: a keyed deferral whose revisit date is before today. It is read wherever the
+  key with a real date stands in the line, in a comment or not.
+- `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
+  it is at or under `.anomaly/` or `.scratch/` (the folders of local work units: a clone has none,
+  so they are never reported), or exists beside that file or at the repository root, or when git ignores it (a folder that git
+  ignores, such as a local work-unit folder, exists in one checkout only, so it is live whether or
+  not it is on disk), or when a tracked file or folder equals it or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is
+  live for `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md`
+  exists). It is dead only when none of these holds. A claim is a backticked word that has no
+  space, glob, placeholder or colon character (a trailing `:12` or `:12-20` line cite is cut off
+  first) and either holds a `/` or is a bare file name ending in `.md`, `.py`, `.json`, `.toml`,
+  `.yml`, `.yaml`, `.sh` or `.txt`; or the target of a markdown link that is relative (a URL, an
+  anchor and a `#fragment` are skipped). A claim that climbs out of the repo (`..`; refused by
+  `check.relative_parts`) cannot be checked against it and is skipped. Fenced code blocks are not read. A git ref such as
+  `origin/main` also looks like a claim: this is a known limit.
+
+The scan covers the files git tracks (`git ls-files`, read at the working folder, so an
+uncommitted edit counts); files that are not UTF-8 text and symbolic links are skipped. Work-unit
+ADRs are read from the working folder even when git ignores them.
 
 ## Planning formats
 
@@ -1556,6 +1867,81 @@ finds the root cause and changes no source.
   `Hypotheses` section of the draft, each with its probe result (`confirmed` or `refuted`), not a chat list.
 - It adds one `diagnose` work-unit line, replies with a 5-line digest, and offers
   `/anomaly:build <adhoc ticket path>`.
+
+## The ship skill
+
+`anomaly:ship` is model-invocable but acts only on an explicit request from you or from `conduct`.
+It takes the MR of one work unit, or of a light-path ticket, from a clean tree to ready. Its text is
+`plugins/anomaly/skills/ship/SKILL.md` (5 KB or less); the docs gate `DOCS-GATE.md` (2 KB or less)
+is read only at the ready gate. Its only pre-approved tool is the CLI.
+
+- **Draft.** `check pre-push`, `mr body --draft`, one plain `git push`, `mr put`.
+- **Ready.** The docs gate (`docs scan` on the range; a `[touched]` finding stops the gate until it is
+  fixed or waived in the Tested section, or on the light path in one chat line and a `ticket amend`;
+  `anomaly:docs` runs only when you ask), `mr body`, the push, `mr put`, `ci watch`, the tracker AC
+  re-check against the stories' `Gathered:` date, and `mr ready`.
+- **Pushes.** Before every push `check pre-push` must pass; on a stale head `ship` runs a delta review
+  and one verify first, and records the head only when no Blocker or High is open and the verify is
+  green. At a draft's first push there is no `mr.md` yet, so the check exits 2 and `ship` goes on. It
+  never pushes to the base branch, never forces, and does not retry a refused push. With no
+  `origin` it skips the push and `ci watch`; on the `mr` core default or with no `origin`, it skips
+  `mr ready` and `mr show`.
+- **End.** One line each offering `/anomaly:observe` and `/clear`, and one `ship` work-unit line.
+
+## The conduct skill
+
+`anomaly:conduct` drives every ticket of one work unit through `anomaly:build` on one integration
+branch, then takes the one MR to the ready gate. It is model-invocable but acts only on an explicit
+request from you. Its text is `plugins/anomaly/skills/conduct/SKILL.md` (8 KB or less); the
+kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode, and the parallel text
+`PARALLEL.md` (3 KB or less) only after you pick a parallel wave. Its only pre-approved tool is
+the CLI.
+
+- **Start.** `worklog start`, `ports`, then `frontier` (its warnings are shown; blockers stop the
+  run; an `in-progress` ticket is resumed only after you confirm that no other session runs it; when
+  only tickets that wait for a person are left, `conduct` names them and goes to the finish, so they
+  run after the MR exists).
+  The integration worktree is made once with `git worktree add`; the main checkout stays on the base
+  branch. With no `origin` there is no push, MR or CI step and no question about it: the `ports`
+  lines decide.
+- **Plan.** Before each wave, one agent on the `explore` model role checks the wave's code claims and
+  returns only the false or moved ones; each becomes a `ticket amend` line, and a claim that changes
+  the scope goes to you first. The wave plan is one line per ticket with its `Touches:` paths. A
+  ticket whose gate is closed waits. Research notes go to `research/NN-slug.md` in the unit folder,
+  and a `ticket amend` line puts their path on the ticket, so `build` passes it on.
+- **Run.** `anomaly:build` once per ticket, in `frontier` order. With an `origin`, one plain
+  `git push` after each merge (never forced, never to the base branch); the first push calls
+  `anomaly:ship` for the draft MR; a `ci` port that is not on its core default starts `ci watch` in
+  the background.
+- **Report.** `log add` events (a `wave <n>` line at the start of each wave, then merge, push and
+  stop; no cost numbers), then `conduct status` first: only when it answers "no lines for work unit"
+  (exit 2) does `conduct` write `worklog add` and run it again. The end-of-run `worklog add` still
+  runs once for the run (at the finish, or at the first stop that has none yet). Then the five lines
+  of the wave report. With an MR, one more
+  line gives its size as a number.
+- **Parallel pick.** A wave of two or more tickets with disjoint `Touches:` paths is the only wave
+  that asks you a question: parallel or sequential. Any other wave is sequential and starts without
+  one. After a parallel pick, `PARALLEL.md` marks each ticket `par` or `seq` (disjoint touches, no
+  shared `seams.md` owner, medium or larger, at most one UI check), builds a prep branch for a
+  shared helper (a `ticket adhoc` unit on `build`'s light path), and makes one plain worktree per
+  ticket with `command install` run once in it; a branch or worktree left by a stopped wave is
+  reused. `conduct` itself runs the red step: it starts the build worklog of each ticket
+  (`worklog start <key> build --ticket <NN>`, so the later `worklog add` has a start time), sets it
+  in progress, then sends one message with one `test_writer` dispatch per ticket, commits each red
+  test and runs `ticket red`. One more message sends one
+  `implementer` agent per ticket with absolute paths; the agents only implement. Then, one branch
+  at a time, `conduct` removes the agent's worktree, switches its own worktree to the ticket
+  branch and runs the close of `anomaly:build` (review, verify, CI check, merge) there, so the
+  verify runs on the ticket's own code. The push, CI watch and report follow as in a sequential
+  wave.
+- **Go on or stop.** A sequential wave with no open decision and a tip that is not red goes straight
+  on. It stops for a parallel pick, a scope change, a red tip and the ready gate. Past 200k tokens
+  of context it stops after the report and offers a fresh session: in the desktop app a chip with the
+  kickoff text, in a plain CLI session the printed text.
+- **Finish.** `anomaly:review` in cumulative mode over the whole branch (skipped for a one-ticket
+  unit), one fix branch that also takes every open Low and Nit finding whose fix needs no decision,
+  one full verify and the `ui_check` port, `mr reviewed` and `mr verified` on the tip, then
+  `anomaly:ship` for the ready gate.
 
 ## Development
 

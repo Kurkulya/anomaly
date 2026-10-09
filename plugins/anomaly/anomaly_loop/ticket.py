@@ -1,4 +1,5 @@
-"""ticket: the one owner of every ticket line shape, and the only writer of ticket lines.
+"""ticket: the one owner of every ticket line shape, and the only writer of ticket lines. It is also the
+writer of the dated `Amended` lines of planning files (stories.md, decisions.md).
 
 A ticket is a markdown file `.anomaly/<work-unit>/tickets/NN-<slug>.md` (or one file in
 `.anomaly/adhoc/`); until the switch-over the old `.scratch/<feature>/issues/NN-<slug>.md` is read
@@ -6,7 +7,7 @@ the same way. Its state lives in header lines, each plain (`Status: x`) or bold
 (`**Status:** x`); both are read, and a rewritten line keeps its own shape.
 
   show        print the state lines; warn when `Blocked by:` is missing
-  gate        exit 0 only when every blocker ticket has `Status: done`
+  gate        exit 0 only when every blocker is `done` and the ticket is `ready-for-agent` (or `in-progress`)
   set-status  rewrite `Status:`; `in-progress` also writes `Metrics: started <t>`
   result      tick the ACs, write `Status: done`, `Result:` and `Metrics:`
   reviewed    add or replace `Reviewed: <sha>`        (additive line)
@@ -14,6 +15,7 @@ the same way. Its state lives in header lines, each plain (`Status: x`) or bold
   red         write `Red: <sha> · <test path>` (the first one, or a different sha, removes the earlier
               `Red-changed:` lines), or add `Red-changed: <reason>`  (additive lines)
   adhoc       write `.anomaly/adhoc/<date>-<slug>.md` under the main checkout from a task text or --from a checked draft
+  amend       add `Amended <date>: <text>` at the end of a file, or --after an AC-n / D-n line of stories.md / decisions.md
 
 Writing is a text edit: only the named lines change, every other byte (line endings, a missing
 final newline) stays. A new line goes after the nearest line that comes before it in LINE_ORDER
@@ -28,19 +30,23 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import files, gitrepo, privacy, records
-from .constants import (NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
-                        TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_START_UNKNOWN,
+from . import files, gitrepo, paths, ports, privacy, records
+from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, NO_START_WARNING, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_SLUG_MAX_CHARS,
+                        TICKET_STATUS_DONE, TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
+                        TICKET_STATUS_READY, TICKET_STATUS_UNKNOWN, TICKET_STATUS_WONTFIX, TICKET_START_UNKNOWN,
                         TICKET_NUMBER_DIGITS, TICKET_TIME_FORMAT, TICKET_TITLE_MAX_CHARS)
 from .files import RecordError
 from .records import require_one_line
 
 LINE_ORDER = ('Status', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed', 'Result')
-HEADER_KEYS = ('Jira', 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
-SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', 'Jira', 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
-              'Red-changed')   # Base: the work unit's integration branch, which build reads here
+HEADER_KEYS = (KEY_LINE_CORE, KEY_LINE_LEGACY, 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
+SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', KEY_LINE_CORE, 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
+              'Red-changed')   # Base: the work unit's integration branch, which build reads here;
+                               # KEY_LINE_CORE marks the slot of the key line, shown under key_name()
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
+WAITS_FOR_PERSON = (TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_WONTFIX)   # the statuses only a person moves on
+STARTS_OR_RUNS = (TICKET_STATUS_READY, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_DONE)   # the statuses that do not wait
 BOM = chr(0xFEFF)   # a byte order mark; written as a code point so the file holds no invisible character
 
 LINE_SPLIT = re.compile(r'(\r\n|\n|\r)')
@@ -49,11 +55,14 @@ NUMBERED_TITLE = re.compile(rf'#\s*[0-9]{{{TICKET_NUMBER_DIGITS}}}:\s*(.+?)\s*$'
 HEADING = re.compile(r'#\s+(\S.*?)\s*$')
 STATUS_WORD = re.compile(r'[\w-]+')
 AC_ID = re.compile(r'AC-\d+')
+AMEND_TARGET = re.compile(r'(?:AC|D)-\d+')
+AMENDED_LINE = re.compile(r'(\s*)Amended \d{4}-\d{2}-\d{2}\b')
 CHECKBOX = re.compile(r'(\s*[-*+]\s+\[)([ xX])(\]\s*\**AC-(\d+)(?!\d))')
 STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
 OPEN_ITEMS = re.compile(r'\bOpen(?:\s*\([^)]*\))?:\s*(.+)$')
 BLOCKER_NUMBER = re.compile(rf'\b([0-9]{{{TICKET_NUMBER_DIGITS}}})\b')
+BLOCKED_UNREADABLE = 'is not only two-digit ticket numbers (NN)'   # the end of every message about an unreadable Blocked by: value
 
 
 # ---------- lines ----------
@@ -115,6 +124,14 @@ def value_of(lines, key):
 def values_of(lines, key):
     pattern = label(key)
     return tuple(pattern.match(lines[index][0]).group(2) for index in find_lines(lines, key))
+
+
+def key_name(lines, key_line=KEY_LINE_CORE):
+    """The name of the key line this ticket has: the `key_line` port's line, else the `Jira:` line that is
+    still read. A ticket with neither has the port's line."""
+    if not find_lines(lines, key_line) and find_lines(lines, KEY_LINE_LEGACY):
+        return KEY_LINE_LEGACY
+    return key_line
 
 
 def line_ending(lines):
@@ -182,7 +199,7 @@ class Ticket:
     blockers: tuple              # ticket numbers ('01', '02'); none for `None`
     blockers_unreadable: bool    # a Blocked by: value that is not `none` and holds no ticket number, or a
                                  # number outside the parentheses that is not two digits
-    jira: str
+    key: str                     # the first word of the key line (key_name)
     covers: tuple                # AC ids, each once; none for `none`
     has_covers_line: bool
     tests: str
@@ -197,9 +214,9 @@ class Ticket:
     open: str                    # the text after `Open:` or `Open (Low):` on the Result line
 
 
-def parse(text, slug=''):
+def parse(text, slug='', key_line=KEY_LINE_CORE):
     """Read a ticket's text into its fields. Ports the old ticket.mjs rules, and reads `Blocked by:`
-    plain as well as bold."""
+    plain as well as bold. The key is read from the `key_line` line (key_name)."""
     lines = split_lines(text)
     skip = fenced(lines)
     bodies = [body for index, (body, _) in enumerate(lines) if index not in skip]
@@ -213,7 +230,7 @@ def parse(text, slug=''):
     blockers = () if says_none else tuple(BLOCKER_NUMBER.findall(without_titles))
     other_numbers = not says_none and any(len(number) != TICKET_NUMBER_DIGITS
                                            for number in re.findall(r'\b[0-9]+\b', without_titles))
-    jira = (value_of(lines, 'Jira') or '').split(None, 1)
+    key = (value_of(lines, key_name(lines, key_line)) or '').split(None, 1)
     covers = value_of(lines, 'Covers') or ''
     covered = () if re.match(r'none\b', covers, re.I) else tuple(dict.fromkeys(AC_ID.findall(covers)))
     red = value_of(lines, 'Red')
@@ -225,7 +242,7 @@ def parse(text, slug=''):
     return Ticket(
         title=title, status=status.group(0) if status else TICKET_STATUS_UNKNOWN, blocked_by=blocked or '',
         has_blocked_line=blocked is not None, blockers=blockers,
-        blockers_unreadable=not says_none and (not blockers or other_numbers), jira=jira[0] if jira else '',
+        blockers_unreadable=not says_none and (not blockers or other_numbers), key=key[0] if key else '',
         covers=covered, has_covers_line=bool(covers.strip()), tests=value_of(lines, 'Tests') or '',
         reviewed=value_of(lines, 'Reviewed') or '', verified=value_of(lines, 'Verified') or '',
         red=(sha, path) if red is not None else None, red_changed=values_of(lines, 'Red-changed'),
@@ -233,19 +250,21 @@ def parse(text, slug=''):
         has_result_line=result is not None, open=open_items.group(1) if open_items else '')
 
 
-def state_lines(text):
-    """The lines `ticket show` prints: each state line with bold markers dropped, in SHOWN_KEYS order."""
+def state_lines(text, key_line=KEY_LINE_CORE):
+    """The lines `ticket show` prints: each state line with bold markers dropped, in SHOWN_KEYS order;
+    the key line is shown under the name it has in the ticket (key_name)."""
     lines = split_lines(text)
     shown = []
     for key in SHOWN_KEYS:
+        key = key_name(lines, key_line) if key == KEY_LINE_CORE else key
         shown += [f'{key}: {value}'.rstrip() for value in values_of(lines, key)]
     return shown
 
 
-def load(path):
+def load(path, key_line=KEY_LINE_CORE):
     """(text, Ticket) of a ticket file, read as bytes so no line ending is translated."""
     text = read_text(path)
-    return text, parse(text, slug=Path(path).stem)
+    return text, parse(text, slug=Path(path).stem, key_line=key_line)
 
 
 def read_text(path, what='ticket'):
@@ -264,18 +283,45 @@ def find_blocker(folder, number):
     return next(iter(sorted(Path(folder).glob(f'{number}-*.md'))), None)
 
 
-def open_blockers(path, parsed):
-    """One line per blocker that is not done: its number, its status and its file."""
-    problems = []
+def unfinished_blockers(folder, parsed):
+    """(number, status, file) for each blocker that is not done, in the order of `Blocked by:`. A blocker with
+    no ticket file in `folder` has no status and no file (both None): it counts as not done."""
+    unfinished = []
     for number in parsed.blockers:
-        found = find_blocker(Path(path).parent, number)
-        if found is None:
-            problems.append(f'blocked by {number}: no ticket file {number}-*.md next to {Path(path).name}')
-            continue
-        status = load(found)[1].status
+        found = find_blocker(folder, number)
+        status = load(found)[1].status if found else None
         if status != TICKET_STATUS_DONE:
-            problems.append(f'blocked by {number}: {status} ({found.name})')
-    return problems
+            unfinished.append((number, status, found))
+    return unfinished
+
+
+def is_blocked(parsed, unfinished):
+    """The gate rule, for `ticket gate` and `frontier`: a ticket is blocked when a blocker is not done
+    (`unfinished`, from unfinished_blockers) or its `Blocked by:` value cannot be read."""
+    return bool(unfinished) or parsed.blockers_unreadable
+
+
+def waits(parsed):
+    """The rule for `ticket gate` and `frontier`, an allow list: a ticket that is not `done` and not `in-progress`
+    starts only when its status is `ready-for-agent`; any other status waits, whatever its blockers are."""
+    return parsed.status not in STARTS_OR_RUNS
+
+
+def wait_text(parsed):
+    """The reason a ticket that waits is not started: `<status>, waits for a person` for `ready-for-human`,
+    `needs-info` and `wontfix`; any other status (a typo, no readable `Status:` line) is named as not ready."""
+    if parsed.status in WAITS_FOR_PERSON:
+        return f'{parsed.status}, waits for a person'
+    return f'status {parsed.status} is not {TICKET_STATUS_READY}'
+
+
+def blocker_lines(path, unfinished):
+    """One line per blocker that is not done (`unfinished`, from unfinished_blockers): its number, its status
+    and its file."""
+    name = Path(path).name
+    return [f'blocked by {number}: no ticket file {number}-*.md next to {name}' if found is None
+            else f'blocked by {number}: {status} ({found.name})'
+            for number, status, found in unfinished]
 
 
 # ---------- writing ----------
@@ -397,9 +443,51 @@ def close(text, branch, merge, open_items, now, counts, acs=()):
     return join_lines(lines)
 
 
+def metric_counts(parsed):
+    """{key: count} for the counts of METRIC_COUNTS (`suites`, `type_checks`, ...) that the `Metrics:` line of a
+    parsed ticket holds; a count the line lacks is not in the result. The reader of what `close` writes."""
+    found = {}
+    for label, key in METRIC_COUNTS:
+        match = re.search(rf'\b{re.escape(label)} (\d+)\b', parsed.metrics)
+        if match:
+            found[key] = int(match.group(1))
+    return found
+
+
+def amend(text, today, note, after=None):
+    """The text with one `Amended <date>: <note>` line. Without `after` it goes at the end of the file.
+    With `after` (AC-n or D-n) it goes below that list item and below any `Amended` lines already under
+    it, indented like them (else two spaces under a D-n, none under an AC-n, as in the planning files).
+    The note and the id are checked before anything is changed."""
+    note = require_one_line('the amend text', note)
+    privacy.check_text('ticket amend', 'the text', note)
+    line = f'Amended {today.isoformat()}: {note}'
+    lines = split_lines(text)
+    if after is None:
+        if lines:
+            insert_after(lines, len(lines) - 1, line)
+        else:
+            lines.append([line, '\n'])
+        return join_lines(lines)
+    if not AMEND_TARGET.fullmatch(after):
+        raise RecordError(f'--after names an AC or a decision like AC-12 or D-3, got: {after}')
+    item, skip = re.compile(rf'\s*[-*+]\s+\**{re.escape(after)}(?!\d)'), fenced(lines)
+    target = next((index for index, (body, _) in enumerate(lines) if index not in skip and item.match(body)), None)
+    if target is None:
+        raise RecordError(f'no {after} line in the file')
+    last, indent = target, '  ' if after.startswith('D-') else ''
+    while last + 1 < len(lines) and last + 1 not in skip and (older := AMENDED_LINE.match(lines[last + 1][0])):
+        last, indent = last + 1, older.group(1)
+    insert_after(lines, last, indent + line)
+    return join_lines(lines)
+
+
 def slugify(text):
     plain = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
     return re.sub(r'[^a-z0-9]+', '-', plain.lower()).strip('-')[:TICKET_SLUG_MAX_CHARS].rstrip('-') or 'task'
+
+
+ADHOC_TITLE_PREFIX = 'Adhoc: '   # the start of the heading adhoc_ticket writes; `mr body` strips it from the summary
 
 
 def adhoc_ticket(task, slug, today):
@@ -410,7 +498,7 @@ def adhoc_ticket(task, slug, today):
         raise RecordError('the task text is empty')
     check_slug(slug)
     title = task[:TICKET_TITLE_MAX_CHARS]
-    text = (f'# Adhoc: {title}\n\nCovers: AC-1\nBlocked by: None\nStatus: {TICKET_STATUS_READY}\n\n'
+    text = (f'# {ADHOC_TITLE_PREFIX}{title}\n\nCovers: AC-1\nBlocked by: None\nStatus: {TICKET_STATUS_READY}\n\n'
             f'**What to build:** {task}\n\nAcceptance criteria:\n\n- [ ] AC-1: {task}\n')
     return f'{today.isoformat()}-{slug or slugify(task)}.md', text
 
@@ -435,14 +523,14 @@ def register(commands, common):
     command = commands.add_parser('ticket', help='read and edit .anomaly tickets (and old .scratch ones): the one writer of ticket lines')
     actions = command.add_subparsers(dest='action', required=True, metavar='action')
 
-    def action(name, handler, help_text):
+    def action(name, handler, help_text, file_help='path of the ticket file'):
         parser = actions.add_parser(name, parents=[common], help=help_text)
-        parser.add_argument('ticket', help='path of the ticket file')
+        parser.add_argument('ticket', help=file_help)
         parser.set_defaults(handler=handler)
         return parser
 
     action('show', run_show, 'print the state lines; warn when Blocked by: is missing')
-    action('gate', run_gate, 'exit 0 only when every blocker is done; else name the open ones (exit 1)')
+    action('gate', run_gate, 'exit 0 only when every blocker is done and the ticket is ready-for-agent or in-progress; else say why (exit 1)')
     status = action('set-status', run_set_status, 'rewrite Status:; in-progress also writes Metrics: started')
     status.add_argument('status', help='one word, for example in-progress or done')
     result = action('result', run_result, 'tick the ACs, write Status: done, Result: and Metrics:')
@@ -473,6 +561,11 @@ def register(commands, common):
     red.add_argument('path', nargs='?', help='the acceptance test file')
     red.add_argument('--repo', help=gitrepo.REPO_HELP)
     red.add_argument('--changed', help='the reason the test file changed after its red commit')
+    amended = action('amend', run_amend, 'add Amended <date>: <text> at the end of the file, or below an AC-n / D-n line',
+                     'path of the ticket, stories.md or decisions.md')
+    amended.add_argument('text', help='the note, one line (checked for private content)')
+    amended.add_argument('--after', metavar='ID', help='an AC-n of stories.md or a D-n of decisions.md; the line goes '
+                                                       'below it and below the Amended lines already under it')
     adhoc = actions.add_parser('adhoc', parents=[common],
                                help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text '
                                     'or --from a checked draft')
@@ -500,12 +593,13 @@ def print_blocker_warnings(path, parsed):
     if not parsed.has_blocked_line:
         print(f'warning: no Blocked by: line in {name}; it is not known whether it is blocked')
     if parsed.blockers_unreadable:
-        print(f'warning: Blocked by: "{parsed.blocked_by}" in {name} is not only two-digit ticket numbers (NN)')
+        print(f'warning: Blocked by: "{parsed.blocked_by}" in {name} {BLOCKED_UNREADABLE}')
 
 
 def run_show(args, environ):
-    text, parsed = load(args.ticket)
-    for line in state_lines(text):
+    key_line = ports.key_line(paths.resolve_home(args.home, environ))
+    text, parsed = load(args.ticket, key_line)
+    for line in state_lines(text, key_line):
         print(line)
     print_blocker_warnings(args.ticket, parsed)
     return 0
@@ -514,10 +608,13 @@ def run_show(args, environ):
 def run_gate(args, environ):
     _, parsed = load(args.ticket)
     print_blocker_warnings(args.ticket, parsed)
-    problems = open_blockers(args.ticket, parsed)
-    for problem in problems:
-        print(problem)
-    return 1 if problems or parsed.blockers_unreadable else 0
+    unfinished = unfinished_blockers(Path(args.ticket).parent, parsed)
+    for line in blocker_lines(args.ticket, unfinished):
+        print(line)
+    if waits(parsed):
+        print(wait_text(parsed))
+        return 1
+    return 1 if is_blocked(parsed, unfinished) else 0
 
 
 def run_set_status(args, environ):
@@ -579,6 +676,11 @@ def draft_ticket(path, slug, today):
     check_slug(slug)
     name = f'{today.isoformat()}-{slug or slugify(draft_title(split_lines(text)))}.md'
     return name, text, check.draft_warnings(text)
+
+
+def run_amend(args, environ):
+    edit(args.ticket, lambda text: amend(text, args.today, args.text, args.after))
+    return 0
 
 
 def run_adhoc(args, environ):

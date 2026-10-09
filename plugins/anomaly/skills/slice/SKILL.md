@@ -36,7 +36,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 
 ## Write the tickets
 
-Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the shape of [formats.md](../../docs/formats.md), the `Jira:` line included. [T12, T16, C1]
+Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the shape of [formats.md](../../docs/formats.md), the key line included (the line the `key_line` port names). [T12, T16, C1]
 
 - Self-contained: `build` reads only the ticket and `seams.md`. Copy every AC it covers, verbatim, and the `D-n` lines it needs. [N1, C4]
 - Every `Covers:` AC has a `Tests:` level; every story AC is in some `Covers:`. [N2, P5]
@@ -60,5 +60,5 @@ Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the
 
 1. `log add`, stage `slice`: one line per gate result (the `check slice` result, the review verdict). `log.md` lines carry no cost numbers. [G17]
 2. `worklog add`, stage `slice`. [N9]
-3. Run `ticket gate` on the tickets in order. Offer `/anomaly:build <work unit> <NN>` for the first ticket with no open blocker; one ticket per session. [C6]
+3. Run `ticket gate` on the tickets in order. Offer `/anomaly:build <work unit> <NN>` for the first ticket with no open blocker that the gate passes: exit 1 means blocked or waiting for a person (`ready-for-human`, `needs-info`, `wontfix`, any status but `ready-for-agent`), so skip it. One ticket per session. [C6]
 4. Offer `/clear` once, as boundaries.md says; never run it.

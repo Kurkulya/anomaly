@@ -2,6 +2,8 @@
 
   pre-merge   exit 0 only when `Reviewed:` and `Verified:` both name the head being merged and the
               acceptance test is unchanged since its red commit (or the ticket notes why)
+  pre-push    exit 0 only when `Reviewed:` and `Verified:` both name the current head: in the mr.md of a
+              work-unit folder, or in an ad-hoc ticket; each stale or missing line is one line, exit 1
   stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
   slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
@@ -30,25 +32,26 @@ as a `note:` line. The ticket keeps no order between its lines, so `ticket red` 
 only the edits after the red commit it was written for.
 """
 import argparse
+import glob
 import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from . import files, gitrepo, ticket
-from .constants import (TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
+from . import files, gitrepo, paths, ports, ticket
+from .constants import (KEY_LINE_CORE, KEY_LINE_LEGACY, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
                         TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
                         TICKET_STATUS_READY, TICKET_STATUS_WONTFIX)
 from .records import is_date
 
 
-def head_problem(repo, key, value, head):
-    """One line when the ticket's `<key>:` value is not the head being merged, else None."""
+def head_problem(repo, key, value, head, what='merged'):
+    """One line when the ticket's `<key>:` value is not the head being `what` (merged, or pushed), else None."""
     if not value:
-        return f'{key}: no {key}: line; the head being merged ({gitrepo.short(head)}) has no record'
+        return f'{key}: no {key}: line; the head being {what} ({gitrepo.short(head)}) has no record'
     found = ticket.named_commit(repo, value)
     if found is None:
         return f'{key}: {ticket.not_a_commit(value)}'
     if found != head:
-        return f'{key}: {value} is not the head being merged ({gitrepo.short(head)})'
+        return f'{key}: {value} is not the head being {what} ({gitrepo.short(head)})'
     return None
 
 
@@ -90,6 +93,13 @@ def pre_merge(repo, parsed, head):
     return [line for line in problems if line], [note] if note else []
 
 
+def pre_push(repo, gate_lines, head):
+    """The problems for the `(label, value)` gate lines and the head being pushed, one line each, in order;
+    [] when every value names the head."""
+    problems = [head_problem(repo, key, value, head, 'pushed') for key, value in gate_lines]
+    return [line for line in problems if line]
+
+
 # ---------- stories ----------
 
 STORIES_WARN_BYTES = 6 * 1024
@@ -116,11 +126,13 @@ ADR_REF = re.compile(r'\bADR-(\d{4})\b')
 # has `issues/`. A unit folder is `<root>/<one of these homes>/<name>/`.
 TICKET_FOLDERS = {'.anomaly': ('tickets',), '.scratch': ('tickets', 'issues')}
 OWNER_HOME_DIRS = tuple(TICKET_FOLDERS)
-ADR_GLOBS = ('docs/adr/{}-*.md', '.anomaly/*/adr/{}-*.md', '.scratch/*/adr/{}-*.md')
-# A file path is an owner only when it is a ticket file or an ADR file, never any file of the checkout.
+ADR_FOLDER_CORE = ports.core_default('adr_folder')[0]   # the `adr_folder` port's core default
+ADR_GLOBS = ('.anomaly/*/adr/{}-*.md', '.scratch/*/adr/{}-*.md')   # the adr/ of every unit folder
+# A file path is an owner only when it is a ticket file or an ADR file, never any file of the checkout. An ADR
+# file in the `adr_folder` port's folder is matched by adr_file_name.
 OWNER_FILE = re.compile(r'(?:\.anomaly|\.scratch)/[^/]+/tickets/\d+-[^/]+\.md|\.scratch/[^/]+/issues/\d+-[^/]+\.md|'
                         + re.escape(TICKET_ADHOC_DIR.as_posix()) + r'/[^/]+\.md|'
-                        r'(?:docs|(?:\.anomaly|\.scratch)/[^/]+)/adr/\d{4}-[^/]+\.md')
+                        r'(?:\.anomaly|\.scratch)/[^/]+/adr/\d{4}-[^/]+\.md')
 
 
 def owner_value(line):
@@ -163,15 +175,41 @@ def unit_folders(root, name):
         return []
 
 
-def owner_file_exists(root, name):
-    """True when `name` is the path of an existing ticket file or ADR file (OWNER_FILE). Any other file, a
-    name with `..` or no path part, an absolute path, or a name the file system refuses (too long) names
-    nothing."""
+def adr_folder_path(adr_folder):
+    """The ADR folder as a repo-relative POSIX path with no trailing slash. A value that names no folder of the
+    repo (no path part such as `.`, `..`, an absolute path or a URL) gives the core folder: an org that keeps
+    its ADRs outside the repo gets `docs/adr` (ADR-0017)."""
+    parts = () if '://' in adr_folder else relative_parts(adr_folder)
+    return PurePosixPath(*(parts or relative_parts(ADR_FOLDER_CORE))).as_posix()
+
+
+def adr_file_name(name, adr_folder):
+    """True when `name` has the shape of an ADR file, `NNNN-*.md`, directly in the ADR folder."""
+    return re.fullmatch(re.escape(adr_folder_path(adr_folder)) + r'/\d{4}-[^/]+\.md', name) is not None
+
+
+def owner_file_exists(root, name, adr_folder=ADR_FOLDER_CORE):
+    """True when `name` is the path of an existing ticket file or ADR file (OWNER_FILE, or a file in the
+    `adr_folder`). Any other file, a name with `..` or no path part, an absolute path, or a name the file
+    system refuses (too long) names nothing."""
     try:
-        return bool(relative_parts(name)) and OWNER_FILE.fullmatch(Path(name).as_posix()) is not None \
+        posix = Path(name).as_posix()
+        return bool(relative_parts(name)) and (OWNER_FILE.fullmatch(posix) is not None
+                                               or adr_file_name(posix, adr_folder)) \
             and (root / name).is_file()
     except OSError:
         return False
+
+
+def adr_globs(number, adr_folder):
+    """The glob patterns, relative to the repo root, of the ADR files `NNNN-*.md` for `number` (a digit string or a
+    glob such as `[0-9][0-9][0-9][0-9]`): in the `adr_folder` and in the adr/ of every unit folder."""
+    return [pattern.format(number) for pattern in ADR_GLOBS] + [f'{glob.escape(adr_folder_path(adr_folder))}/{number}-*.md']
+
+
+def adr_exists(root, number, adr_folder):
+    """True when `NNNN-*.md` for the ADR `number` is in the `adr_folder` or in the adr/ of a unit folder."""
+    return any(any(root.glob(pattern)) for pattern in adr_globs(number, adr_folder))
 
 
 def ticket_exists(root, folder, number, unit):
@@ -184,11 +222,11 @@ def ticket_exists(root, folder, number, unit):
                for path in units for name in TICKET_FOLDERS.get(path.parent.name, ('tickets',)))
 
 
-def owner_exists(owner, folder):
+def owner_exists(owner, folder, adr_folder=ADR_FOLDER_CORE):
     """True when the owner value carries a `TODO(<owner>, revisit YYYY-MM-DD)` key with a real date, or names
     something in the checkout (no git lookup): a unit folder other than the checked one (a unit is never its
     own owner, also when its bare name is the name of the checked one), the path of a ticket or ADR file,
-    `ticket NN` or `ADR-NNNN` (`docs/adr/`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md`
+    `ticket NN` or `ADR-NNNN` (in the `adr_folder`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md`
     (or `issues/NN-*.md` in a `.scratch` unit) of the unit named by "of `unit`" right after it, else of the
     checked work-unit folder; "in `unit`" names no ticket. A ticket never passes on its unit alone, and a
     backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR file. `<root>` is the
@@ -200,13 +238,12 @@ def owner_exists(owner, folder):
     plain = BRACKETED.sub('', owner)
     names = [name.strip() for name in BACKTICKED.findall(plain)] + [plain.replace('`', '').strip().rstrip('.')]
     refs = TICKET_REF.findall(plain)
-    return (any(owner_file_exists(root, name)
+    return (any(owner_file_exists(root, name, adr_folder)
                 or not refs and name != folder.name
                 and any(path.resolve() != folder for path in unit_folders(root, name))
                 for name in names)
             or any(ticket_exists(root, folder, number, unit) for number, word, unit in refs if word != 'in')
-            or any(any(root.glob(pattern.format(number))) for number in ADR_REF.findall(plain)
-                   for pattern in ADR_GLOBS))
+            or any(adr_exists(root, number, adr_folder) for number in ADR_REF.findall(plain)))
 
 
 def read_optional(path):
@@ -237,10 +274,17 @@ def ac_ids(text):
     return ids, errors
 
 
-def stories_errors(text, folder, look_up_owners=True):
+def uncovered_acs(text, parsed_tickets):
+    """(AC id, line number) for each AC of a stories text (ac_ids) that no ticket's `Covers:` names, in file order.
+    `parsed_tickets` are `ticket.Ticket` values. `check slice` and `frontier` both use it."""
+    covered = {ac for parsed in parsed_tickets for ac in parsed.covers}
+    return [(ac, number) for ac, number in ac_ids(text)[0].items() if ac not in covered]
+
+
+def stories_errors(text, folder, look_up_owners=True, adr_folder=ADR_FOLDER_CORE):
     """Errors for stories.md: duplicate AC ids and Out of scope lines with no `— owner:`, an owner that names a D-n
     outside brackets, or an owner that is not found in the checkout and has no TODO key (the work-unit
-    `folder` resolves the names; `look_up_owners=False` skips that last check). Also the ids found."""
+    `folder` and the `adr_folder` resolve the names; `look_up_owners=False` skips that last check). Also the ids found."""
     found, errors = ac_ids(text)
     in_scope_out = False
     for number, line in enumerate(text.splitlines(), 1):
@@ -252,12 +296,12 @@ def stories_errors(text, folder, look_up_owners=True):
             errors.append(f'stories.md:{number}: an Out of scope line needs the marker — owner: ({OWNER_SHAPE})')
         elif owner_names_decision(line):
             errors.append(f'stories.md:{number}: an owner is a unit, ticket or ADR, not a D-n ({OWNER_SHAPE})')
-        elif look_up_owners and not owner_exists(owner_value(line), folder):
+        elif look_up_owners and not owner_exists(owner_value(line), folder, adr_folder):
             errors.append(f'stories.md:{number}: {owner_missing(OWNER_SHAPE)}')
     return errors, found
 
 
-def decisions_errors(text, folder, look_up_owners=True):
+def decisions_errors(text, folder, look_up_owners=True, adr_folder=ADR_FOLDER_CORE):
     """Errors for decisions.md: a `- D-<n>:` line with no `Source:`, or whose `— owner:` names a D-n outside brackets
     or is not found in the checkout and has no TODO key (`look_up_owners=False` skips that last check). A
     `T-n` line needs no Source."""
@@ -270,7 +314,8 @@ def decisions_errors(text, folder, look_up_owners=True):
         elif owner_names_decision(line):
             errors.append(f'decisions.md:{number}: an owner is a unit, ticket or ADR, '
                           f'not a D-n ({D_OWNER_SHAPE})')
-        elif look_up_owners and (owner := owner_value(line)) is not None and not owner_exists(owner, folder):
+        elif look_up_owners and (owner := owner_value(line)) is not None \
+                and not owner_exists(owner, folder, adr_folder):
             errors.append(f'decisions.md:{number}: {owner_missing(D_OWNER_SHAPE)}')
     return errors
 
@@ -292,8 +337,9 @@ def logged_ac_ids(text):
     return ids, errors
 
 
-def stories(folder):
-    """(errors, warnings) for a work-unit folder, each a list of one-line strings. A missing
+def stories(folder, adr_folder=ADR_FOLDER_CORE):
+    """(errors, warnings) for a work-unit folder, each a list of one-line strings; `adr_folder` is the folder
+    where an ADR owner is looked up besides the adr/ of a unit folder. A missing
     stories.md is an error line; a missing decisions.md or log.md is empty (no decisions, no
     recorded ids). Sizes over 6 KB (stories.md) and 8 KB (decisions.md) only warn. A folder that is not
     `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>` gets one layout error and no owner lookup, since
@@ -312,7 +358,7 @@ def stories(folder):
     if stories_text is None:
         errors.append('stories.md: the file is missing (a work unit keeps its stories in stories.md)')
     else:
-        found_errors, found = stories_errors(stories_text, folder, in_layout)
+        found_errors, found = stories_errors(stories_text, folder, in_layout, adr_folder)
         errors.extend(found_errors)
         logged, log_errors = logged_ac_ids(log_text or '')
         errors.extend(log_errors)
@@ -323,7 +369,7 @@ def stories(folder):
         if len(stories_text.encode('utf-8')) > STORIES_WARN_BYTES:
             warnings.append('stories.md: over 6 KB; consider splitting the work unit')
     if decisions_text is not None:
-        errors.extend(decisions_errors(decisions_text, folder, in_layout))
+        errors.extend(decisions_errors(decisions_text, folder, in_layout, adr_folder))
         if len(decisions_text.encode('utf-8')) > DECISIONS_WARN_BYTES:
             warnings.append('decisions.md: over 8 KB; consider moving settled decisions out')
     return errors, warnings
@@ -357,7 +403,7 @@ STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
 COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
-JIRA_SHAPE = 'Jira: <key> | no-ticket'
+KEY_VALUE_SHAPE = '<key> | no-ticket'   # the value of the key line, whatever the line is called
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
 REPRO_SHAPE = 'Repro: <command>'
 HYPOTHESES_SHAPE = '1. <hypothesis>: confirmed | refuted, probe <output>'
@@ -367,6 +413,12 @@ RESULT_WORD = re.compile(r':\s*(?:confirmed|refuted)\b', re.IGNORECASE)
 PROBE_WORD = re.compile(r'\bprobe\b', re.IGNORECASE)
 HYPOTHESES_MIN, HYPOTHESES_MAX = 3, 5
 CLI_LINES = ('Result', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed')   # written later by the CLI
+
+
+def key_shape(key_line):
+    """The shape of the key line that `key_line` names; a `Jira:` line is still read in its place."""
+    shape = f'{key_line}: {KEY_VALUE_SHAPE}'
+    return shape if key_line == KEY_LINE_LEGACY else f'{shape}; a {KEY_LINE_LEGACY}: line is read too'
 
 
 def blocker_cycle(graph, start):
@@ -409,8 +461,8 @@ def blocked_errors(lines, parsed, empty_is_error=False):
     if empty_is_error and not parsed.blocked_by.strip():
         return [(where(lines, 'Blocked by'), f'Blocked by: is empty ({BLOCKED_SHAPE})')]
     if parsed.blockers_unreadable:
-        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" is not only two-digit '
-                                             f'ticket numbers (NN) ({BLOCKED_SHAPE})')]
+        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" {ticket.BLOCKED_UNREADABLE} '
+                                             f'({BLOCKED_SHAPE})')]
     return []
 
 
@@ -425,8 +477,9 @@ def key_errors(lines, keys):
     return errors
 
 
-def ticket_errors(name, text, parsed, folder, graph):
+def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
     """Errors for one ticket file: the missing or wrong lines, an unresolved blocker, a line anchor.
+    The key line is the `key_line` line, or the `Jira:` line when the ticket has no such line.
     Fills `graph` with the resolved blockers of the ticket, keyed by its number."""
     lines = ticket.split_lines(text)
     errors = [f'{name}:{number}: {message}'
@@ -442,7 +495,7 @@ def ticket_errors(name, text, parsed, folder, graph):
                 graph[number].append(blocker)
     errors += [f'{name}:{number}: {message}'
                for number, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
-                                                         ('Jira', JIRA_SHAPE)))]
+                                                         (ticket.key_name(lines, key_line), key_shape(key_line))))]
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
         match = None if number - 1 in skip or D_LINE.match(body) else line_anchor(body)
@@ -517,27 +570,26 @@ def draft_warnings(text):
     return []
 
 
-def slice(folder):
+def slice(folder, key_line=KEY_LINE_CORE):
     """(errors, warnings) for the tickets of a work-unit folder (`tickets/NN-slug.md`) and its
-    stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or Jira:
-    line, a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
+    stories.md: an AC in no ticket's Covers:, a missing Status:, Blocked by:, Covers:, Tests: or key
+    line (the `key_line` line, or `Jira:`), a Status: that is no status word, a blocker with no ticket file or in a cycle, a `path:NN`
     line anchor (fenced code blocks and copied `- D-n:` lines are not checked). A ticket over 5 KB only warns."""
     folder = Path(folder)
     if not folder.is_dir():
         raise files.RecordError(f'{folder}: not a folder')
     tickets_dir = folder / 'tickets'
-    loaded = [(f'tickets/{path.name}', *ticket.load(path))
+    loaded = [(f'tickets/{path.name}', *ticket.load(path, key_line))
               for path in sorted(tickets_dir.glob('*.md')) if TICKET_NUMBER.match(path.name)]
-    errors, warnings, graph, covered = [], [], {}, set()
+    errors, warnings, graph = [], [], {}
     stories_text = read_optional(folder / 'stories.md')
     if stories_text is None:
         errors.append('stories.md: the file is missing (a work unit keeps its stories in stories.md)')
     else:
-        covered = {ac for _, _, parsed in loaded for ac in parsed.covers}
         errors.extend(f'stories.md:{number}: {ac} is in no ticket\'s Covers: line ({COVERS_SHAPE})'
-                      for ac, number in ac_ids(stories_text)[0].items() if ac not in covered)
+                      for ac, number in uncovered_acs(stories_text, (parsed for _, _, parsed in loaded)))
     for name, text, parsed in loaded:
-        errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph))
+        errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph, key_line))
         if len(text.encode('utf-8')) > SLICE_WARN_BYTES:
             warnings.append(f'{name}: over 5 KB; consider splitting the ticket')
     for name, text, parsed in loaded:
@@ -569,6 +621,19 @@ def register(commands, common):
                        help='the commit being merged: a commit id or a branch (default: HEAD of --repo)')
     merge.add_argument('--repo', help=gitrepo.REPO_HELP)
     merge.set_defaults(handler=run_pre_merge)
+    push = actions.add_parser(
+        'pre-push', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help='exit 0 only when the unit or ad-hoc ticket was reviewed and verified on the head; '
+             'name each stale line (exit 1)',
+        description=('Exit 0 only when Reviewed: and Verified: both name the current head of --repo. A work-unit\n'
+                     'folder keeps them in its mr.md (mr reviewed, mr verified), an ad-hoc ticket in the ticket\n'
+                     'itself (ticket reviewed, ticket verified). Each failed line is one line on stdout and the\n'
+                     'exit code is 1: a missing line, a value that is not a commit, or a head that moved. A\n'
+                     'missing or unreadable mr.md, or a target that is neither a work-unit folder nor an\n'
+                     'ad-hoc ticket, is one anomaly: line and exit 2. Nothing is written.'))
+    push.add_argument('target', help='a work-unit folder (reads mr.md in it) or an ad-hoc ticket file')
+    push.add_argument('--repo', help=gitrepo.REPO_HELP)
+    push.set_defaults(handler=run_pre_push)
     check_stories = actions.add_parser(
         'stories', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
         help='exit 1 when stories.md or decisions.md of a work unit breaks its shape',
@@ -578,7 +643,8 @@ def register(commands, common):
                      'that names a D-n outside brackets, an owner (an Out of scope line, or a D-n line with\n'
                      '— owner:) that is not in the checkout (a unit folder other than the checked one, ticket NN\n'
                      'or ticket NN of `<unit>` (never "in"; issues/ only in .scratch),\n'
-                     'ADR-NNNN or a ticket or ADR file path)\n'
+                     'ADR-NNNN or a ticket or ADR file path; an ADR is looked up in the folder the adr_folder\n'
+                     'port names, from the profile in --home, and in the adr/ of every unit folder)\n'
                      'and carries no TODO(<owner>, revisit YYYY-MM-DD) key with a real date, a work-unit folder\n'
                      'that is not <root>/.anomaly/<unit> or <root>/.scratch/<unit> (one error, no owner lookup).\n'
                      'Warnings: stories.md over 6 KB, decisions.md over 8 KB. Each is one line on stdout;\n'
@@ -590,7 +656,8 @@ def register(commands, common):
         'slice', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
         help='exit 1 when the tickets of a work unit cannot be run by build',
         description=('Check the tickets/ of a work-unit folder against stories.md and docs/formats.md. Errors: an AC\n'
-                     'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or Jira: line,\n'
+                     'in no ticket\'s Covers:, a ticket with no Status:, Blocked by:, Covers:, Tests: or key line\n'
+                     '(the line the key_line port names, from the profile in --home; a Jira: line is read too),\n'
                      'a Status: that is no status word, a blocker with no ticket file or in a cycle, a path:NN\n'
                      'line anchor (not in a fenced block or a copied - D-n: line; a host:port after :// or @\n'
                      'is not one, a bare example.com:8080 is; a path right after @ such as @check.py:42, or in a\n'
@@ -616,11 +683,13 @@ def print_check(word, errors, warnings, folder):
 
 
 def run_stories(args, environ):
-    return print_check('stories', *stories(args.folder), args.folder)
+    adr_folder = ports.adr_folder(paths.resolve_home(args.home, environ))
+    return print_check('stories', *stories(args.folder, adr_folder), args.folder)
 
 
 def run_slice(args, environ):
-    return print_check('slice', *slice(args.folder), args.folder)
+    key_line = ports.key_line(paths.resolve_home(args.home, environ))
+    return print_check('slice', *slice(args.folder, key_line), args.folder)
 
 
 def run_pre_merge(args, environ):
@@ -636,4 +705,26 @@ def run_pre_merge(args, environ):
     for line in notes:
         print(line)
     print(f'pre-merge check passed for {Path(args.ticket).name} at {gitrepo.short(head)}')
+    return 0
+
+
+def run_pre_push(args, environ):
+    from . import mr   # inside the function: mr imports this module
+    found = mr.locate(args.target)
+    if found.unit:
+        if not found.state.is_file():
+            raise files.RecordError(f'{found.state}: no MR file; `mr reviewed` and `mr verified` write it')
+        state = mr.read_state(found.state)
+        gate_lines = [(label, state.get(label)) for label in (mr.REVIEWED_LABEL, mr.VERIFIED_LABEL)]
+    else:
+        _, parsed = ticket.load(args.target)
+        gate_lines = [(mr.REVIEWED_LABEL, parsed.reviewed), (mr.VERIFIED_LABEL, parsed.verified)]
+    repo = gitrepo.repo_for(args.repo)
+    head = gitrepo.require_commit(repo, 'HEAD')
+    problems = pre_push(repo, gate_lines, head)
+    if problems:
+        for line in problems:
+            print(line)
+        return 1
+    print(f'pre-push check passed for {Path(args.target).name} at {gitrepo.short(head)}')
     return 0

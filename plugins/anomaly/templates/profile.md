@@ -21,8 +21,9 @@ commit_style: <type>(<key>): <summary>
 implementers:
   stack-a: <agent id>
   stack-b: <agent id>
-# The skill or command that opens a merge request.
-mr_tool: <skill or command>
+# The tool that opens and updates the merge request: `glab` or `gh`. Without it `mr put` only
+# prints the title and body.
+mr_tool: <glab or gh>
 # The skill or tool that checks a user interface.
 verify_ui: <skill or tool>
 # Where requirements come from, and whether the loop may write to it.
@@ -53,6 +54,10 @@ reviewers: <agent id>
 gather: <skill>
 # The tool the CI step watches and reads logs with.
 ci: <ci tool>
+# The line that holds the ticket key. Core default: Key.
+key_line: <line name>
+# The repo folder ADR drafts are moved to. Core default: docs/adr/.
+adr_folder: <repo-relative folder>
 # The model per dispatch role. One role per indented line.
 models:
   explore: <model>

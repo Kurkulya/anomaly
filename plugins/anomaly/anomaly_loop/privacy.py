@@ -88,11 +88,12 @@ def is_identifier(value):
             and IDENTIFIER.fullmatch(value) is not None and SIGHTING_SEPARATOR not in value)
 
 
-def check_text(label, key, value, limit):
-    """Refuse a free-text field that is not one short, clean line (ADR-0003)."""
+def check_text(label, key, value, limit=None):
+    """Refuse a free-text field that is not one short, clean line (ADR-0003). A `limit` of None sets
+    no length limit (a note in a planning file, not a loop record)."""
     if '\n' in value or '\r' in value:
         raise RecordError(f'{label}: {key} must be one line, never pasted output')
-    if len(value) > limit:
+    if limit is not None and len(value) > limit:
         raise RecordError(f'{label}: {key} is longer than {limit} characters; shorten it')
     problems = privacy_problems(value)
     if problems:

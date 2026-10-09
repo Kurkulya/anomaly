@@ -89,6 +89,18 @@ def port(resolution, name, stack=''):
     return next((line for line in lines if line.stack == stack), lines[0])
 
 
+def key_line(home):
+    """The name of the ticket line that holds the key: the `key_line` port of the profile in `home`,
+    without one trailing colon (a profile `key_line: Jira:` names the line `Jira`)."""
+    return port(resolve(home), 'key_line').value.removesuffix(':')
+
+
+def adr_folder(home):
+    """The repo-relative folder that holds the ADRs: the `adr_folder` port of the profile in `home`, as written
+    (core default `docs/adr/`)."""
+    return port(resolve(home), 'adr_folder').value
+
+
 def core_default(name):
     """The core default items of the port `name` (constants.PORTS), with no profile read."""
     for port_name, _, _, default in PORTS:

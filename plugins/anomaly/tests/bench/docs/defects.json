@@ -1,0 +1,13 @@
+{
+  "fixture": "docs",
+  "defects": [
+    {"id": "DOC-D1", "what": "the commit replaces the per-call file read with a cache and no ADR records that decision", "min_severity": "Medium",
+     "places": [{"file": "notes/store.py", "lines": [5, 5]}]},
+    {"id": "DOC-D2", "what": "ADR-0001 says list_notes returns the notes newest first, but the code does not match: it returns file order, oldest first", "min_severity": "Medium",
+     "places": [{"file": "docs/adr/0001-notes-live-in-one-jsonl-file.md", "lines": [20, 20]}]}
+  ],
+  "decoys": [
+    {"id": "DOC-X1", "what": "ADR-0002 says append_note refuses a title over 80 characters, and the code still does",
+     "places": [{"file": "docs/adr/0002-titles-are-short.md", "lines": [11, 11]}]}
+  ]
+}

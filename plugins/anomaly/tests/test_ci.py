@@ -267,6 +267,13 @@ class WatchTest(CiCase):
         self.assertEqual(out, '')
         self.assertNotIn('secret-user', err)
 
+    def test_a_host_that_only_contains_gitlab_com_is_not_gitlab_com(self):
+        self.repo.git('remote', 'set-url', 'origin', 'git@www.gitlab.com:g/p.git')
+        self.use_glab()
+        code, out, err = self.ci('log', 'HEAD')
+        assert_cli_error(self, (code, out, err), '--project')
+        self.assertEqual(self.fake.calls, [])
+
     def test_an_unknown_ref_is_one_anomaly_line_and_exit_2(self):
         self.use_glab()
         code, out, err = self.ci('watch', 'no-such-ref')

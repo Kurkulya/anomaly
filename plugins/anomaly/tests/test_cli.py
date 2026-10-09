@@ -43,6 +43,7 @@ class SkillFileTest(unittest.TestCase):
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
     REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window after each round (AC-53)
+    DOCS_AGENT = PLUGIN / 'agents' / 'docs.md'
     REVIEW_SKILL = PLUGIN / 'skills' / 'review' / 'SKILL.md'
     REVIEW_BRIEF = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
     BUILD_SKILL = PLUGIN / 'skills' / 'build' / 'SKILL.md'
@@ -80,8 +81,10 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_the_core_reviewers_and_the_plan_reviewer_read_only_and_with_no_pinned_model(self):
-        self.assertEqual(sorted(path.stem for path in self.agents()), sorted((*lens.core_lenses(), lens.PLAN_LENS)))   # plan: the plan-gate reviewer, outside the core lenses
+    def test_the_agents_are_the_core_reviewers_the_plan_reviewer_and_the_docs_agent_read_only_and_with_no_pinned_model(self):
+        """AC-52: the docs agent is the fifth file; the size, description and tools checks run over every agent,
+        so they cover it once the file exists."""
+        self.assertEqual({path.stem for path in self.agents()}, {*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem})   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
             with self.subTest(agent=path.stem):
@@ -89,6 +92,41 @@ class SkillFileTest(unittest.TestCase):
                 self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')],
                                  ['Read', 'Grep', 'Glob', 'Bash'])
                 self.assertNotIn('model', fields)
+
+    def docs_agent_lines(self):
+        """The docs agent's text as lines; fails while the file is missing."""
+        self.assertTrue(self.DOCS_AGENT.is_file(), self.DOCS_AGENT.relative_to(PLUGIN).as_posix())
+        return self.DOCS_AGENT.read_text(encoding='utf-8').splitlines()
+
+    def test_the_docs_agent_names_the_finding_line_shape_the_other_agents_print(self):
+        """AC-52: the shape line of code, feature and plan (security adds a label field, so it is not the model)."""
+        shape = (f'- [<{"|".join(constants.FINDING_SEVERITIES)}>] <path>:<line> — <problem> — fix: <fix> '
+                 f'— <{"|".join(constants.FINDING_STATES)}>')
+        self.assertIn(shape, self.docs_agent_lines())
+        for name in ('code', 'feature', 'plan'):
+            with self.subTest(agent=name):
+                self.assertIn(shape, (PLUGIN / 'agents' / f'{name}.md').read_text(encoding='utf-8').splitlines())
+
+    def test_the_docs_agent_names_both_checks_the_unrecorded_decision_commit_and_the_drifted_adr_claim(self):
+        """AC-52: one line each, so a check named only in passing does not count."""
+        lines = self.docs_agent_lines()
+        self.assertTrue(any(re.search(r'commit', line, re.I) and re.search(r'decision', line, re.I)
+                            and re.search(r'ADR', line) for line in lines), 'commit + decision + ADR on one line')
+        self.assertTrue(any(re.search(r'ADR', line) and re.search(r'no longer match|drift|moved away', line, re.I)
+                            for line in lines), 'ADR + drift on one line')
+
+    def test_the_docs_agent_reads_the_adr_folder_the_caller_passes_and_each_unit_adr_folder_and_states_no_fallback(self):
+        """AC-52 (Amended 2026-10-09, third line): the caller passes the ADR folder, already resolved through
+        the CLI, so check.adr_folder_path stays the one owner of the fallback; each unit folder's adr/ counts
+        too. No line names a fixed docs/adr or states a fallback rule."""
+        lines = self.docs_agent_lines()
+        text = '\n'.join(lines)
+        self.assertRegex(text, r'(?i)ADR folder the caller passes')
+        self.assertRegex(text, r'\bunit\b[^\n]*\badr/|\badr/[^\n]*\bunit\b')
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertNotIn('docs/adr', line)
+                self.assertNotRegex(line, r'(?i)fall ?back|outside the repo|adr_folder')
 
     def test_the_rules_mode_doc_fits_in_2_KB_and_only_the_feature_agent_loads_it(self):
         self.assertLessEqual(self.RULES_DOC.stat().st_size, self.RULES_DOC_MAX_BYTES)
@@ -544,11 +582,22 @@ class PlanningDocsTest(unittest.TestCase):
         next-step offer, the ADR front block."""
         text = self.doc_text(self.FORMATS)
         for token in ('## stories.md', '## decisions.md', '- D-n:', '- T-n:', 'Source:', 'Avoid:', 'Amended <date>:',
-                      'Jira:', 'no-ticket', 'Repro:', '## log.md', 'anomaly log add', 'ACs: AC-1',
+                      'Key:', 'no-ticket', 'Repro:', '## log.md', 'anomaly log add', 'ACs: AC-1',
                       'ready-for-agent', 'ready-for-human (', 'needs-info', 'wontfix', '`in-progress` and `done`',
                       '/anomaly:<name>', '- Decision:', '- Revisit:', '## Out of scope', '(verbatim', '— owner:'):
             with self.subTest(token=token):
                 self.assertIn(token, text)
+
+    def test_the_formats_doc_names_the_key_line_through_the_key_line_port_not_as_jira(self):
+        """AC-11: the ticket shape and its key-line rule name the `key_line` port (core line `Key:`). A `Jira:`
+        line is still read until the switch-over, so the doc may say that, but never as the required line."""
+        text = self.doc_text(self.FORMATS)
+        self.assertIn('key_line', text)
+        self.assertNotRegex(text, r'(?m)^Jira:')
+        for line in text.splitlines():
+            if 'Jira:' in line:
+                with self.subTest(line=line):
+                    self.assertRegex(line, r'(?i)still read|legacy|switch-over')
 
     def test_the_formats_doc_repro_shape_is_the_runnable_command_without_a_red_now_suffix(self):
         """Adhoc 2026-10-08-durable-runnable-repro, AC-1: `Repro: <command>` runs as written."""
@@ -967,9 +1016,11 @@ class SpecifySkillTest(unittest.TestCase):
         """AC-20."""
         text = self.text()
         self.assertRegex(text, r'\.anomaly/<work unit>/adr/')
-        self.assertIn('git log --all -- docs/adr/', text)
+        self.assertRegex(text, r'git log --all -- [^\n]*<NNNN>')
         self.assertRegex(text.lower(), r'free on every branch|every branch')
         self.assertRegex(text, r'\.anomaly/\*/adr/')
+        self.assertIn('adr_folder', text)
+        self.assertNotIn('docs/adr/', text)   # AC-11: the ADR folder is named through the port
 
     def test_it_runs_check_stories_then_the_spec_review_then_a_digest_of_at_most_5_lines_and_waits(self):
         """AC-21, with the Blocker and warning rules of the review amendments."""
@@ -1105,6 +1156,12 @@ class SliceSkillTest(unittest.TestCase):
         self.assertIn('ready-for-human', text)
         self.assertRegex(text, r'Result:')   # named only to say that slice never writes it
         self.assertRegex(text.lower(), r'never writes?|does not write|writes none|not write')
+
+    def test_it_names_the_key_line_through_the_key_line_port_not_as_jira(self):
+        """AC-11."""
+        text = self.text()
+        self.assertIn('key_line', text)
+        self.assertNotIn('Jira:', text)
 
     def test_it_links_the_formats_and_boundaries_docs_one_level_deep(self):
         text = self.text()
@@ -1289,6 +1346,130 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertRegex(text, r'(?m)^## The diagnose skill$')
         section = text.split('## The diagnose skill', 1)[1].split('\n## ', 1)[0]
         self.assertIn('anomaly:diagnose', section)
+
+
+def named_once_about(test, text, doc):
+    """The text a skill names its doc `doc` (a Path) in: the one body line that holds the file name, with the heading
+    above it. The name must not be in the frontmatter and must stand on exactly one line."""
+    fields, body = frontmatter.split(text)
+    test.assertNotIn(doc.name, ' '.join(str(value) for value in fields.values()))
+    lines = body.splitlines()
+    named = [number for number, line in enumerate(lines) if doc.name in line]
+    test.assertEqual(len(named), 1, f'{doc.name} is named on {len(named)} lines, expected 1')
+    heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
+    return f'{heading}\n{lines[named[0]]}'
+
+
+class ShipSkillTest(unittest.TestCase):
+    """Workflow-conduct ticket 11 (AC-58 to AC-61, the ship half): the ship skill's files. The rule trace against
+    the brief (AC-49, AC-51, AC-54 to AC-57) is run by review, not here. The all-skills checks (250-character
+    description, folder set) and the `allowed-tools` and deny-shape checks of test_pipeline_files.py cover the
+    new folder through ALLOWED_TOOLS_SKILLS (AC-61); test_neutral.py scans these files for the owner's profile
+    identifiers, so the example test below holds only the shapes it does not look for."""
+    SKILL = PLUGIN / 'skills' / 'ship' / 'SKILL.md'
+    GATE = SKILL.parent / 'DOCS-GATE.md'
+    SKILL_MAX_BYTES = 5 * 1024   # tighter than the 8 KB of the all-skills check
+    GATE_MAX_BYTES = 2 * 1024
+    DOMAIN_WORDS = re.compile(r'(?i)\b(?:recipes?|bakery|library|garden|plants?|shop|carts?|orders?|invoices?|books?|'
+                              r'loans?|playlists?|tea|coffee|pets?|trips?|bookings?|menu|quiz|calendar|weather)\b')   # loose: a made-up everyday domain
+    REAL_NAME = re.compile(r'(?i)\b(?:anomaly|claude|anthropic|jira|gitlab|github|glab)\b')   # a real product, org or project name
+    TICKET_KEY = re.compile(r'\b(?!AC-|D-|ADR-)[A-Z][A-Z0-9]+-\d+\b')   # PRJ-123; AC-n, D-n and ADR-n are the plugin's own ids
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/ship/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_ship_skill_is_model_invocable_and_its_description_names_conduct(self):
+        """The brief's Start line: model-invocable, and conduct calls it (the 250-character limit is the
+        all-skills check; `allowed-tools` is the check of test_pipeline_files.py)."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'ship')
+        self.assertNotEqual(fields.get('disable-model-invocation'), 'true')
+        self.assertIn('conduct', fields.get('description', ''))
+
+    def test_the_ship_skill_fits_in_5_KB_and_its_docs_gate_doc_in_2_KB(self):
+        """AC-59, ship half."""
+        self.text()
+        self.assertTrue(self.GATE.is_file(), 'skills/ship/DOCS-GATE.md is missing')
+        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        self.assertLessEqual(self.GATE.stat().st_size, self.GATE_MAX_BYTES)
+
+    def test_the_docs_gate_doc_is_named_once_and_only_in_the_ready_gate_step(self):
+        """AC-60, DOCS-GATE half: one line of SKILL.md names it, outside the frontmatter, and that line or
+        the heading above it says "ready". The check is on the text of the line, so the skill's step layout
+        stays free."""
+        self.assertRegex(named_once_about(self, self.text(), self.GATE), r'(?i)\bready\b')
+
+    def test_it_holds_one_worked_mr_body_example_in_a_fence_with_no_real_name(self):
+        """AC-58. The example is the one fenced block with the body's Why, What changed and Tested sections.
+        A made-up domain is checked loosely: a real-name pattern, a ticket key, a link, a mention and a commit id
+        must be absent, and one everyday domain word must be present."""
+        fences = re.findall(r'(?ms)^```[a-z]*\n(.*?)^```', self.text())
+        examples = [block for block in fences
+                    if all(re.search(rf'(?i)\b{section}\b', block) for section in ('why', 'what changed', 'tested'))]
+        self.assertEqual(len(examples), 1, 'expected one fenced MR body example with Why, What changed and Tested')
+        example = examples[0]
+        self.assertIsNone(self.REAL_NAME.search(example), 'a real product, org or project name')
+        self.assertIsNone(self.TICKET_KEY.search(example), 'a ticket key')
+        self.assertIsNone(re.search(r'https?://|@\w|\b[0-9a-f]{7,40}\b', example), 'a link, a mention or a commit id')
+        self.assertIsNotNone(self.DOMAIN_WORDS.search(example), 'no word of a made-up everyday domain')
+
+
+class ConductSkillTest(unittest.TestCase):
+    """Workflow-conduct ticket 12 (AC-15, AC-59 to AC-61, the conduct SKILL.md and KICKOFF.md half). The other
+    ACs of the ticket are checked by the rule trace of ticket 13; the PARALLEL.md checks are ticket 13's. The
+    all-skills checks (250-character description, folder set) and the `allowed-tools` and deny-shape checks
+    of test_pipeline_files.py cover the new folder through ALLOWED_TOOLS_SKILLS (AC-61)."""
+    SKILL = PLUGIN / 'skills' / 'conduct' / 'SKILL.md'
+    KICKOFF = SKILL.parent / 'KICKOFF.md'
+    PARALLEL = SKILL.parent / 'PARALLEL.md'
+    SKILL_MAX_BYTES = 8 * 1024
+    KICKOFF_MAX_BYTES = 1024
+    PARALLEL_MAX_BYTES = 3 * 1024
+
+    def text(self):
+        self.assertTrue(self.SKILL.is_file(), 'skills/conduct/SKILL.md is missing')
+        return self.SKILL.read_text(encoding='utf-8')
+
+    def test_the_conduct_skill_is_model_invocable_and_acts_only_on_an_explicit_request(self):
+        """AC-15, as the build skill's description check (the 250-character limit is the all-skills check)."""
+        fields = frontmatter.split(self.text())[0]
+        self.assertEqual(fields.get('name'), 'conduct')
+        self.assertNotIn('disable-model-invocation', fields)
+        description = fields.get('description', '').lower()
+        self.assertIn('explicit', description)
+        self.assertIn('model-invocable', description)
+
+    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3_KB(self):
+        """AC-59, conduct half (the ship caps live in ShipSkillTest)."""
+        self.text()
+        self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
+        self.assertTrue(self.PARALLEL.is_file(), 'skills/conduct/PARALLEL.md is missing')
+        self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
+        self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
+        self.assertLessEqual(self.PARALLEL.stat().st_size, self.PARALLEL_MAX_BYTES)
+
+    def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
+        """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
+        heading above it says "chip". The check is on the text of the line, so the skill's step layout stays free."""
+        self.assertRegex(named_once_about(self, self.text(), self.KICKOFF), r'(?i)\bchip\b')
+
+    def test_the_parallel_doc_starts_the_build_worklog_of_each_par_ticket_before_its_red_step(self):
+        """Dogfood finding 1: build's `worklog start <key> build --ticket <NN>` is run in the main window, so the
+        later `worklog add` has a start time. The call comes before the first `ticket set-status` of the red step."""
+        self.assertTrue(self.PARALLEL.is_file(), 'skills/conduct/PARALLEL.md is missing')
+        text = self.PARALLEL.read_text(encoding='utf-8')
+        found = re.search(r'worklog start [^`\n]*\bbuild --ticket [^`\n]+', text)
+        self.assertIsNotNone(found, 'PARALLEL.md has no `worklog start <key> build --ticket <NN>` call')
+        self.assertLess(found.start(), text.index('ticket set-status'),
+                        'the worklog start comes after the first ticket set-status')
+
+    def test_the_parallel_doc_is_named_once_and_only_in_the_parallel_pick_step(self):
+        """AC-60, PARALLEL half: one line of SKILL.md names it, outside the frontmatter, and that line or the
+        heading above it is about the parallel pick (the words "parallel" and "pick" or "picks")."""
+        about = named_once_about(self, self.text(), self.PARALLEL)
+        self.assertRegex(about, r'(?i)\bparallel\b')
+        self.assertRegex(about, r'(?i)\bpicks?\b')
 
 
 if __name__ == '__main__':

@@ -131,6 +131,8 @@ TICKET_TITLE_MAX_CHARS = 80          # adhoc ticket: the heading is the task cut
 TICKET_FIELD_SEPARATOR = ' · '       # between the parts of a Result: or Red: line
 TICKET_TIME_FORMAT = '%Y-%m-%d %H:%M'   # the times on a Metrics: line
 TICKET_START_UNKNOWN = 'unknown'     # `started unknown` on a Metrics: line closed without a start time
+KEY_LINE_CORE = 'Key'                # the ticket line that holds the key (the `key_line` port's core default) ...
+KEY_LINE_LEGACY = 'Jira'             # ... and the line that is still read when the ticket has no such line
 TICKET_NUMBER_DIGITS = 2             # a ticket is named by a number of two ASCII digits (NN): ledger lines, work-unit lines
 NO_START_WARNING = 'warning: no start time'   # printed (on stdout, like the other ticket warnings) by `worklog add` and `ticket result`
 TICKET_STATUS_DONE = 'done'          # ticket Status: words the commands write or test for
@@ -168,6 +170,8 @@ PORTS = (
     ('commit', REPLACE, 'commit_style', ('type(scope): summary',)),
     ('branch', REPLACE, 'branch_pattern', ('feat/<slug>',)),
     ('ui_check', REPLACE, 'verify_ui', ("built-in browser walkthrough of the ticket's UI ACs",)),
+    ('key_line', REPLACE, 'key_line', (KEY_LINE_CORE,)),
+    ('adr_folder', REPLACE, 'adr_folder', ('docs/adr/',)),
 )
 PER_STACK_PORTS = ('implementer', 'test_writer', 'conventions')
 MODELS_KEY = 'models'                # profile key: one `role: model` line per role
@@ -225,6 +229,10 @@ OWASP_2021 = (                       # the public OWASP Top 10 2021 labels and c
 SHORT_SHA_CHARS = 12                 # a commit id as shown in a message
 SEAM_BULLET = '- '                   # a seam ledger line: `- <name> · <owner file> · replaces <old way> (ticket NN)`
 SEAM_REPLACES = 'replaces'           # the word before the old way; the parts are joined by TICKET_FIELD_SEPARATOR
+
+# ---------- mr put, ready and show ----------
+
+MR_ADAPTERS = ('glab', 'gh')         # the `mr` profile values that name an MR tool wrapper (glab.py, gh.py)
 
 # ---------- ci watch and ci log ----------
 

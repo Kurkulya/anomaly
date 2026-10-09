@@ -27,7 +27,7 @@ Amended <date>: <what changed> — <why>
 - UI copy is in bold, endpoints in backticks; a scenario's steps follow `**Scenario N — <name>:**`.
 - Each AC id is unique and is never renumbered. A withdrawn AC stays in place with an
   `Amended <date>:` line.
-- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored. The owner must exist in the checkout (a unit folder under `.anomaly/` or `.scratch/` other than this unit, written with or without backticks, bare or as a path; a ticket file of this unit as `ticket NN` (or `issues/` in a `.scratch` unit), or of another unit as ``ticket NN of `<unit>` `` (the ticket is in that unit's `tickets/`, or its `issues/` in the old `.scratch` layout; "in `<unit>`" names no ticket), or the path of a ticket or ADR file; an ADR file as `ADR-NNNN`) or carry `TODO(<owner>, revisit YYYY-MM-DD)` with a real date. A unit is never the owner of its own item. A person or a skill needs the key; a placeholder is never an owner. `check stories` finds the owners from the folder `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>`; a work unit anywhere else gets one layout error.
+- An Out of scope line needs the marker `— owner:`. Only the first `— owner:` starts the owner. It is a unit, ticket or ADR that holds the item, never a `D-n`; a `D-n` in brackets after it, such as `(D-3)`, is a citation and is allowed. A plain `owner:` elsewhere is ignored. The owner must exist in the checkout (a unit folder under `.anomaly/` or `.scratch/` other than this unit, written with or without backticks, bare or as a path; a ticket file of this unit as `ticket NN` (or `issues/` in a `.scratch` unit), or of another unit as ``ticket NN of `<unit>` `` (the ticket is in that unit's `tickets/`, or its `issues/` in the old `.scratch` layout; "in `<unit>`" names no ticket), or the path of a ticket or ADR file; an ADR file as `ADR-NNNN`, found in the folder the `adr_folder` port names (core `docs/adr/`) or in the `adr/` of a unit folder) or carry `TODO(<owner>, revisit YYYY-MM-DD)` with a real date. A unit is never the owner of its own item. A person or a skill needs the key; a placeholder is never an owner. `check stories` finds the owners from the folder `<root>/.anomaly/<unit>` or `<root>/.scratch/<unit>`; a work unit anywhere else gets one layout error.
 
 ## decisions.md
 
@@ -36,7 +36,7 @@ One line per entry, written after each round, settled items only. Numbers are ne
 - `- D-n: <decision>. Why: <one line>. Source: <where>`, where `<where>` is a file:line, a commit, an ADR
   or the text "user, <date>".
 - Add the tag ` ADR?` when the decision may need an ADR.
-- Prefixes: `Test seam:`, `Open:`, `Risk:`.
+- Prefixes: `Test seam:`, `Open:`, `Risk:`, `Breaking:` (a change that breaks a caller; `mr body` lists these in the MR body). A prefix may follow the D-n id: `- D-n: Breaking: …`.
 - A changed line gets a second line `Amended <date>: <what changed>`.
 - `- T-n: **<term>** — <meaning>. Avoid: <words>.` is one settled term, waiting to be written into
   the glossary.
@@ -54,7 +54,7 @@ Status: ready-for-agent | ready-for-human (<why>)
 Blocked by: none | 01, 03
 Covers: AC-2, AC-5 | none
 Tests: <levels>
-Jira: <key> | no-ticket
+Key: <key> | no-ticket
 Gate: <date or outside step>
 
 What to build: <behaviour, 1-3 sentences>
@@ -67,10 +67,10 @@ Decisions:
 - D-3: <verbatim from decisions.md>
 ```
 
-- `Jira:` holds a tracker key or `no-ticket`, until the tracker port (phase 2, D-11) names the key line.
+- The key line is the line the `key_line` port names (core `Key:`, shown above). It holds a tracker key or `no-ticket`. A `Jira:` line is still read until the switch-over.
 - `Gate:` only when the ticket was gated. `Restates:` only on a ticket that changes a rule.
 - `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
-  CLI; `Amended` by a later stage or a person. `slice` writes none of them.
+  CLI; a later stage writes `Amended` through `ticket amend` (`--after AC-n | D-n` for stories.md and decisions.md). `slice` writes none of them.
 - A light-path ticket from `diagnose` has `Blocked by: none` (`ticket show` warns without a `Blocked by:` line), `Covers: AC-1`, `Status: ready-for-agent`,
   the `Tests:` line, then `Repro: <command>` (runnable as written, red at hand-over). AC-1 is the exact symptom gone with the repro
   green. The body holds Symptom, Root cause, Fix, Risk, and the seam or a no-correct-seam finding, and a

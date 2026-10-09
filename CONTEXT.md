@@ -36,7 +36,7 @@
 | **adapter** | The org value or tool the profile injects into a port, such as an org implementer agent or MR tool. | plugin, integration |
 | **core default** | What a port does when the profile names no adapter, written in the plugin's own words. | fallback |
 | **base branch** | The branch a work unit's integration branch is cut from: the repo layer's `base` key, else the branch `origin/HEAD` points at, else `main`. `ports` prints it as `repo base`. | a ticket's `Base:` line (that holds the **integration branch**) |
-| **ticket key** | The key line of a ticket (`Jira: <KEY>` today): a tracker key or `no-ticket`. The `commit` and `branch` ports use it where their pattern holds `<key>`. Not the work-unit key. | ticket id, ticket number (that is the two-digit NN) |
+| **ticket key** | The key line of a ticket: `Key: <KEY>` in core, or the line the `key_line` port names; `Jira:` is still read until the switch-over. It holds a tracker key or `no-ticket`. The `commit` and `branch` ports use it where their pattern holds `<key>`. Not the work-unit key. | ticket id, ticket number (that is the two-digit NN) |
 | **integration branch** | The one branch per work unit that each ticket branch merges into with `--no-ff`: the ticket's `Base:` line, else the `branch` port pattern with the work-unit key as slug. `build` never commits on it directly and never pushes it. | feature branch (that is a ticket's) |
 | **start branch** | The branch a light-path run starts from (the current head's branch) and merges back into. It stands in for the integration branch, which a light-path run does not create. | integration branch (that is a work unit's) |
 | **repo layer** | The commands a repository documents itself (scripts, build files, its own instructions), plus a personal override file in home; never committed to the repo. | repo config |
@@ -52,3 +52,7 @@
 | **term line** | A `T-n:` line in `decisions.md`: one settled term, its meaning and the words to avoid, waiting for the ticket that writes it into the glossary. | glossary entry (for the line) |
 | **red commit** | The commit that holds a ticket's acceptance test alone, before any code commit; recorded as `Red: <sha> · <test path>`. `check pre-merge` requires the test file to be unchanged since it, unless a `Red-changed:` line says why. | test commit |
 | **plan gate** | The `spec` or `tickets` review mode that ends `specify` or `slice`; it stops only on a Blocker. | plan-sanity, claim check (for the whole gate) |
+| **frontier** | The tickets of a work unit whose blockers are all done, that are neither done nor in progress, and that wait for no person; only a `ready-for-agent` ticket counts. | queue, backlog (that is the anomaly list) |
+| **wave** | One round of frontier tickets run together, one after another or in parallel. | batch, round (that is a review round) |
+| **wave report** | The 5-line chat summary `conduct` prints after a wave: done, failed, open, next, cost. | digest (that is the backlog digest command and an Avoid word for **log**) |
+| **MR** | The one merge request of a work unit (a pull request on GitHub), opened as a draft and made ready through `ship`. | PR (in plugin text) |

@@ -84,7 +84,7 @@ class RegistryTest(CheckTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['check', '--help'], environ={})
-        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'stories', 'slice'])
+        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'pre-push', 'stories', 'slice'])
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
         assert_cli_error(self, self.check(ticket=self.repo.root / '.scratch' / '99-none.md'), '99-none.md')
@@ -322,6 +322,77 @@ class AdhocTicketTest(CheckTestCase):
         self.assertTrue(self.problems(self.check())[0].startswith('Test:'))
         self.ticket_cmd('red', '--changed', 'why')
         self.assertEqual(self.check()[0], 0)
+
+
+class PrePushTest(CheckTestCase):
+    """AC-47, AC-48: `check pre-push <unit folder or ad-hoc ticket>`. A unit keeps its `Reviewed:` and `Verified:`
+    lines in `mr.md` (written by `mr reviewed` and `mr verified`), the light path in the ad-hoc ticket itself
+    (written by `ticket reviewed` and `ticket verified`); the check passes only when both name the current head.
+    Each failed line is one stdout line that starts with its label, and the exit code is 1."""
+
+    def setUp(self):
+        super().setUp()
+        self.unit = self.repo.root / '.anomaly' / 'demo-unit'
+        write_text(self.unit / 'stories.md', '# A unit\n')
+
+    def unit_record(self, reviewed='head', verified='head'):
+        """Write the unit's mr.md lines through `mr reviewed` and `mr verified`; 'head' means the current head."""
+        head = self.repo.git('rev-parse', 'HEAD').strip()
+        for action, value in (('reviewed', reviewed), ('verified', verified)):
+            if value:
+                code, out, err = run_cli('mr', action, str(self.unit), head if value == 'head' else value,
+                                         '--repo', str(self.repo.root), '--home', str(self.home))
+                self.assertEqual((code, err), (0, ''), out)
+
+    def adhoc_record(self):
+        """An ad-hoc ticket with its own Reviewed and Verified lines on the head; returns its path."""
+        code, out, err = run_cli('ticket', 'adhoc', 'a small task', '--repo', str(self.repo.root),
+                                 '--home', str(self.home))
+        self.assertEqual((code, err), (0, ''), out)
+        path = Path(out.strip())
+        self.record(red=False, ticket=path)
+        return path
+
+    def push_check(self, target):
+        return run_cli('check', 'pre-push', str(target), '--repo', str(self.repo.root), '--home', str(self.home))
+
+    def move_head(self):
+        """Commit after the review; returns the new head."""
+        self.repo.write('src/b.py', 'code v2\n')
+        return self.repo.commit(['src/b.py'], 'feat: more code', date(2026, 10, 3))
+
+    def test_a_unit_whose_mr_md_has_reviewed_and_verified_on_the_head_passes(self):
+        self.unit_record()
+        code, out, err = self.push_check(self.unit)
+        self.assertEqual((code, err), (0, ''), out)
+
+    def test_an_adhoc_ticket_with_its_own_reviewed_and_verified_on_the_head_passes(self):
+        path = self.adhoc_record()
+        code, out, err = self.push_check(path)
+        self.assertEqual((code, err), (0, ''), out)
+
+    def test_a_missing_reviewed_or_verified_line_fails_and_names_that_line(self):
+        for missing, kept in (('Reviewed', {'reviewed': None}), ('Verified', {'verified': None})):
+            with self.subTest(missing=missing):
+                (self.unit / 'mr.md').unlink(missing_ok=True)
+                self.unit_record(**kept)
+                lines = self.problems(self.push_check(self.unit))
+                self.assertEqual([line.split(':')[0] for line in lines], [missing], lines)
+
+    def test_a_head_that_moved_after_the_review_fails_and_names_both_stale_lines(self):
+        path = self.adhoc_record()
+        self.unit_record()
+        self.move_head()
+        for name, target in (('unit', self.unit), ('light path', path)):
+            with self.subTest(layout=name):
+                lines = self.problems(self.push_check(target))
+                self.assertEqual(sorted(line.split(':')[0] for line in lines), ['Reviewed', 'Verified'], lines)
+
+    def test_a_target_that_cannot_be_checked_is_an_error_not_a_failed_line(self):
+        for name, target, fragment in (('unit without mr.md', self.unit, 'mr.md'),
+                                       ('ticket outside the ad-hoc folder', self.ticket, 'ad-hoc ticket')):
+            with self.subTest(case=name):
+                assert_cli_error(self, self.push_check(target), fragment)
 
 
 GOOD_STORIES = """# A unit
@@ -629,6 +700,39 @@ class CheckStoriesTest(unittest.TestCase):
         self.assertIn('decisions.md', out)
         assert_cli_error(self, run_cli('check', 'stories', str(self.folder / 'missing')), 'missing')
 
+    def test_the_adr_folder_port_names_the_folder_where_an_adr_owner_is_found(self):
+        """AC-10, through the CLI: a profile `adr_folder: decisions/` makes `ADR-0003` resolve to
+        `decisions/0003-*.md` and not to `docs/adr/0003-*.md`; the `adr/` of a unit folder is searched too.
+        The core default `docs/adr/` is covered by the pass and fail tests above."""
+        home = self.root / 'home'
+        home.mkdir()
+        write_text(home / 'profile.md', '---\nadr_folder: decisions/\n---\n')
+        write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
+        write_text(self.folder / 'adr' / '0005-y.md', '# 5\n')
+
+        def check(owner):
+            self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+            return run_cli('check', 'stories', str(self.folder), '--home', str(home))
+
+        code, out, err = check('ADR-0003')
+        self.assertEqual((code, err), (1, ''), out)
+        self.assertIn('must exist', out)
+        write_text(self.root / 'decisions' / '0003-z.md', '# 3\n')
+        for owner in ('ADR-0003', 'decisions/0003-z.md', 'ADR-0005'):
+            with self.subTest(owner=owner):
+                code, out, err = check(owner)
+                self.assertEqual((code, err), (0, ''), out)
+
+    def test_an_adr_folder_outside_the_repo_falls_back_to_the_core_folder(self):
+        """ADR-0017's accepted risk: an absolute, `..`, `.` or URL value names no folder of the repo, so the
+        lookup uses the core folder `docs/adr`; a relative value is normalized (no slash, no `./`)."""
+        from anomaly_loop import check
+        for value, folder in (('/abs/adr', 'docs/adr'), ('../adr', 'docs/adr'), ('.', 'docs/adr'),
+                              ('https://wiki.example/adr', 'docs/adr'), ('docs/adr/', 'docs/adr'),
+                              ('./docs/adr', 'docs/adr'), ('decisions/', 'decisions')):
+            with self.subTest(value=value):
+                self.assertEqual(check.adr_folder_path(value), folder)
+
     def test_a_specify_line_without_the_ids_shape_is_an_error_naming_the_shape(self):
         self.put(log=GOOD_LOG + '2026-10-02 10:00 specify: ACs: AC-1, AC-2 claim check passed\n')
         self.assert_error(2, 'ACs: AC-1, AC-2, …;', file_name='log.md')
@@ -661,10 +765,11 @@ class CheckStoriesTest(unittest.TestCase):
 
 
 def slice_ticket(number, covers='AC-1', blocked='none', status='ready-for-agent', jira='no-ticket',
-                 tests='unit tests', body=''):
-    """A ticket whose lines sit at fixed numbers: Covers 3, Blocked by 4, Status 5, Jira 6, Tests 7."""
+                 tests='unit tests', body='', key_line='Jira'):
+    """A ticket whose lines sit at fixed numbers: Covers 3, Blocked by 4, Status 5, key line 6, Tests 7.
+    The key line is `Jira:` unless `key_line` names another."""
     return (f'# {number}: A ticket\n\nCovers: {covers}\nBlocked by: {blocked}\nStatus: {status}\n'
-            f'Jira: {jira}\nTests: {tests}\n{body}')
+            f'{key_line}: {jira}\nTests: {tests}\n{body}')
 
 
 class CheckSliceTest(unittest.TestCase):
@@ -819,6 +924,25 @@ class CheckSliceTest(unittest.TestCase):
             with self.subTest(key=key):
                 self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', **{key.lower(): ''}))
                 self.assert_error(f'01-first.md:{line}:', f'{key}: is empty')
+
+    def test_the_key_line_is_key_in_core_or_the_line_the_key_line_port_names_and_a_jira_line_still_counts(self):
+        """AC-9, through the CLI: a `Jira:`-only set passes in the first test of this class."""
+        home = self.folder.parent / 'home'
+        home.mkdir()
+        run = lambda: run_cli('check', 'slice', str(self.folder), '--home', str(home))
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Key', jira='ABC-1'))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', key_line='Story', jira='ABC-3'))
+        code, out, err = run()
+        self.assertEqual(code, 1, out)
+        self.assertIn('no Key: line', out)
+        write_text(home / 'profile.md', '---\nkey_line: Story\n---\n')
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
+        self.put('02-second', slice_ticket('02', covers='AC-3', blocked='01', status='done', jira='ABC-2'))
+        code, out, err = run()
+        self.assertEqual((code, err), (0, ''), out)
 
     def test_ready_for_human_without_a_reason_is_an_error_quoting_the_value(self):
         self.put('03-third', slice_ticket('03', covers='none', status='ready-for-human'))
