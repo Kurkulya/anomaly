@@ -1348,6 +1348,18 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertIn('anomaly:diagnose', section)
 
 
+def named_once_about(test, text, doc):
+    """The text a skill names its doc `doc` (a Path) in: the one body line that holds the file name, with the heading
+    above it. The name must not be in the frontmatter and must stand on exactly one line."""
+    fields, body = frontmatter.split(text)
+    test.assertNotIn(doc.name, ' '.join(str(value) for value in fields.values()))
+    lines = body.splitlines()
+    named = [number for number, line in enumerate(lines) if doc.name in line]
+    test.assertEqual(len(named), 1, f'{doc.name} is named on {len(named)} lines, expected 1')
+    heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
+    return f'{heading}\n{lines[named[0]]}'
+
+
 class ShipSkillTest(unittest.TestCase):
     """Workflow-conduct ticket 11 (AC-58 to AC-61, the ship half): the ship skill's files. The rule trace against
     the brief (AC-49, AC-51, AC-54 to AC-57) is run by review, not here. The all-skills checks (250-character
@@ -1386,13 +1398,7 @@ class ShipSkillTest(unittest.TestCase):
         """AC-60, DOCS-GATE half: one line of SKILL.md names it, outside the frontmatter, and that line or
         the heading above it says "ready". The check is on the text of the line, so the skill's step layout
         stays free."""
-        fields, body = frontmatter.split(self.text())
-        self.assertNotIn(self.GATE.name, ' '.join(str(value) for value in fields.values()))
-        lines = body.splitlines()
-        named = [number for number, line in enumerate(lines) if self.GATE.name in line]
-        self.assertEqual(len(named), 1, f'{self.GATE.name} is named on {len(named)} lines, expected 1')
-        heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
-        self.assertRegex(f'{heading}\n{lines[named[0]]}', r'(?i)\bready\b')
+        self.assertRegex(named_once_about(self, self.text(), self.GATE), r'(?i)\bready\b')
 
     def test_it_holds_one_worked_mr_body_example_in_a_fence_with_no_real_name(self):
         """AC-58. The example is the one fenced block with the body's Why, What changed and Tested sections.
@@ -1446,24 +1452,12 @@ class ConductSkillTest(unittest.TestCase):
     def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
         """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
         heading above it says "chip". The check is on the text of the line, so the skill's step layout stays free."""
-        fields, body = frontmatter.split(self.text())
-        self.assertNotIn(self.KICKOFF.name, ' '.join(str(value) for value in fields.values()))
-        lines = body.splitlines()
-        named = [number for number, line in enumerate(lines) if self.KICKOFF.name in line]
-        self.assertEqual(len(named), 1, f'{self.KICKOFF.name} is named on {len(named)} lines, expected 1')
-        heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
-        self.assertRegex(f'{heading}\n{lines[named[0]]}', r'(?i)\bchip\b')
+        self.assertRegex(named_once_about(self, self.text(), self.KICKOFF), r'(?i)\bchip\b')
 
     def test_the_parallel_doc_is_named_once_and_only_in_the_parallel_pick_step(self):
         """AC-60, PARALLEL half: one line of SKILL.md names it, outside the frontmatter, and that line or the
         heading above it is about the parallel pick (the words "parallel" and "pick" or "picks")."""
-        fields, body = frontmatter.split(self.text())
-        self.assertNotIn(self.PARALLEL.name, ' '.join(str(value) for value in fields.values()))
-        lines = body.splitlines()
-        named = [number for number, line in enumerate(lines) if self.PARALLEL.name in line]
-        self.assertEqual(len(named), 1, f'{self.PARALLEL.name} is named on {len(named)} lines, expected 1')
-        heading = next((line for line in reversed(lines[:named[0]]) if line.startswith('#')), '')
-        about = f'{heading}\n{lines[named[0]]}'
+        about = named_once_about(self, self.text(), self.PARALLEL)
         self.assertRegex(about, r'(?i)\bparallel\b')
         self.assertRegex(about, r'(?i)\bpicks?\b')
 

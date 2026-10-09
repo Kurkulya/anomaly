@@ -44,6 +44,7 @@ INNER_WORD = 'quokkarefactor'   # only in the subject of a commit inside a merge
 HEX_ID = re.compile(r'\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b')
 ATTRIBUTION = ('co-authored-by', 'generated with')
 TRAILER = 'Co-Authored-By: Helper <helper@example.invalid>'
+PRIVACY_PROBLEMS = ('write to jane.doe@example.com', 'see https://example.com/report?id=5')   # an email, a URL with a query
 
 
 def sections(body):
@@ -232,6 +233,46 @@ class BodyTest(UnitCase):
         """AC-33."""
         _, body = self.body_of(self.unit(), '--docs-gate', 'no stale doc found')
         self.assertIn('no stale doc found', ' '.join(sections(body)['tested']))
+
+    def assert_refused_for_privacy(self, folder, section):
+        code, out, err = self.run_body(folder)
+        self.assertEqual(code, 2, (out, err))
+        self.assertTrue(err.startswith('anomaly: '), err)
+        self.assertIn(section, err.lower())
+        self.assertFalse((folder / 'mr-body.md').exists())
+
+    def test_an_open_text_with_a_privacy_problem_is_refused_naming_the_section_and_writes_no_file(self):
+        """AC-37 (Amended, cumulative review): facts that go to the MR are checked as `privacy` checks free text; an
+        email address or a URL with a query string in an `Open:` text gives exit 2 and no body."""
+        folder = self.unit()
+        ticket = folder / 'tickets' / '01-alpha.md'
+        original = ticket.read_text(encoding='utf-8')
+        for problem in PRIVACY_PROBLEMS:
+            with self.subTest(problem=problem):
+                write_text(ticket, original.replace(OPEN_ITEM, f'{OPEN_ITEM}, {problem}'))
+                self.assert_refused_for_privacy(folder, 'open')
+
+    def test_a_why_line_with_a_privacy_problem_is_refused_naming_the_section_and_writes_no_file(self):
+        """AC-37 (Amended, cumulative review): the same check for the Why line of the AC file."""
+        folder = self.unit()
+        stories = folder / 'stories.md'
+        original = stories.read_text(encoding='utf-8')
+        for problem in PRIVACY_PROBLEMS:
+            with self.subTest(problem=problem):
+                write_text(stories, original.replace(WHY, f'{WHY}, {problem}'))
+                self.assert_refused_for_privacy(folder, 'why')
+
+    def test_a_title_with_a_privacy_problem_is_refused_naming_the_title_and_writes_no_file(self):
+        """AC-37 (Amended, cumulative review): the `Title:` line goes to the host too; its summary is the first heading
+        of the AC file."""
+        folder = self.unit()
+        stories = folder / 'stories.md'
+        original = stories.read_text(encoding='utf-8')
+        for problem in PRIVACY_PROBLEMS:
+            with self.subTest(problem=problem):
+                write_text(stories, original.replace('# Make the widget list reliable and show it to every reader',
+                                                     f'# {problem}'))
+                self.assert_refused_for_privacy(folder, 'title')
 
     def test_a_decision_line_with_a_number_before_the_prefix_is_a_breaking_line(self):
         """AC-33 and formats.md: a prefix may follow the D-n id; the fact is the decision, not its Why or Source."""
@@ -433,6 +474,7 @@ class FakeGh:
 
     def __init__(self):
         self.records, self.environs, self.failure = [], [], None
+        self.source = None   # the source branch of the MR a view answers (`headRefName`); PutSetup sets the current branch
 
     def run(self, *args, environ=None, **kwargs):
         self.records.append(record(args, kwargs))
@@ -441,7 +483,8 @@ class FakeGh:
             return finished('gh', args, code=1, stderr=self.failure)
         kind = self.records[-1].kind
         stdout = {'create': LINKS['gh'] + '\n', 'update': LINKS['gh'] + '\n', 'ready': '',
-                  'show': json.dumps({'url': LINKS['gh'], 'number': 7, 'state': 'OPEN', 'isDraft': True})}[kind]
+                  'show': json.dumps({'url': LINKS['gh'], 'number': 7, 'state': 'OPEN', 'isDraft': True,
+                                      'headRefName': self.source})}[kind]
         return finished('gh', args, stdout)
 
 
@@ -452,6 +495,7 @@ class FakeMrGlab(FakeGlab):
     def __init__(self):
         super().__init__()
         self.records, self.failure = [], None
+        self.source = None   # the source branch of the MR a view answers (`source_branch`); PutSetup sets the current branch
         self.ready_answer = json.dumps({'data': {'mergeRequestSetDraft': {'errors': []}}})   # the GraphQL answer
 
     def run(self, *args, environ=None, **kwargs):
@@ -465,7 +509,7 @@ class FakeMrGlab(FakeGlab):
             return finished('glab', args, self.ready_answer)
         if args[:1] == ('api',) or kind == 'show':
             return finished('glab', args, json.dumps({'web_url': LINKS['glab'], 'iid': 7, 'state': 'opened',
-                                                      'draft': True}))
+                                                      'draft': True, 'source_branch': self.source}))
         return finished('glab', args, LINKS['glab'] + '\n' if kind in ('create', 'update') else '')
 
 
@@ -485,6 +529,7 @@ class PutSetup:
             patcher = mock.patch(target, replacement)
             patcher.start()
             self.addCleanup(patcher.stop)
+        self.gh.source = self.glab.source = self.repo.git('branch', '--show-current').strip()
         if self.ADAPTER:
             self.use(self.ADAPTER)
 
@@ -610,8 +655,57 @@ class PutTests:
         self.assertFalse((folder / 'mr.md').exists())
 
 
+    def test_put_refuses_a_body_file_with_a_privacy_problem_and_calls_nothing(self):
+        """AC-37 (Amended, cumulative review): a body file edited by hand is checked again before it leaves the machine."""
+        for problem in PRIVACY_PROBLEMS:
+            with self.subTest(problem=problem):
+                folder = self.unit()
+                write_text(folder / 'mr-body.md', f'{MR_BODY_FILE}\n{problem}\n')
+                code, out, err = self.run_mr('put', folder)
+                self.assertEqual(code, 2, (out, err))
+                self.assertTrue(err.startswith('anomaly: '), err)
+                self.assert_no_tool_call()
+                self.assertFalse((folder / 'mr.md').exists())
+        with self.subTest('the Title: line'):
+            folder = self.unit()
+            write_text(folder / 'mr-body.md', f'Title: feat(no-ticket): {PRIVACY_PROBLEMS[0]}\n\n## Why\n\n{MR_BODY_LINE}\n')
+            code, out, err = self.run_mr('put', folder)
+            self.assertEqual(code, 2, (out, err))
+            self.assertIn('title', err.lower())
+            self.assert_no_tool_call()
+            self.assertFalse((folder / 'mr.md').exists())
+
+    def test_put_and_ready_refuse_an_mr_link_of_another_project_and_change_nothing(self):
+        """AC-42 and AC-43 (Amended, cumulative review): the `MR:` link names another project than the origin."""
+        other = self.link.replace(PROJECT_PATH, 'other-owner/other-repo')
+        folder = self.unit(link=other)
+        for action in ('put', 'ready'):
+            with self.subTest(action=action):
+                code, out, err = self.run_mr(action, folder)
+                self.assertEqual(code, 2, (out, err))
+                self.assertEqual([call for call in self.fake.records if call.kind != 'show'], [])
+
+    def test_put_and_ready_refuse_an_mr_whose_source_branch_is_not_the_current_branch_and_change_nothing(self):
+        """AC-42 and AC-43 (Amended, cumulative review): the view of the MR answers another source branch."""
+        self.fake.source = 'feat/another-branch'
+        folder = self.unit(link=self.link)
+        for action in ('put', 'ready'):
+            with self.subTest(action=action):
+                code, out, err = self.run_mr(action, folder)
+                self.assertEqual(code, 2, (out, err))
+                self.assertEqual([call for call in self.fake.records if call.kind != 'show'], [])
+
+
 class GhPutTest(PutTests, PutSetup, MrCase):
     ADAPTER = 'gh'
+
+    def test_an_origin_project_of_three_parts_is_refused_and_nothing_is_called(self):
+        """AC-42 (Amended, cumulative review): the gh adapter works with `owner/name` only; a group path is a gitlab shape."""
+        self.point_origin('git@github.com:a/b/c.git')
+        folder = self.unit()
+        assert_cli_error(self, self.run_mr('put', folder))
+        self.assert_no_tool_call()
+        self.assertFalse((folder / 'mr.md').exists())
 
 
 class GlabPutTest(PutTests, PutSetup, MrCase):

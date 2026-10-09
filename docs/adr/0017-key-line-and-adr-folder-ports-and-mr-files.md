@@ -17,7 +17,7 @@ ADR-0011 lists the files of a work unit: `stories.md`, `decisions.md`, `tickets/
 - `constants.PORTS` gains `key_line` (profile key `key_line`, core default `Key`) and `adr_folder` (profile key `adr_folder`, core default `docs/adr/`). `ports` prints both.
 - The ticket parser, `ticket show` and `check slice` read the key from the `key_line` line; a ticket with only `Jira:` is read the same way until the switch-over, like the two layouts of ADR-0011.
 - `check stories` resolves `ADR-NNNN` and the ADR number search in the `adr_folder` folder and in the `adr/` of every unit folder.
-- A work unit folder may hold `research/NN-slug.md`, `mr-body.md` and `mr.md`. `mr-body.md` is written only by `mr body`; `mr.md` only by `mr put`, `mr reviewed` and `mr verified`.
+- A work unit folder may hold `research/NN-slug.md`, `mr-body.md` and `mr.md`. `mr-body.md` is written only by `mr body`; `mr.md` only by `mr put`, `mr reviewed` and `mr verified`. An ad-hoc ticket keeps its MR files as siblings in `.anomaly/adhoc/`: `<stem>.mr-body.md` and `<stem>.mr.md`, where `<stem>` is the ticket file name without `.md`.
 - `check pre-push` passes a unit only when `Reviewed:` and `Verified:` in `mr.md` name the current head; for a light-path ticket it reads the ticket's own lines.
 - Partly supersedes ADR-0011 (the work unit's file list).
 
@@ -44,3 +44,7 @@ When a tracker needs more than a line name, when an org keeps its ADRs outside t
 ## Sources
 
 ADR-0001, ADR-0007, ADR-0011; main at 914b3b8 (`plugins/anomaly/anomaly_loop/constants.py` `PORTS`, `ticket.py` `HEADER_KEYS`, `check.py` `ADR_GLOBS`, `docs/formats.md` § Ticket).
+
+## Consequences
+
+- The merged-ticket rule that ADR-0014 names as `worklog.run_report` now lives in `worklog.read_report`, which `conduct status` shares with `worklog report`.

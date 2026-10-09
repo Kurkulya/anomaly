@@ -14,6 +14,7 @@ from . import glab
 
 HOST = 'github.com'                  # the only origin host this adapter works with
 LINK = re.compile(r'https?://\S+')
+PROJECT = re.compile(r'[^/\s]+/[^/\s]+')   # a GitHub project is `owner/name`; a longer path is a GitLab group shape
 
 
 class GhError(Exception):
@@ -44,8 +45,15 @@ def call(*args, environ=None, input=None):
     return done.stdout
 
 
+def check_project(project):
+    """Refuse a project that is not exactly `owner/name`, before any call."""
+    if not PROJECT.fullmatch(project):
+        raise GhError(f'the origin project "{project}" is not owner/name, the only shape the gh adapter works with')
+
+
 def create_mr(project, title, body, source, target, environ=None):
     """Open a draft pull request in `project` from branch `source` to `target`; returns its link."""
+    check_project(project)
     out = call('pr', 'create', '--repo', project, '--draft', '--title', title, '--head', source, '--base', target,
                '--body-file', '-', environ=environ, input=body)
     links = LINK.findall(out)
@@ -56,19 +64,22 @@ def create_mr(project, title, body, source, target, environ=None):
 
 def update_mr(project, number, body, environ=None):
     """Replace the body of pull request `number`."""
+    check_project(project)
     call('pr', 'edit', str(number), '--repo', project, '--body-file', '-', environ=environ, input=body)
 
 
 def ready_mr(project, number, environ=None):
     """Mark pull request `number` ready for review."""
+    check_project(project)
     call('pr', 'ready', str(number), '--repo', project, environ=environ)
 
 
 def view_mr(project, number, environ=None):
-    """(link, state, is_draft) of pull request `number`; the state is `open`, `closed` or `merged`."""
-    out = call('pr', 'view', str(number), '--repo', project, '--json', 'url,state,isDraft', environ=environ)
+    """(link, state, is_draft, source branch) of pull request `number`; the state is `open`, `closed` or `merged`."""
+    check_project(project)
+    out = call('pr', 'view', str(number), '--repo', project, '--json', 'url,state,isDraft,headRefName', environ=environ)
     try:
         answer = json.loads(out)
-        return answer['url'], answer['state'].lower(), bool(answer['isDraft'])
+        return answer['url'], answer['state'].lower(), bool(answer['isDraft']), answer['headRefName']
     except (ValueError, KeyError, TypeError, AttributeError):
         raise GhError(f'gh answered pull request {number} in an unknown shape') from None

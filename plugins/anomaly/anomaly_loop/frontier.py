@@ -5,19 +5,24 @@
 Reads every ticket of the unit (`tickets/` in either layout, `issues/` in an old `.scratch` unit) and prints,
 one line each, in ticket order:
 
-  <ticket>: <status>                 a startable ticket: not done, not in progress, every blocker done
+  <ticket>: <status>                 a startable ticket: `ready-for-agent`, every blocker done
   <ticket>: in progress              a ticket that is in progress; it is neither startable nor blocked
+  <ticket>: <status>, waits for a person   a ticket that is `ready-for-human`, `needs-info` or `wontfix`, whatever
+                                     its blockers are; any other status (a typo, no `Status:` line) is the line
+                                     `<ticket>: status <x> is not ready-for-agent`; both are ticket.waits: they are
+                                     neither startable nor blocked
   <ticket>: blocked by <NN> (<status>), ...   only when no ticket is startable: each open ticket that waits
 
 Exit 0 when a ticket is startable, or a ticket is in progress (the unit is not stuck; the blocked lines are
-printed when nothing is startable), or every ticket is done (one `finished` line). Exit 1 when no ticket is
-startable, none is in progress and one waits for a blocker. Exit 2 (one `anomaly:` line naming each ticket)
+printed when nothing is startable), or every ticket left waits (for a person, or on a status that is not ready-for-agent), or every ticket is done (one
+`finished` line). Exit 1 when no ticket is startable, none is in progress and one is blocked by a ticket that is
+not done. Exit 2 (one `anomaly:` line naming each ticket)
 when a ticket that is not done has no `Blocked by:` line or names a blocker with no ticket file. A `warning:`
 line follows for each AC of the unit's AC file (`spec.md` when the unit has one, else `stories.md`) that no
 ticket's `Covers:` names.
 
-The rule "every blocker is done" is `ticket.unfinished_blockers` and `ticket.is_blocked`, the one `ticket gate`
-uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; the ticket folders are
+The rule "every blocker is done" is `ticket.unfinished_blockers` and `ticket.is_blocked`, and the rule "waits" is
+`ticket.waits`, the ones `ticket gate` uses; the uncovered ACs are `check.uncovered_acs`, the one `check slice` uses; the ticket folders are
 `check.TICKET_FOLDERS`.
 """
 from pathlib import Path
@@ -28,7 +33,7 @@ from .constants import KEY_LINE_CORE, TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGR
 from .files import RecordError
 
 AC_FILES = ('spec.md', 'stories.md')   # the files that hold the ACs, the first one that exists is read (ADR-0011)
-START, RUNNING, BLOCKED = 'start', 'running', 'blocked'
+START, RUNNING, BLOCKED, WAITING = 'start', 'running', 'blocked', 'waiting'
 
 
 def unit_home(folder):
@@ -63,7 +68,7 @@ def blocked_text(parsed, unfinished):
 
 
 class Entry(NamedTuple):
-    kind: str   # START, RUNNING or BLOCKED
+    kind: str   # START, RUNNING, BLOCKED or WAITING
     line: str   # the line `frontier` prints for the ticket
     path: Path  # the ticket file
 
@@ -84,6 +89,8 @@ def classify(tickets_dir, tickets):
             errors.append(f'{path.name}: no ticket file for blocker {", ".join(missing)}')
         elif parsed.status == TICKET_STATUS_IN_PROGRESS:
             entries.append(Entry(RUNNING, f'{path.stem}: in progress', path))
+        elif ticket.waits(parsed):
+            entries.append(Entry(WAITING, f'{path.stem}: {ticket.wait_text(parsed)}', path))
         elif ticket.is_blocked(parsed, unfinished):
             entries.append(Entry(BLOCKED, f'{path.stem}: {blocked_text(parsed, unfinished)}', path))
         else:
@@ -91,14 +98,19 @@ def classify(tickets_dir, tickets):
     return entries, errors
 
 
+def ac_file(folder):
+    """The AC file of the unit folder: `spec.md` when the unit has one, else `stories.md` (ADR-0011); None when it
+    has neither. The one pick `frontier` and `mr body` use."""
+    return next((folder / name for name in AC_FILES if (folder / name).is_file()), None)
+
+
 def ac_warnings(folder, tickets):
-    """One warning line per AC of the unit's AC file that no ticket's `Covers:` names. The file is `spec.md` when
-    the unit has one, else `stories.md` (ADR-0011)."""
-    name = next((name for name in AC_FILES if (folder / name).is_file()), None)
-    if name is None:
+    """One warning line per AC of the unit's AC file that no ticket's `Covers:` names."""
+    path = ac_file(folder)
+    if path is None:
         return [f'warning: the unit has no {" or ".join(AC_FILES)}; the ACs are not checked']
-    text = files.read_input(folder / name)
-    return [f'warning: {name}:{number}: {ac} is in no ticket\'s Covers: line'
+    text = files.read_input(path)
+    return [f'warning: {path.name}:{number}: {ac} is in no ticket\'s Covers: line'
             for ac, number in check.uncovered_acs(text, (parsed for _, parsed in tickets))]
 
 
@@ -124,11 +136,11 @@ def look(folder):
     tickets, entries = read(folder)
     kinds = {entry.kind for entry in entries}
     if START in kinds:
-        shown, code = (START, RUNNING), 0
+        shown, code = (START, RUNNING, WAITING), 0
     elif BLOCKED in kinds:
-        shown, code = (RUNNING, BLOCKED), 0 if RUNNING in kinds else 1
+        shown, code = (RUNNING, BLOCKED, WAITING), 0 if RUNNING in kinds else 1
     else:
-        shown, code = (RUNNING,), 0
+        shown, code = (RUNNING, WAITING), 0
     lines = [entry.line for entry in entries if entry.kind in shown]
     if not entries:
         lines = [f'{folder.resolve().name}: finished, every ticket is done']

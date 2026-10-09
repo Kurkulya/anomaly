@@ -81,12 +81,12 @@ class EnvironmentTest(PutSetup, MrCase):
     def test_the_environment_of_the_command_reaches_every_adapter_call(self):
         marker = {'ANOMALY_TEST_MARKER': '1'}
         folder = self.unit()
-        for action in ('put', 'put', 'show', 'ready'):   # create, update, view, ready
+        for action in ('put', 'put', 'show', 'ready'):   # create; view, update; view; view, ready
             code, out, err = run_cli('mr', action, str(folder), '--repo', str(self.repo.root), '--home', str(self.home),
                                      environ=marker)
             self.assertEqual(code, 0, (action, out, err))
-        self.assertEqual([call.kind for call in self.gh.records], ['create', 'update', 'show', 'ready'])
-        self.assertEqual(self.gh.environs, [marker] * 4)
+        self.assertEqual([call.kind for call in self.gh.records], ['create', 'show', 'update', 'show', 'show', 'ready'])
+        self.assertEqual(self.gh.environs, [marker] * 6)
 
 
 class GlabReadyAnswerTest(PutSetup, MrCase):

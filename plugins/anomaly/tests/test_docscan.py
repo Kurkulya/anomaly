@@ -125,6 +125,20 @@ class ScanFindingsTest(DocsScanTestCase):
             self.assertEqual(result[1].splitlines()[-1], 'docs scan: 1 finding, 0 in files the range changes')
 
 
+    def test_the_output_has_one_line_naming_the_resolved_adr_folder(self):
+        """AC-50 (Amended, cumulative review): a port value that names no folder of the repo (a URL, `..`) is read as
+        `docs/adr`, and the one line says so, so a wrong value is not silent. The repo has no finding."""
+        base = self.commit({'README.md': '# Demo\n'}, 'docs: plant', 1)
+        head = self.commit({'README.md': '# Demo\nChanged.\n'}, 'docs: readme', 2)
+        for value, resolved in (('docs/adr/', 'docs/adr'), ('decisions/', 'decisions'),
+                                ('https://wiki.example.invalid/adr', 'docs/adr'), ('..', 'docs/adr')):
+            with self.subTest(adr_folder=value):
+                write_text(self.home / 'profile.md', f'---\nadr_folder: {value}\n---\n')
+                code, out, err = self.scan(f'{base}..{head}')
+                self.assertEqual((code, err), (0, ''), out)
+                self.assertEqual(len([line for line in out.splitlines() if resolved in line]), 1, out)
+
+
 class ScanTouchedFilesTest(DocsScanTestCase):
     """AC-50: the findings in files the range touches are marked, and the exit code is 1 on any of them."""
 
@@ -301,6 +315,12 @@ class PathLivenessTest(unittest.TestCase):
         """`.anomaly/` and `.scratch/` hold local work units: a clone has neither, and does not ignore them."""
         self.assertEqual(self.dead('CLAUDE.md', 'Units: `.anomaly/`, `.scratch/x.md`, `.anomaly/u/tickets/`, `.other/`.'),
                          ['.other/ does not exist'])
+
+    def test_a_claim_outside_the_repository_is_not_checked(self):
+        """A path that climbs out of the repo cannot be checked against it, so it is no finding; a dead claim in
+        the same line still is."""
+        self.assertEqual(self.dead('CLAUDE.md', 'See `../../outside.md`, [up](../up.md) and `gone/missing.py`.'),
+                         ['gone/missing.py does not exist'])
 
     def test_a_path_that_git_ignores_is_live_whether_or_not_it_is_on_disk(self):
         """An ignored folder that is not a unit home is in one checkout only: a clone must not report it. Without the

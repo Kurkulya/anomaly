@@ -21,7 +21,8 @@ An ad-hoc ticket body has Why (the ticket's `What to build:`) and What changed (
 current branch that are not on the repo base).
 
 A body holds no commit id, no table row and no attribution line (`plain`). A body over 2.5 KB prints one
-`warning:` line and is still written. The file path is printed.
+`warning:` line and is still written. The file path is printed. The title or a body line with a privacy
+problem (`privacy.privacy_problems`) is an error that names its section (`check_privacy`); no file is written.
 
   mr put <work unit folder | ad-hoc ticket> [--repo <dir>]
   mr ready <work unit folder | ad-hoc ticket> [--repo <dir>]
@@ -31,8 +32,9 @@ A body holds no commit id, no table row and no attribution line (`plain`). A bod
 
 `put` reads the title from the first `Title:` line of the body file and the body from the lines after the blank line,
 and opens a draft MR from the current branch to the base branch, or, when the MR file already has an `MR:` line,
-replaces the body of that MR (the title stays). `ready` takes the draft state off and `show` prints the link and the
-state. The tool is the adapter the `mr` port names (constants.MR_ADAPTERS; an unknown value is an error naming
+replaces the body of that MR (the title stays). `put` runs `check_privacy` on the title and body of the file first. Before it replaces a
+body, and before `ready` acts, the MR is viewed and must have the link of the `MR:` line and the current branch as its
+source (`check_same_mr`). `ready` takes the draft state off and `show` prints the link and the state. The tool is the adapter the `mr` port names (constants.MR_ADAPTERS; an unknown value is an error naming
 them), run for the project of the `origin` remote, which must be on the host of the adapter (`gh`: github.com,
 `glab`: gitlab.com; any other host is an error, never guessed). With the port on its core default, or a repository
 with no `origin`, `put` only prints the title and body and nothing leaves the machine; `ready` and `show` are
@@ -173,10 +175,10 @@ def unit_parts(folder, resolution, key_line, docs_gate):
     tickets = frontier.load_tickets(frontier.tickets_folder(folder), key_line)
     if not tickets:
         raise RecordError(f'{folder}: no ticket files NN-*.md')
-    ac_file = next((name for name in frontier.AC_FILES if (folder / name).is_file()), None)
-    if ac_file is None:
+    ac_path = frontier.ac_file(folder)
+    if ac_path is None:
         raise RecordError(f'{folder}: no {" or ".join(frontier.AC_FILES)}')
-    text = files.read_input(folder / ac_file)
+    text = files.read_input(ac_path)
     merged = [(path, parsed) for path, parsed in tickets if parsed.status == TICKET_STATUS_DONE]
     ids, _ = check.ac_ids(text)
     missing = [ac for ac, _ in check.uncovered_acs(text, (parsed for _, parsed in merged))]
@@ -227,13 +229,29 @@ def adhoc_parts(path, repo, resolution, key_line):
 
 
 def render(title, why, sections, draft):
-    """The file text: the Title line, a blank line, then the body."""
+    """(file text, body): the file is the Title line, a blank line, then the body."""
     if draft:
         body = '\n'.join(([why] if why else []) + [WIP_LINE])
     else:
         blocks = ([('Why', [why])] if why else []) + sections
         body = '\n\n'.join('\n'.join([f'## {name}', '', *lines]) for name, lines in blocks if lines)
-    return f'Title: {title}\n\n{body}\n', len(body.encode('utf-8'))
+    return f'Title: {title}\n\n{body}\n', body
+
+
+def check_privacy(label, title, body):
+    """Refuse the title or a body line that `privacy.privacy_problems` names (ADR-0003), naming the section it is in
+    (`title`, or the last `## ` heading before the line; a draft body has none). It is the one check `mr body` runs
+    before it writes the file and `mr put` runs on the file before it sends it, which may have been edited by hand."""
+    section = 'title'
+    for line in [title, *body.splitlines()]:
+        if line.startswith('## '):
+            section = line[3:].strip()
+        problems = privacy.privacy_problems(line)
+        if problems:
+            raise RecordError(f'{label}: the {section} section holds {" and ".join(problems)}; '
+                              'describe it in your own words')
+        if section == 'title':
+            section = 'body'   # the lines after the title, until a heading
 
 
 class Target(NamedTuple):
@@ -276,7 +294,9 @@ def run_body(args, environ):
             raise RecordError('--docs-gate is for a work unit: the light-path body has no Tested section')
         repo = gitrepo.repo_for(args.repo)
         parts = adhoc_parts(target, repo, ports.resolve(home, repo), key_line)
-    text, size = render(*parts, args.draft)
+    text, body = render(*parts, args.draft)
+    check_privacy('mr body', parts[0], body)
+    size = len(body.encode('utf-8'))
     files.write_text(found.body, text)
     print(found.body)
     if size > BODY_WARN_BYTES:
@@ -356,6 +376,20 @@ def print_only(title, body, reason):
     print(f'note: nothing was sent: {reason}', file=sys.stderr)
 
 
+def check_same_mr(tool, project, number, link, repo, environ):
+    """Refuse (before a change) an MR line that is not this repository's MR of the current branch: the MR the
+    origin project answers for `number` must have the link of the MR line, and its source branch must be the
+    current branch. A link of another project, or a stale or hand-written one, never changes another MR."""
+    shown, _, _, source = call(tool.view_mr, project, number, environ=environ)
+    if shown.rstrip('/').lower() != link.rstrip('/').lower():
+        raise RecordError(f'the MR line names {link}, but merge request {number} of the origin project is {shown}; '
+                          'it is not an MR of this repository')
+    branch = current_branch(repo)
+    if source != branch:
+        raise RecordError(f'the MR {link} has the source branch "{source}", but the current branch is '
+                          f'"{branch or "(detached head)"}"; check out the branch of the MR')
+
+
 def run_put(args, environ):
     home = paths.resolve_home(args.home, environ)
     found = locate(args.target)
@@ -363,6 +397,7 @@ def run_put(args, environ):
     resolution = ports.resolve(home, repo)
     name = adapter_name(resolution)
     title, body = read_title_and_body(found.body, args.target)
+    check_privacy('mr put', title, body)
     if name is None:
         print_only(title, body, 'the mr port is on its core default')
         return 0
@@ -373,7 +408,9 @@ def run_put(args, environ):
     tool = ADAPTERS[name]
     state = read_state(found.state)
     if MR_LABEL in state:
-        call(tool.update_mr, project, mr_number(state[MR_LABEL], found.state), body, environ=environ)
+        number = mr_number(state[MR_LABEL], found.state)
+        check_same_mr(tool, project, number, state[MR_LABEL], repo, environ)
+        call(tool.update_mr, project, number, body, environ=environ)
     else:
         branch = current_branch(repo)
         if not branch:
@@ -386,7 +423,7 @@ def run_put(args, environ):
 
 
 def existing_mr(args, environ):
-    """(adapter module, project, number, link) of the MR in the MR file, for `ready` and `show`."""
+    """(adapter module, project, number, link, repo) of the MR in the MR file, for `ready` and `show`."""
     home = paths.resolve_home(args.home, environ)
     found = locate(args.target)
     repo = gitrepo.repo_for(args.repo)
@@ -399,19 +436,20 @@ def existing_mr(args, environ):
     project = project_of(repo, name)
     if project is None:
         raise RecordError('the repository has no origin remote: there is no MR to call')
-    return ADAPTERS[name], project, mr_number(link, found.state), link
+    return ADAPTERS[name], project, mr_number(link, found.state), link, repo
 
 
 def run_ready(args, environ):
-    tool, project, number, link = existing_mr(args, environ)
+    tool, project, number, link, repo = existing_mr(args, environ)
+    check_same_mr(tool, project, number, link, repo, environ)
     call(tool.ready_mr, project, number, environ=environ)
     print(f'{link}\nstate: ready for review')
     return 0
 
 
 def run_show(args, environ):
-    tool, project, number, _ = existing_mr(args, environ)
-    link, state, draft = call(tool.view_mr, project, number, environ=environ)
+    tool, project, number, *_ = existing_mr(args, environ)
+    link, state, draft, _ = call(tool.view_mr, project, number, environ=environ)
     print(f'{link}\nstate: {state}{", draft" if draft else ""}')
     return 0
 

@@ -38,8 +38,9 @@ class GhTest(unittest.TestCase):
                 gh.update_mr('owner/repo', 7, 'body')
 
     def test_view_reads_the_link_state_and_draft_flag_and_refuses_another_shape(self):
-        with mock.patch('subprocess.run', return_value=done('{"url": "%s", "state": "OPEN", "isDraft": true}' % LINK)):
-            self.assertEqual(gh.view_mr('owner/repo', 7), (LINK, 'open', True))
+        answer = '{"url": "%s", "state": "OPEN", "isDraft": true, "headRefName": "feat/x"}' % LINK
+        with mock.patch('subprocess.run', return_value=done(answer)):
+            self.assertEqual(gh.view_mr('owner/repo', 7), (LINK, 'open', True, 'feat/x'))
         with mock.patch('subprocess.run', return_value=done('[1]')):
             with self.assertRaisesRegex(gh.GhError, 'unknown shape'):
                 gh.view_mr('owner/repo', 7)
