@@ -32,6 +32,14 @@ def waits_for_person(line):
 
 
 WAITS_FOR_PERSON = ('ready-for-human', 'needs-info', 'wontfix')   # the statuses that only a person moves on
+TYPO_STATUS = 'ready-for-agnet'
+NOT_STARTABLE_STATUSES = (TYPO_STATUS, 'unknown')   # not a triage word: a typo, or no readable Status: line
+
+
+def names_a_status_that_does_not_start(line):
+    """The line of a ticket whose status is not ready-for-agent and is no triage word: it names the status and
+    says it is not ready-for-agent."""
+    return 'is not ready-for-agent' in line
 
 
 class FrontierTest(unittest.TestCase):
@@ -89,6 +97,7 @@ class FrontierTest(unittest.TestCase):
             '03-charlie': slice_ticket('03', blocked='01', status='needs-info'),
             '04-delta': slice_ticket('04', blocked='01', status='wontfix'),
             '05-echo': slice_ticket('05', blocked='01', status='ready-for-agent'),
+            '06-foxtrot': slice_ticket('06', blocked='01', status=TYPO_STATUS),
         }
         for layout in LAYOUTS:
             with self.subTest(layout=layout.root):
@@ -101,6 +110,11 @@ class FrontierTest(unittest.TestCase):
                 startable = self.lines_naming(output, 'echo')
                 self.assertEqual(len(startable), 1, output)
                 self.assertFalse(waits_for_person(startable[0]), startable)
+                self.assertFalse(names_a_status_that_does_not_start(startable[0]), startable)
+                with self.subTest('a status that is not ready-for-agent and not a triage word'):
+                    lines = self.lines_naming(output, 'foxtrot')
+                    self.assertEqual(len(lines), 1, output)
+                    self.assertTrue(names_a_status_that_does_not_start(lines[0]), lines)
 
     def test_with_only_tickets_that_wait_for_a_person_left_nothing_is_startable_and_it_exits_0(self):
         """AC-1 (Amended, cumulative review): every other ticket is done; the one left waits for a person, so it is
@@ -116,6 +130,21 @@ class FrontierTest(unittest.TestCase):
                     self.assertEqual(len(lines), 1, output)
                     self.assertTrue(waits_for_person(lines[0]), lines)
                     self.assertEqual(self.lines_naming(output, 'alpha'), [], output)
+
+    def test_a_status_that_is_not_ready_for_agent_is_never_startable_and_the_line_names_it(self):
+        """AC-1 (Amended, allow list): a typo or a missing Status: line is not ready-for-agent, so the ticket waits;
+        with nothing else open it is named with its status and the unit is not stuck (exit 0)."""
+        for status in NOT_STARTABLE_STATUSES:
+            for layout in LAYOUTS:
+                with self.subTest(status=status, layout=layout.root):
+                    tickets = {'01-alpha': slice_ticket('01', status='done'),
+                               '02-bravo': slice_ticket('02', blocked='01', status=status)}
+                    code, output = self.frontier(self.unit(layout, tickets))
+                    self.assertEqual(code, 0, output)
+                    lines = self.lines_naming(output, 'bravo')
+                    self.assertEqual(len(lines), 1, output)
+                    self.assertTrue(names_a_status_that_does_not_start(lines[0]), lines)
+                    self.assertIn(status, lines[0])
 
     def test_blocked_by_none_in_lower_case_is_no_blocker(self):
         """Notes of the ticket: `Blocked by: none` means no blocker (the `None` case is in the first test)."""
