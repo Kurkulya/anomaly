@@ -9,16 +9,18 @@ folder is refused. Facts come only from the ticket files, the AC file (`spec.md`
 `stories.md`, ADR-0011), `decisions.md` and, for an ad-hoc ticket, the commit subjects of its branch; never the diff.
 
 The title: the type is `feat` (an ad-hoc ticket: the type before the first `/` of the branch name, when it is an
-Angular type); the key is the first ticket key of the unit (else `no-ticket`); the summary is the first heading of
-the AC file, or the title of the ad-hoc ticket, cut at a word so the title is under 70 characters.
+Angular type); the key of a unit is the key every keyed ticket shares, the unit folder name when the keyed tickets
+have different keys, and `no-ticket` when no ticket has a key (a key equal to `no-ticket` counts as no key); the
+summary is the first heading of the AC file, or the title of the ad-hoc ticket, cut at a word so the title is under 70
+characters.
 
-A work unit body has these sections, each left out when it has no facts: Why (the `Why:` line of the AC file),
-What changed (the title of each ticket that is `done`), Acceptance criteria (`n of m covered` by those tickets,
-with the missing ids), Still open (their `Open:` items), Breaking changes (the `- Breaking:` and
+A work unit body has these sections, each left out when it has no facts: Why (the `Why:` line of the AC file, its
+first letter a capital), What changed (the title of each ticket that is `done`), Acceptance criteria (`n of m covered`
+by those tickets, with the missing ids), Still open (their `Open:` items), Breaking changes (the `- Breaking:` and
 `- D-n: Breaking:` lines of decisions.md), Tested, How to review. With `--draft` the body is two lines: the Why,
 then `Work in progress` (one line when there is no Why).
-An ad-hoc ticket body has Why (the ticket's `What to build:`) and What changed (the subjects of the commits on the
-current branch that are not on the repo base).
+An ad-hoc ticket body has Why (the ticket's `What to build:`, its first letter a capital too) and What changed (the
+subjects of the commits on the current branch that are not on the repo base).
 
 A body holds no commit id, no table row and no attribution line (`plain`). A body over 2.5 KB prints one
 `warning:` line and is still written. The file path is printed. The title or a body line with a privacy
@@ -196,7 +198,8 @@ def unit_parts(folder, resolution, key_line, docs_gate):
         ('How to review', [f'Review the merge commits one at a time, in order: {", ".join(p.stem for p, _ in merged)}.']
          if merged else []),
     ]
-    key = next((parsed.key for _, parsed in tickets if parsed.key), NO_KEY)
+    keys = {parsed.key for _, parsed in tickets if parsed.key and parsed.key != NO_KEY}
+    key = (next(iter(keys)) if len(keys) == 1 else folder.resolve().name) if keys else NO_KEY
     summary = ticket.draft_title(ticket.split_lines(text)) or folder.resolve().name
     why = plain(ticket.value_of(ticket.split_lines(text), WHY_KEY) or '')
     return title_line(DEFAULT_TYPE, key, summary), why, sections
@@ -229,7 +232,9 @@ def adhoc_parts(path, repo, resolution, key_line):
 
 
 def render(title, why, sections, draft):
-    """(file text, body): the file is the Title line, a blank line, then the body."""
+    """(file text, body): the file is the Title line, a blank line, then the body. The Why starts with a capital
+    letter here, the one place that does it for a unit, an ad-hoc ticket, the full body and the draft."""
+    why = why[:1].upper() + why[1:]
     if draft:
         body = '\n'.join(([why] if why else []) + [WIP_LINE])
     else:
