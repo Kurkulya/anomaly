@@ -261,6 +261,13 @@ def ac_ids(text):
     return ids, errors
 
 
+def uncovered_acs(text, parsed_tickets):
+    """(AC id, line number) for each AC of a stories text (ac_ids) that no ticket's `Covers:` names, in file order.
+    `parsed_tickets` are `ticket.Ticket` values. `check slice` and `frontier` both use it."""
+    covered = {ac for parsed in parsed_tickets for ac in parsed.covers}
+    return [(ac, number) for ac, number in ac_ids(text)[0].items() if ac not in covered]
+
+
 def stories_errors(text, folder, look_up_owners=True, adr_folder=ADR_FOLDER_CORE):
     """Errors for stories.md: duplicate AC ids and Out of scope lines with no `— owner:`, an owner that names a D-n
     outside brackets, or an owner that is not found in the checkout and has no TODO key (the work-unit
@@ -441,8 +448,8 @@ def blocked_errors(lines, parsed, empty_is_error=False):
     if empty_is_error and not parsed.blocked_by.strip():
         return [(where(lines, 'Blocked by'), f'Blocked by: is empty ({BLOCKED_SHAPE})')]
     if parsed.blockers_unreadable:
-        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" is not only two-digit '
-                                             f'ticket numbers (NN) ({BLOCKED_SHAPE})')]
+        return [(where(lines, 'Blocked by'), f'Blocked by: "{parsed.blocked_by}" {ticket.BLOCKED_UNREADABLE} '
+                                             f'({BLOCKED_SHAPE})')]
     return []
 
 
@@ -561,14 +568,13 @@ def slice(folder, key_line=KEY_LINE_CORE):
     tickets_dir = folder / 'tickets'
     loaded = [(f'tickets/{path.name}', *ticket.load(path, key_line))
               for path in sorted(tickets_dir.glob('*.md')) if TICKET_NUMBER.match(path.name)]
-    errors, warnings, graph, covered = [], [], {}, set()
+    errors, warnings, graph = [], [], {}
     stories_text = read_optional(folder / 'stories.md')
     if stories_text is None:
         errors.append('stories.md: the file is missing (a work unit keeps its stories in stories.md)')
     else:
-        covered = {ac for _, _, parsed in loaded for ac in parsed.covers}
         errors.extend(f'stories.md:{number}: {ac} is in no ticket\'s Covers: line ({COVERS_SHAPE})'
-                      for ac, number in ac_ids(stories_text)[0].items() if ac not in covered)
+                      for ac, number in uncovered_acs(stories_text, (parsed for _, _, parsed in loaded)))
     for name, text, parsed in loaded:
         errors.extend(ticket_errors(name, text, parsed, tickets_dir, graph, key_line))
         if len(text.encode('utf-8')) > SLICE_WARN_BYTES:

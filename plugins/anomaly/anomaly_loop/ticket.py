@@ -59,6 +59,7 @@ STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
 OPEN_ITEMS = re.compile(r'\bOpen(?:\s*\([^)]*\))?:\s*(.+)$')
 BLOCKER_NUMBER = re.compile(rf'\b([0-9]{{{TICKET_NUMBER_DIGITS}}})\b')
+BLOCKED_UNREADABLE = 'is not only two-digit ticket numbers (NN)'   # the end of every message about an unreadable Blocked by: value
 
 
 # ---------- lines ----------
@@ -279,18 +280,31 @@ def find_blocker(folder, number):
     return next(iter(sorted(Path(folder).glob(f'{number}-*.md'))), None)
 
 
-def open_blockers(path, parsed):
-    """One line per blocker that is not done: its number, its status and its file."""
-    problems = []
+def unfinished_blockers(folder, parsed):
+    """(number, status, file) for each blocker that is not done, in the order of `Blocked by:`. A blocker with
+    no ticket file in `folder` has no status and no file (both None): it counts as not done."""
+    unfinished = []
     for number in parsed.blockers:
-        found = find_blocker(Path(path).parent, number)
-        if found is None:
-            problems.append(f'blocked by {number}: no ticket file {number}-*.md next to {Path(path).name}')
-            continue
-        status = load(found)[1].status
+        found = find_blocker(folder, number)
+        status = load(found)[1].status if found else None
         if status != TICKET_STATUS_DONE:
-            problems.append(f'blocked by {number}: {status} ({found.name})')
-    return problems
+            unfinished.append((number, status, found))
+    return unfinished
+
+
+def is_blocked(parsed, unfinished):
+    """The gate rule, for `ticket gate` and `frontier`: a ticket is blocked when a blocker is not done
+    (`unfinished`, from unfinished_blockers) or its `Blocked by:` value cannot be read."""
+    return bool(unfinished) or parsed.blockers_unreadable
+
+
+def blocker_lines(path, unfinished):
+    """One line per blocker that is not done (`unfinished`, from unfinished_blockers): its number, its status
+    and its file."""
+    name = Path(path).name
+    return [f'blocked by {number}: no ticket file {number}-*.md next to {name}' if found is None
+            else f'blocked by {number}: {status} ({found.name})'
+            for number, status, found in unfinished]
 
 
 # ---------- writing ----------
@@ -548,7 +562,7 @@ def print_blocker_warnings(path, parsed):
     if not parsed.has_blocked_line:
         print(f'warning: no Blocked by: line in {name}; it is not known whether it is blocked')
     if parsed.blockers_unreadable:
-        print(f'warning: Blocked by: "{parsed.blocked_by}" in {name} is not only two-digit ticket numbers (NN)')
+        print(f'warning: Blocked by: "{parsed.blocked_by}" in {name} {BLOCKED_UNREADABLE}')
 
 
 def run_show(args, environ):
@@ -563,10 +577,10 @@ def run_show(args, environ):
 def run_gate(args, environ):
     _, parsed = load(args.ticket)
     print_blocker_warnings(args.ticket, parsed)
-    problems = open_blockers(args.ticket, parsed)
-    for problem in problems:
-        print(problem)
-    return 1 if problems or parsed.blockers_unreadable else 0
+    unfinished = unfinished_blockers(Path(args.ticket).parent, parsed)
+    for line in blocker_lines(args.ticket, unfinished):
+        print(line)
+    return 1 if is_blocked(parsed, unfinished) else 0
 
 
 def run_set_status(args, environ):
