@@ -201,11 +201,15 @@ def owner_file_exists(root, name, adr_folder=ADR_FOLDER_CORE):
         return False
 
 
+def adr_globs(number, adr_folder):
+    """The glob patterns, relative to the repo root, of the ADR files `NNNN-*.md` for `number` (a digit string or a
+    glob such as `[0-9][0-9][0-9][0-9]`): in the `adr_folder` and in the adr/ of every unit folder."""
+    return [pattern.format(number) for pattern in ADR_GLOBS] + [f'{glob.escape(adr_folder_path(adr_folder))}/{number}-*.md']
+
+
 def adr_exists(root, number, adr_folder):
     """True when `NNNN-*.md` for the ADR `number` is in the `adr_folder` or in the adr/ of a unit folder."""
-    patterns = [pattern.format(number) for pattern in ADR_GLOBS]
-    patterns.append(f'{glob.escape(adr_folder_path(adr_folder))}/{number}-*.md')
-    return any(any(root.glob(pattern)) for pattern in patterns)
+    return any(any(root.glob(pattern)) for pattern in adr_globs(number, adr_folder))
 
 
 def ticket_exists(root, folder, number, unit):

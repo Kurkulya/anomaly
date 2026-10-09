@@ -1652,6 +1652,7 @@ python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [-
 python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-hoc ticket> [--draft] [--docs-gate '<text>'] [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        put|ready|show <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1680,9 +1681,63 @@ python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit
 - `frontier` takes a work-unit folder and prints the tickets that can start now; see Frontier.
 - `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
 - `mr` takes the actions `body` (writes the MR body of a work unit or an ad-hoc ticket to a file), `put`, `ready`, `show`, `reviewed` and `verified`; see MR body and MR.
+- `docs` takes the action `scan`, which prints the overdue ADRs, the deferral notes without an owner and date, and the dead paths of `CLAUDE.md` files; see Docs scan.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
+
+## Docs scan
+
+```
+python plugins/anomaly/scripts/anomaly.py docs scan <range> [--repo <dir>] [--home <dir>]
+```
+
+`docs scan` runs the three checks of the docs audit that need no judgment: it reports the ADRs
+whose revisit date has passed, the deferral notes without an owner and a revisit date, and the
+paths in `CLAUDE.md` files that no longer exist. The other two checks (a commit that decided
+something no ADR records, and an ADR claim the code has moved away from) are the docs agent's, not
+this command's. It reads the working folder and writes nothing. The range is `A..B`
+or `A...B` (a range that does not resolve is an error, exit 2); it only decides which findings
+are marked, not what is scanned. Today is the command's clock.
+
+Each finding is one line, `<path>:<line>: <kind>: <detail>`, with the path relative to the
+repository, in the order of path and line. A finding in a file the range changes ends with
+` [touched]`. The last line counts the findings, or says there are none. The exit code is 1 when
+any finding is marked `[touched]` and 0 otherwise; whether that blocks anything is the caller's
+decision.
+
+- `adr-overdue`: the date is the `Revisit-by:` field of the ADR's status line; an ADR with no such
+  field uses its `Revisit:` front-block line (a line that starts with `Revisit:` above the first
+  `## ` heading) when that line holds a date. A date before today is overdue; the day itself is
+  not. An ADR whose status starts with `Superseded` is left out. The ADRs are the `NNNN-*.md`
+  files in the folder of the `adr_folder` port (read from the profile in `--home`; a value outside
+  the repo gives `docs/adr`, as in `check stories`) and in the `adr/` of every work-unit folder.
+- `todo-unkeyed`: in any tracked text file, the word `TODO` that is not followed at once by the
+  key `(<owner>, revisit YYYY-MM-DD)`. A key whose date is not a real date counts as no key. The
+  word counts only where a deferral is written: as the first word of a comment (after `#`, `//`,
+  `--`, `/*` or `<!--`, spaces allowed), the first word of a line (after leading spaces or `> `
+  quote marks) or the first word of a list item (`- `, `* `, `1. `, also with a `[ ]` or `[x]` box).
+  A mention in the middle of code or of a sentence,
+  and the word followed by `(<` (the key shape written out), are not reported. One finding for
+  each line.
+- `todo-overdue`: a keyed deferral whose revisit date is before today. It is read wherever the
+  key with a real date stands in the line, in a comment or not.
+- `dead-path`: in a tracked file named `CLAUDE.md`, in any folder, a path claim that is live when
+  it is at or under `.anomaly/` or `.scratch/` (the folders of local work units: a clone has none,
+  so they are never reported), or exists beside that file or at the repository root, or when git ignores it (a folder that git
+  ignores, such as a local work-unit folder, exists in one checkout only, so it is live whether or
+  not it is on disk), or when a tracked file or folder equals it or ends with `/<claim>` (whole path parts only, so `scripts/tool.py` is
+  live for `tools/scripts/tool.py` and a bare `SKILL.md` is live when any tracked `SKILL.md`
+  exists). It is dead only when none of these holds. A claim is a backticked word that has no
+  space, glob, placeholder or colon character (a trailing `:12` or `:12-20` line cite is cut off
+  first) and either holds a `/` or is a bare file name ending in `.md`, `.py`, `.json`, `.toml`,
+  `.yml`, `.yaml`, `.sh` or `.txt`; or the target of a markdown link that is relative (a URL, an
+  anchor and a `#fragment` are skipped). Fenced code blocks are not read. A git ref such as
+  `origin/main` also looks like a claim: this is a known limit.
+
+The scan covers the files git tracks (`git ls-files`, read at the working folder, so an
+uncommitted edit counts); files that are not UTF-8 text and symbolic links are skipped. Work-unit
+ADRs are read from the working folder even when git ignores them.
 
 ## Planning formats
 
