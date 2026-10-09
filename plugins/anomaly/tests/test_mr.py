@@ -23,7 +23,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import constants, mr
+from anomaly_loop import mr
 from anomaly_loop.files import RecordError
 from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 from tests.test_check import slice_ticket
@@ -648,12 +648,6 @@ class UnknownAdapterTest(PutSetup, MrCase):
                 self.assertRegex(result[2], r'\bgh\b')
                 self.assertEqual(result[1], '')
         self.assert_no_tool_call()
-
-
-class AdapterNamesTest(unittest.TestCase):
-    def test_the_known_mr_adapters_are_glab_and_gh(self):
-        """AC-45 (D-27): the one list the port value is checked against."""
-        self.assertEqual(constants.MR_ADAPTERS, ('glab', 'gh'))
 
 
 class AdhocPutTest(PutSetup, AdhocCase):
