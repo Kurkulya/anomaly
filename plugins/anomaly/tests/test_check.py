@@ -629,6 +629,29 @@ class CheckStoriesTest(unittest.TestCase):
         self.assertIn('decisions.md', out)
         assert_cli_error(self, run_cli('check', 'stories', str(self.folder / 'missing')), 'missing')
 
+    def test_the_adr_folder_port_names_the_folder_where_an_adr_owner_is_found(self):
+        """AC-10, through the CLI: a profile `adr_folder: decisions/` makes `ADR-0003` resolve to
+        `decisions/0003-*.md` and not to `docs/adr/0003-*.md`; the `adr/` of a unit folder is searched too.
+        The core default `docs/adr/` is covered by the pass and fail tests above."""
+        home = self.root / 'home'
+        home.mkdir()
+        write_text(home / 'profile.md', '---\nadr_folder: decisions/\n---\n')
+        write_text(self.root / 'docs' / 'adr' / '0003-x.md', '# 3\n')
+        write_text(self.folder / 'adr' / '0005-y.md', '# 5\n')
+
+        def check(owner):
+            self.put(stories=GOOD_STORIES.replace('ticket 05', owner), decisions=GOOD_DECISIONS)
+            return run_cli('check', 'stories', str(self.folder), '--home', str(home))
+
+        code, out, err = check('ADR-0003')
+        self.assertEqual((code, err), (1, ''), out)
+        self.assertIn('must exist', out)
+        write_text(self.root / 'decisions' / '0003-z.md', '# 3\n')
+        for owner in ('ADR-0003', 'decisions/0003-z.md', 'ADR-0005'):
+            with self.subTest(owner=owner):
+                code, out, err = check(owner)
+                self.assertEqual((code, err), (0, ''), out)
+
     def test_a_specify_line_without_the_ids_shape_is_an_error_naming_the_shape(self):
         self.put(log=GOOD_LOG + '2026-10-02 10:00 specify: ACs: AC-1, AC-2 claim check passed\n')
         self.assert_error(2, 'ACs: AC-1, AC-2, …;', file_name='log.md')
