@@ -279,18 +279,30 @@ def find_blocker(folder, number):
     return next(iter(sorted(Path(folder).glob(f'{number}-*.md'))), None)
 
 
+def unfinished_blockers(folder, parsed):
+    """(number, status, file) for each blocker that is not done, in the order of `Blocked by:`. A blocker with
+    no ticket file in `folder` has no status and no file (both None): it counts as not done."""
+    unfinished = []
+    for number in parsed.blockers:
+        found = find_blocker(folder, number)
+        status = load(found)[1].status if found else None
+        if status != TICKET_STATUS_DONE:
+            unfinished.append((number, status, found))
+    return unfinished
+
+
+def is_blocked(parsed, unfinished):
+    """The gate rule, for `ticket gate` and `frontier`: a ticket is blocked when a blocker is not done
+    (`unfinished`, from unfinished_blockers) or its `Blocked by:` value cannot be read."""
+    return bool(unfinished) or parsed.blockers_unreadable
+
+
 def open_blockers(path, parsed):
     """One line per blocker that is not done: its number, its status and its file."""
-    problems = []
-    for number in parsed.blockers:
-        found = find_blocker(Path(path).parent, number)
-        if found is None:
-            problems.append(f'blocked by {number}: no ticket file {number}-*.md next to {Path(path).name}')
-            continue
-        status = load(found)[1].status
-        if status != TICKET_STATUS_DONE:
-            problems.append(f'blocked by {number}: {status} ({found.name})')
-    return problems
+    name = Path(path).name
+    return [f'blocked by {number}: no ticket file {number}-*.md next to {name}' if found is None
+            else f'blocked by {number}: {status} ({found.name})'
+            for number, status, found in unfinished_blockers(Path(path).parent, parsed)]
 
 
 # ---------- writing ----------
@@ -566,7 +578,7 @@ def run_gate(args, environ):
     problems = open_blockers(args.ticket, parsed)
     for problem in problems:
         print(problem)
-    return 1 if problems or parsed.blockers_unreadable else 0
+    return 1 if is_blocked(parsed, problems) else 0
 
 
 def run_set_status(args, environ):
