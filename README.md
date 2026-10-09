@@ -943,9 +943,10 @@ and no profile; the work unit is named by its folder.
 python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
 ```
 
-- It reads the numbered ticket files (`NN-*.md`) of `tickets/` and decides "every blocker is done" with the rule `ticket gate` uses (`ticket.unfinished_blockers`
-  and `ticket.is_blocked`), so a blocker that is not `done` and an unreadable `Blocked by:` value (for
-  example `TBD`) make a ticket blocked in both commands. A blocker with no ticket file is also not
+- It reads the numbered ticket files (`NN-*.md`) of `tickets/` and decides "every blocker is done"
+  with the rule `ticket gate` uses (`ticket.unfinished_blockers` and `ticket.is_blocked`), so a
+  blocker that is not `done` and an unreadable `Blocked by:` value (for example `TBD`) make a ticket
+  blocked in both commands. A blocker with no ticket file is also not
   done, but `frontier` reports it as an error (see below).
 - A **startable** ticket has `Status: ready-for-agent` (an allow list: nothing else starts) and
   every blocker `done`. It is one

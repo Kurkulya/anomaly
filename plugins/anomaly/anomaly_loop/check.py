@@ -159,7 +159,8 @@ def relative_parts(name):
 
 def unit_folders(root, name):
     """The existing unit folders `name` names: a bare name under `<root>/.anomaly/`, or the path
-    `.anomaly/<name>`. `.anomaly/adhoc/` only stores adhoc tickets and is no unit. A name the file system refuses (too long) names none."""
+    `.anomaly/<name>`. `.anomaly/adhoc/` only stores adhoc tickets and is no unit. A name the file system
+    refuses (too long) names none."""
     parts = relative_parts(name)
     if len(parts) == 1:
         candidates = [root / home / name for home in OWNER_HOME_DIRS]
@@ -211,8 +212,9 @@ def adr_exists(root, number, adr_folder):
 
 
 def ticket_exists(root, folder, number, unit):
-    """True when `tickets/NN-*.md` exists in the unit folder named by `unit` (a name or path, as in unit_folders), or in the checked work-unit `folder` when `unit` is empty.
-    NN is padded to the ticket number width."""
+    """True when `tickets/NN-*.md` exists in the unit folder named by `unit` (a name or path, as in
+    unit_folders), or in the checked work-unit `folder` when `unit` is empty. NN is padded to the ticket
+    number width."""
     units = unit_folders(root, unit.strip()) if unit else [folder]
     padded = number.zfill(TICKET_NUMBER_DIGITS)
     return any(ticket.find_blocker(path / TICKETS_DIR, padded) for path in units)
@@ -223,10 +225,9 @@ def owner_exists(owner, folder, adr_folder=ADR_FOLDER_CORE):
     something in the checkout (no git lookup): a unit folder other than the checked one (a unit is never its
     own owner, also when its bare name is the name of the checked one), the path of a ticket or ADR file,
     `ticket NN` or `ADR-NNNN` (in the `adr_folder`, or the `adr/` of any unit folder). `ticket NN` is `tickets/NN-*.md`
-    of the unit named by "of `unit`" right after it, else of the
-    checked work-unit folder; "in `unit`" names no ticket. A ticket never passes on its unit alone, and a
-    backticked unit beside a `ticket NN` counts only as a path to a ticket or ADR file. `<root>` is the
-    grandparent of the work-unit folder. A bracketed text is a citation and names nothing."""
+    of the unit named by "of `unit`" right after it, else of the checked work-unit folder; "in `unit`" names no
+    ticket. A ticket never passes on its unit alone, and a backticked unit beside a `ticket NN` counts only
+    as a path to a ticket or ADR file. `<root>` is the grandparent of the work-unit folder. A bracketed text is a citation and names nothing."""
     if any(is_date(day) for day in TODO_KEY.findall(owner)):
         return True
     folder = Path(folder).resolve()
@@ -338,8 +339,8 @@ def stories(folder, adr_folder=ADR_FOLDER_CORE):
     where an ADR owner is looked up besides the adr/ of a unit folder. A missing
     stories.md is an error line; a missing decisions.md or log.md is empty (no decisions, no
     recorded ids). Sizes over 6 KB (stories.md) and 8 KB (decisions.md) only warn. A folder that is not
-    `<root>/.anomaly/<unit>` gets one layout error and no owner lookup, since
-    `<root>` is found from that layout."""
+    `<root>/.anomaly/<unit>` gets one layout error and no owner lookup, since `<root>` is found from that
+    layout."""
     folder = Path(folder)
     if not folder.is_dir():
         raise files.RecordError(f'{folder}: not a folder')
