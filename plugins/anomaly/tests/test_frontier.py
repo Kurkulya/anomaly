@@ -221,6 +221,20 @@ class FrontierTest(unittest.TestCase):
                 self.assertEqual(len(warnings), 1, output)
                 self.assertTrue(warnings[0].startswith('warning:'), warnings)
 
+    def test_a_unit_with_both_spec_and_stories_reads_the_acs_of_spec_md(self):
+        """ADR-0011: spec.md is read when the unit has one, else stories.md. Here spec.md holds AC-2, which no ticket
+        covers, and stories.md holds only AC-1; the warning names spec.md and AC-2."""
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout.root):
+                folder = self.unit(layout, {'01-alpha': slice_ticket('01', covers='AC-1')})
+                write_text(folder / 'spec.md', stories_text(2))
+                write_text(folder / 'stories.md', stories_text(1))
+                code, output = self.frontier(folder)
+                self.assertEqual(code, 0, output)
+                warnings = self.lines_naming(output, 'AC-2')
+                self.assertEqual(len(warnings), 1, output)
+                self.assertIn('spec.md', warnings[0])
+
     def test_a_unit_with_no_ticket_file_is_an_error_naming_the_folder_and_exits_2(self):
         """A unit with no tickets folder, or an empty one, has nothing to list: not "finished"."""
         for layout in LAYOUTS:
