@@ -59,10 +59,33 @@ class ConductStatusTest(test_worklog.ReportCase):
         done, failed, opened, following, _ = lines
         self.assertTrue(has_count(done, 1), done)
         self.assertTrue(has_count(failed, 1) and 'bravo' in failed, failed)
-        self.assertTrue('charlie' in opened and 'delta' in opened, opened)
+        self.assertTrue(has_count(opened, 2) and 'charlie' in opened and 'delta' in opened, opened)
+        self.assertNotIn('bravo', opened)
         self.assertTrue('charlie' in following, following)
         for other in ('alpha', 'bravo', 'delta'):
             self.assertNotIn(other, following)
+
+    def test_an_in_progress_ticket_with_a_result_line_is_open_and_not_failed(self):
+        """AC-27 (settled): failed is in progress with no Result line; with one the ticket stays in open."""
+        self.write_files()
+        tickets = self.wave_tickets()
+        tickets['02-bravo'] = slice_ticket('02', blocked='01', status='in-progress', body='Result: branch · sha\n')
+        lines = self.status_lines(self.unit(tickets))
+        done, failed, opened, following, _ = lines
+        self.assertTrue(has_count(failed, 0) and 'bravo' not in failed, failed)
+        self.assertTrue(has_count(opened, 3) and 'bravo' in opened, opened)
+        self.assertTrue(has_count(done, 1), done)
+
+    def test_a_unit_with_no_startable_ticket_says_none_for_next(self):
+        """AC-27: bravo runs and charlie waits for it, so nothing can start and next names no ticket."""
+        self.write_files()
+        tickets = self.wave_tickets()
+        del tickets['04-delta']
+        tickets['03-charlie'] = slice_ticket('03', blocked='02')
+        lines = self.status_lines(self.unit(tickets))
+        self.assertEqual(len(lines), 5, lines)
+        self.assertTrue('none' in lines[3] and not any(name in lines[3] for name in ('alpha', 'bravo', 'charlie')),
+                        lines[3])
 
     def test_the_cost_line_is_the_cost_line_of_worklog_report_for_the_unit_and_home(self):
         """AC-27."""
@@ -81,6 +104,13 @@ class ConductStatusTest(test_worklog.ReportCase):
             self.assertTrue(line.startswith(label), (label, line))
         self.assertTrue(has_count(lines[1], 0), lines[1])
         self.assertEqual(lines[4], self.cost_of_report())
+
+    def test_a_unit_with_no_work_unit_line_exits_2_naming_the_unit_like_the_report(self):
+        """AC-27: the cost line is the cost line of worklog report, so a unit that report refuses ends the
+        command; nothing is printed."""
+        result = self.status(self.unit(self.wave_tickets()))
+        assert_cli_error(self, result, self.UNIT)
+        self.assertEqual(result[1], '')
 
     def test_a_ticket_without_a_blocked_by_line_makes_it_exit_2_naming_the_ticket(self):
         """AC-27 (Amended): the AC-4 error of the frontier rule ends the command; nothing is printed."""
