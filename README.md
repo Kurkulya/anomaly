@@ -962,6 +962,40 @@ python plugins/anomaly/scripts/anomaly.py frontier <work unit folder>
   lines are read as `check stories` reads them (`- AC-n:`), and the uncovered ACs are found by the
   same function as in `check slice`. A unit with neither file gets one `warning:` line, not an error.
 
+## Wave report
+
+`conduct status` prints the **wave report**: where a work unit stands after a wave of tickets, in
+five lines. It reads the tickets of the unit like `frontier` and the cost like `worklog report`, and
+writes nothing.
+
+```
+python plugins/anomaly/scripts/anomaly.py conduct status <work unit folder> [--home <dir>]
+```
+
+```
+done: 1
+failed: 1 (02-bravo)
+open: 2 (03-charlie, 04-delta)
+next: 03-charlie
+cost: weighted tokens 3,000, weighted tokens per merged ticket 1,000, minutes per merged ticket 40.0
+```
+
+- The lines come in this order, and the label opens each line. The three counts split the tickets:
+  `done` is the tickets with `Status: done`; `failed` is the tickets that are `in-progress` with no
+  `Result:` line (a run that stopped without a merge); `open` is every other ticket, which means
+  startable, blocked, and `in-progress` with a `Result:` line. `failed` and `open` give the ticket
+  names after the count. An empty group says `0` and no names.
+- `next` is the startable tickets, as `frontier` finds them (the `start` entries of
+  `frontier.classify`), in ticket order, and `none` when nothing can start. It names tickets only:
+  the `warning:` lines and the finished line of `frontier` are not part of it.
+- `cost` is the cost line of `worklog report` for the unit, built by the one function both commands
+  call (`worklog.cost_line`). The work-unit key is the name of the folder, as in `worklog add`,
+  and `--home` is read as in `worklog report`. A unit with no work-unit line is an error of
+  `worklog report`, so it is one here too.
+- The rule for tickets is `frontier`'s: a ticket that is not `done` and has no `Blocked by:` line,
+  or names a blocker with no ticket file, is an error. One `anomaly:` line names each such ticket,
+  nothing else is printed, and the exit code is 2.
+
 ## Benchmark
 
 Each reviewer agent has one small seeded-defect fixture under `plugins/anomaly/tests/bench/`
@@ -1502,6 +1536,7 @@ python plugins/anomaly/scripts/anomaly.py lens      tally add|sum ...
 python plugins/anomaly/scripts/anomaly.py worklog   start|add|report ...
 python plugins/anomaly/scripts/anomaly.py log       add <folder> --stage <stage> '<text>'
 python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
+python plugins/anomaly/scripts/anomaly.py conduct   status <work unit folder> [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1528,6 +1563,7 @@ python plugins/anomaly/scripts/anomaly.py frontier  <work unit folder>
   prints what one work unit cost; the options are in the same section.
 - `log` takes the action `add`, which appends one line to a work unit's `log.md`; see the same section.
 - `frontier` takes a work-unit folder and prints the tickets that can start now; see Frontier.
+- `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
