@@ -104,8 +104,8 @@ class UnitCase(MrCase):
         self.merges.append(merge)
         return merge
 
-    def ticket(self, number, slug, covers, ac_ids, status='ready-for-agent', title=None):
-        text = slice_ticket(number, covers=covers, status=status, jira=KEY, key_line='Key',
+    def ticket(self, number, slug, covers, ac_ids, status='ready-for-agent', title=None, key=KEY):
+        text = slice_ticket(number, covers=covers, status=status, jira=key, key_line='Key',
                             body='\n' + ''.join(f'- [ ] {ac}: criterion {ac}\n' for ac in ac_ids))
         path = self.repo.root / '.anomaly' / UNIT / 'tickets' / f'{number}-{slug}.md'
         write_text(path, text.replace(': A ticket\n', f': {title or TITLES[number]}\n', 1))
@@ -119,11 +119,12 @@ class UnitCase(MrCase):
         self.assertEqual((code, err), (0, ''), out)
 
     def unit(self, open_items=(OPEN_ITEM, 'none'), breaking=BREAKING, long_text=False, first_title=None,
-             decision_lines=()):
+             decision_lines=(), keys=(KEY, KEY, KEY)):
         """The unit folder: AC-1 to AC-4, tickets 01 and 02 merged and done (01 covers AC-1 and AC-2, 02 covers
         AC-3), ticket 03 (AC-4) not merged. `long_text` gives the unit a long heading, Why and first ticket title;
-        `first_title` sets that title; `decision_lines` are added to decisions.md. The word MERGE in an open item or
-        a breaking line becomes the id of the first merge commit."""
+        `first_title` sets that title; `decision_lines` are added to decisions.md; `keys` are the key lines of
+        tickets 01, 02 and 03. The word MERGE in an open item or a breaking line becomes the id of the first merge
+        commit."""
         folder = self.repo.root / '.anomaly' / UNIT
         heading = 'Make the widget list reliable and show it to every reader ' * (3 if long_text else 1)
         why = (WHY + ' and ') * (4 if long_text else 1) + 'then ship once'
@@ -133,9 +134,9 @@ class UnitCase(MrCase):
                                           '- AC-4: criterion AC-4\n')
         first = self.ticket('01', 'alpha', 'AC-1, AC-2', ('AC-1', 'AC-2'), status='in-progress',
                             title=first_title or TITLES['01'] + (' with a very long title that goes on and on and on'
-                                                                 if long_text else ''))
-        second = self.ticket('02', 'bravo', 'AC-3', ('AC-3',), status='in-progress')
-        self.ticket('03', 'charlie', 'AC-4', ('AC-4',))
+                                                                 if long_text else ''), key=keys[0])
+        second = self.ticket('02', 'bravo', 'AC-3', ('AC-3',), status='in-progress', key=keys[1])
+        self.ticket('03', 'charlie', 'AC-4', ('AC-4',), key=keys[2])
         self.close(first, 'alpha', self.merge_ticket('01', 'alpha'), open_items[0].replace('MERGE', self.merges[0]))
         self.close(second, 'bravo', self.merge_ticket('02', 'bravo'), open_items[1].replace('MERGE', self.merges[0]))
         write_text(folder / 'decisions.md', '- D-1: pick x. Why: simple. Source: user, 2026-10-01\n'
@@ -154,7 +155,7 @@ class BodyTest(UnitCase):
         title, body = self.body_of(self.unit())
         found = sections(body)
         self.assertEqual([name for name in found if name in SECTIONS], SECTIONS, body)
-        self.assertIn(WHY, ' '.join(found['why']))
+        self.assertIn(WHY[1:], ' '.join(found['why']))   # the first letter is a capital, see the capital-letter test
         what = found['what changed']
         self.assertEqual(len(what), 2, what)
         self.assertTrue(TITLES['01'] in what[0] and TITLES['02'] in what[1], what)
@@ -196,8 +197,19 @@ class BodyTest(UnitCase):
         self.assertEqual(lines[1], '')
         body = lines[2:]
         self.assertEqual(len(body), 2, body)
-        self.assertIn(WHY, body[0])
+        self.assertIn(WHY[1:], body[0])   # the first letter is a capital, see the capital-letter test
         self.assertTrue(body[1].startswith('Work in progress'), body)
+
+    def test_the_why_starts_with_a_capital_letter_in_the_body_and_in_the_draft_and_the_rest_is_unchanged(self):
+        """Dogfood finding 3: the `Why:` line of the AC file is lower case; the full body Why section and the first
+        line of the draft body both start with its capital form."""
+        folder = self.unit()
+        expected = f'{WHY[0].upper()}{WHY[1:]} and then ship once'
+        _, body = self.body_of(folder)
+        self.assertEqual(sections(body)['why'], [expected], body)
+        self.make(folder, '--draft')
+        lines = (folder / 'mr-body.md').read_text(encoding='utf-8').splitlines()
+        self.assertEqual(lines[2], expected, lines)
 
     def test_the_body_holds_no_commit_id_table_row_or_attribution_line(self):
         """AC-36: the Result lines hold merge ids and the merge commits carry a trailer; none gets in."""
@@ -314,6 +326,24 @@ class BodyTest(UnitCase):
         self.assertRegex(title, rf'^[a-z]+\({re.escape(KEY)}\): \S')
         self.assertLess(len(title), 70, title)
 
+    def assert_title_key(self, keys, expected):
+        """Dogfood finding 2: tickets 01, 02 and 03 carry the key lines `keys`; the title holds `expected`."""
+        title, _ = self.body_of(self.unit(keys=keys))
+        self.assertTrue(title.startswith(f'feat({expected}): '), title)
+
+    def test_the_title_key_is_the_key_every_ticket_shares(self):
+        self.assert_title_key((KEY, KEY, KEY), KEY)
+
+    def test_the_title_key_is_the_unit_folder_name_when_the_keyed_tickets_have_different_keys(self):
+        self.assert_title_key((KEY, 'ABC-9', KEY), UNIT)
+
+    def test_a_no_ticket_key_counts_as_no_key_for_the_title(self):
+        """The first ticket is the `no-ticket` one, so the old first-key rule would give `no-ticket`."""
+        self.assert_title_key(('no-ticket', KEY, KEY), KEY)
+
+    def test_the_title_key_is_no_ticket_when_no_ticket_has_a_key(self):
+        self.assert_title_key(('no-ticket', 'no-ticket', 'no-ticket'), 'no-ticket')
+
     def test_facts_come_from_the_files_and_merge_subjects_and_never_the_diff(self):
         """AC-37: a word only in a tracked source file, and one only in the subject of a commit inside a merged branch."""
         title, body = self.body_of(self.unit())
@@ -369,7 +399,8 @@ class AdhocBodyTest(AdhocCase):
         self.assertTrue(self.body_file().is_file())
         _, body = self.read(self.body_file())
         found = sections(body)
-        self.assertIn(self.TASK, ' '.join(found.get('why', [])), body)
+        self.assertIn(self.TASK[1:], ' '.join(found.get('why', [])), body)
+        self.assertEqual(found.get('why'), [self.TASK[0].upper() + self.TASK[1:]], body)   # a capital first letter, the rest as is
         changed = ' '.join(found.get('what changed', []))
         self.assertTrue(all(subject in changed for subject in self.SUBJECTS), changed)
         self.assertNotIn('earlier main work on gadgets', body)
@@ -415,7 +446,7 @@ class AdhocBodyTest(AdhocCase):
         lines = self.body_file().read_text(encoding='utf-8').splitlines()
         self.assertEqual(lines[1], '')
         self.assertEqual(len(lines[2:]), 2, lines)
-        self.assertIn(self.TASK, lines[2])
+        self.assertIn(self.TASK[1:], lines[2])
         self.assertTrue(lines[3].startswith('Work in progress'), lines)
 
 

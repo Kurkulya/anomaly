@@ -1454,6 +1454,16 @@ class ConductSkillTest(unittest.TestCase):
         heading above it says "chip". The check is on the text of the line, so the skill's step layout stays free."""
         self.assertRegex(named_once_about(self, self.text(), self.KICKOFF), r'(?i)\bchip\b')
 
+    def test_the_parallel_doc_starts_the_build_worklog_of_each_par_ticket_before_its_red_step(self):
+        """Dogfood finding 1: build's `worklog start <key> build --ticket <NN>` is run in the main window, so the
+        later `worklog add` has a start time. The call comes before the first `ticket set-status` of the red step."""
+        self.assertTrue(self.PARALLEL.is_file(), 'skills/conduct/PARALLEL.md is missing')
+        text = self.PARALLEL.read_text(encoding='utf-8')
+        found = re.search(r'worklog start [^`\n]*\bbuild --ticket [^`\n]+', text)
+        self.assertIsNotNone(found, 'PARALLEL.md has no `worklog start <key> build --ticket <NN>` call')
+        self.assertLess(found.start(), text.index('ticket set-status'),
+                        'the worklog start comes after the first ticket set-status')
+
     def test_the_parallel_doc_is_named_once_and_only_in_the_parallel_pick_step(self):
         """AC-60, PARALLEL half: one line of SKILL.md names it, outside the frontmatter, and that line or the
         heading above it is about the parallel pick (the words "parallel" and "pick" or "picks")."""
