@@ -578,7 +578,7 @@ class ReportTest(ReportCase):
     def test_a_unit_with_no_merged_ticket_prints_no_per_ticket_numbers(self):
         """AC-7: only reviewed or planned, so nothing to divide by."""
         self.write_files(self.unit_lines() + [
-            self.line('grill', 'sess-alpha', '08:20', started='08:00', feature='review-only'),
+            self.line('interview', 'sess-alpha', '08:20', started='08:00', feature='review-only'),
             self.line('review', 'sess-alpha', '08:50', started='08:30', ticket='04', mode='ticket',
                       feature='review-only')])
         code, out, err = self.report('review-only')

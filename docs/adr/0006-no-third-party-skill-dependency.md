@@ -4,12 +4,12 @@ Status: Accepted · Date: 2026-10-04 · Owner: VK · Revisit-by: 2027-01-04
 
 ## Context
 
-The feature pipeline the plugin replaces (grill, to-spec, to-tickets, implement, orchestrate,
-code-review, pr) mixes the owner's own skills with a third-party skill set and an org plugin. The
+The feature pipeline the plugin replaces (seven skills, from the planning interview to the merge
+request) mixes the owner's own skills with a third-party skill set and an org plugin. The
 third-party skills were patched from outside: the global config added the `AC-n` prefix, the
 `Sources:` header, the `Covers:` and key lines and a claim review on top of their templates. They
 also changed under the owner: two of them are slash-only and stayed invisible to the agent, one
-was split into `grilling` and `grill-with-docs`, and the phase-boundary rules lived in the
+was split into two skills, and the phase-boundary rules lived in the
 third-party plugin's own file. The workflow audit of 2026-10-04 counts these overlays as a source
 of drift (U8).
 
