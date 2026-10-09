@@ -51,6 +51,7 @@ or stages it holds; the per-merged-ticket numbers are the unit total divided by 
 there is no per-ticket token number, because one session holds many tickets.
 """
 from datetime import datetime
+from typing import NamedTuple
 
 from . import files, observe, paths, privacy, records
 from .constants import (COMMIT_SCOPE, METRICS_FILE, NO_START_WARNING, REVIEW_MODES, TICKET_TIME_FORMAT,
@@ -213,13 +214,28 @@ def stage_lines(rows, adhoc):
     return lines
 
 
-def run_report(args, environ):
-    home = paths.resolve_home(args.home, environ)
+class UnitReport(NamedTuple):
+    """What `worklog report` reads of one work unit: its lines, the sessions they hold (each once, with its
+    tickets), the merged tickets, the minutes of each `build` line, the sessions with no metrics row and the
+    weighted tokens of the measured ones."""
+    unit: str
+    rows: list
+    adhoc: bool
+    held: dict
+    merged: int
+    spans: list
+    unmeasured: list
+    weighted: float
+
+
+def read_report(home, unit):
+    """The UnitReport of a work unit from `work-units.jsonl` and `metrics.jsonl` in home; a unit with no
+    lines raises RecordError."""
     everything = records.load_work_units(home)
-    rows = [row for row in everything if row.get('feature') == args.unit]
+    rows = [row for row in everything if row.get('feature') == unit]
     if not rows:
         units = sorted({row['feature'] for row in everything if isinstance(row.get('feature'), str)})
-        raise RecordError(f"{LABEL}: no lines for work unit {args.unit}; the units that exist: "
+        raise RecordError(f"{LABEL}: no lines for work unit {unit}; the units that exist: "
                           f"{', '.join(units) or 'none'}")
     measured = {row.get('session_id'): row for row in files.load_lines(home / METRICS_FILE)}
     held = {}   # each session of the unit once, with the tickets its lines name
@@ -233,17 +249,27 @@ def run_report(args, environ):
     spans = [minutes_of(row) for row in builds]
     unmeasured = [session for session in held if session not in measured]
     weighted = sum(records.number(measured[session].get('weighted')) or 0 for session in held if session in measured)
-    print(f'work unit: {args.unit}, merged tickets {merged}, sessions {len(held)}')
-    for line in stage_lines(rows, adhoc):
+    return UnitReport(unit, rows, adhoc, held, merged, spans, unmeasured, weighted)
+
+
+def cost_line(report):
+    """The `cost:` line of a UnitReport; `worklog report` and `conduct status` both print it."""
+    cost = f'cost: weighted tokens {report.weighted:,.0f}'
+    if report.merged:
+        cost += (f', weighted tokens per merged ticket {report.weighted / report.merged:,.0f}'
+                 f', minutes per merged ticket {sum(span or 0 for span in report.spans) / report.merged:,.1f}')
+    return cost
+
+
+def run_report(args, environ):
+    report = read_report(paths.resolve_home(args.home, environ), args.unit)
+    print(f'work unit: {args.unit}, merged tickets {report.merged}, sessions {len(report.held)}')
+    for line in stage_lines(report.rows, report.adhoc):
         print(line)
-    print(f'sessions with more than one ticket: {sum(len(tickets) > 1 for tickets in held.values())}')
-    if None in spans:
-        print(f'build lines without a start time: {spans.count(None)} (they add no minutes)')
-    if unmeasured:
-        print(f'sessions without a metrics row: {len(unmeasured)} (left out of the cost; run `measure`)')
-    cost = f'cost: weighted tokens {weighted:,.0f}'
-    if merged:
-        cost += (f', weighted tokens per merged ticket {weighted / merged:,.0f}'
-                 f', minutes per merged ticket {sum(span or 0 for span in spans) / merged:,.1f}')
-    print(cost)
+    print(f'sessions with more than one ticket: {sum(len(tickets) > 1 for tickets in report.held.values())}')
+    if None in report.spans:
+        print(f'build lines without a start time: {report.spans.count(None)} (they add no minutes)')
+    if report.unmeasured:
+        print(f'sessions without a metrics row: {len(report.unmeasured)} (left out of the cost; run `measure`)')
+    print(cost_line(report))
     return 0
