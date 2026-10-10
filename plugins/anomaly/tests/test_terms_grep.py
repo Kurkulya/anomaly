@@ -73,6 +73,13 @@ class TermsGrepTest(unittest.TestCase):
         # U+017F (long s) folds to 's' under Unicode case folding
         self.assertEqual(terms_grep.clean('a <ſcript>b c'), 'a b c')
 
+    def test_unclosed_openers_search_for_their_closing_tag_once(self):
+        closer = terms_grep.HIDDEN_CLOSE['script']
+        counted = mock.Mock(search=mock.Mock(side_effect=closer.search))
+        with mock.patch.dict(terms_grep.HIDDEN_CLOSE, script=counted):
+            terms_grep.drop_hidden('<script>' * 1000)
+        self.assertEqual(counted.search.call_count, 1)
+
     def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
