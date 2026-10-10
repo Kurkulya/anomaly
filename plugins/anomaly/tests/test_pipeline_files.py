@@ -38,7 +38,7 @@ CHAINED = re.compile(r'&&|\|\||;|`|\$\(|(?<!\|)\|(?!\|)|\s\d?>>?|\s<\s|&\s*$')  
 SETTINGS_FILE = re.compile(r'settings(?:\.local)?\.json')
 ALLOW_RULE = re.compile(r'"allow"\s*:|permissions\.allow')
 TOOL_RULE = re.compile(r'\b(?:Bash|Read|Edit|Write|WebFetch)\([^)\n]*\)')   # a rule in the text a user reads
-SETTINGS_READER = 'anomaly_loop/scans.py'   # the one plugin file that reads settings files, never writes them (ADR-0021)
+SETTINGS_READER = 'anomaly_loop/scans.py'   # the one plugin file that names settings files to read them, never writes them or prints an allow rule (ADR-0021)
 QUOTED = re.compile(r'"([^"\n]*)"|\'[^\'\n]*\'')   # a double-quoted span (group 1) or a single-quoted one, left to right
 PLACEHOLDER = re.compile(r'<[^<>\n]*>')
 FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|\bticket amend\s+\S+(?:\s+--after\s+\S+)?|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--after\b|--from\s+(?:<[^>]*>|\S+)(?:\s+--[\w-]+\s+(?:<[^>]*>|\S+))*\s*$)")
@@ -203,19 +203,21 @@ def frontmatter_lines(lines):
 
 
 def settings_edit_hits(root):
-    """Plugin files (not the tests, nor the one settings reader) that name a Claude Code settings file or print an allow rule. A tool
-    rule such as `Bash(...)` counts in the body of a Markdown file only: its frontmatter holds
-    `allowed-tools` and the constant that defines the CLI pattern is code (line numbers stay true)."""
+    """Plugin files (not the tests) that name a Claude Code settings file or print an allow rule. The one
+    settings reader is exempt from the settings-file-name match only. A tool rule such as `Bash(...)`
+    counts in the body of a Markdown file only: its frontmatter holds `allowed-tools` and the constant
+    that defines the CLI pattern is code (line numbers stay true)."""
     hits = set()
     for path in plugin_files(root):
-        if relative(root, path).split('/')[0] == 'tests' or relative(root, path) == SETTINGS_READER:
+        if relative(root, path).split('/')[0] == 'tests':
             continue
+        reader = relative(root, path) == SETTINGS_READER
         text = path.read_text(encoding='utf-8', errors='ignore')
         markdown = path.suffix == '.md'
         lines = text.splitlines()
         skipped = frontmatter_lines(lines) if markdown else 0
         for number, line in enumerate(lines[skipped:], start=skipped + 1):
-            if SETTINGS_FILE.search(line) or ALLOW_RULE.search(line) or (markdown and TOOL_RULE.search(line)):
+            if (not reader and SETTINGS_FILE.search(line)) or ALLOW_RULE.search(line) or (markdown and TOOL_RULE.search(line)):
                 hits.add(f'{relative(root, path)}:{number}: settings file or allow rule')
     return sorted(hits)
 
