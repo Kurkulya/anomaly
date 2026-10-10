@@ -1351,10 +1351,12 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships five read-only agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
+The plugin ships five read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
 gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model: no agent file pins
 one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
-characters or fewer and a file of 6 KB or less.
+characters or fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are
+readers, not reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin
+no model either, and keep the same size and description limits.
 
 | Agent | Checks | Modes |
 |---|---|---|
@@ -1363,6 +1365,8 @@ characters or fewer and a file of 6 KB or less.
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
 | `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
 | `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
+| `anomaly:facts` | questions about a repository that need inference across lines (a call chain, whether a claim still holds, which callers can pass a value); tools Read, Grep and Glob; model role `explore`; answers in `- <path>:<line> — <fact>` lines (see Facts bench) | one mode: the questions the dispatcher passes |
+| `anomaly:digest` | a transcript or a long page (a local file or a link) as a digest in its own words; tools Read and WebFetch; model role `digest` | one mode: the source and the word limit the dispatcher passes |
 
 `anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
 does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
@@ -1374,7 +1378,7 @@ touched; for an ADR claim, the ADR line that holds the claim. The `docs/` fixtur
 review: its `commits.md` gives the two commit messages to use when you build the repository (first
 `base/`, then `change/`), and the agent reviews the whole history.
 
-Each agent prints one finding per line in the shape above, with the fix always after ` — fix: `
+Each of the first five agents prints one finding per line in the shape above, with the fix always after ` — fix: `
 and nothing after the closing `observed` or `unverified`; then a `fine: <class> — ...` line for
 each clean class or category. It asks no questions. It never runs tests, builds or other repo
 code, so a test outcome is unverified unless a cited CI log shows it; the only runs are the ones
