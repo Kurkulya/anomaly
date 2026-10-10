@@ -27,7 +27,7 @@ REDIRECTING_ENV = ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE')
 NOISE_PREFIXES = ('warning:', 'hint:')
 # scheme, user and password, host, port (only before a `/`), then the project path up to an optional `.git`
 REMOTE_URL = re.compile(r'(?:[A-Za-z][A-Za-z0-9+.-]*://)?(?:[^@/]*@)?([^:/@]+)(?::\d+(?=/))?[:/]+(.+?)(?:\.git)?/*')
-REPO_HELP = 'a folder of the repository (default: the working folder)'   # every --repo option
+REPO_HELP = 'a folder of the repository (default: the working folder)'   # every git --repo option; pkg-facts reads its folder as given
 PLUGIN_REPO_SKIPPED = ('plugin repository not found: plugin-skill churn and unused-skill checks are '
                        'skipped (set plugin_repo in the profile)')
 
