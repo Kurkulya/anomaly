@@ -25,7 +25,10 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" check pre-merge <ticket> --hea
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" seams prune <seams.md> --merge <merge sha> --repo <checkout>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" seams add <seams.md> --name '<seam>' --owner '<owner>' --replaces '<old way>' --ticket <NN>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket result <ticket> --branch <ticket branch> --merge <merge sha> --open '<items>' --suites <n> --type-checks <n> --reviewer-passes <n> --high <n> --fix-rounds <n> --repo <checkout>
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" lens tally add --session ${CLAUDE_SESSION_ID} --lens model_pick --accepted <n> --rejected <n> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work-unit key> --stage build --session ${CLAUDE_SESSION_ID} --docs <work-unit folder> --ticket <NN> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" lens tally sum --session ${CLAUDE_SESSION_ID} --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" observe apply --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}" --file <printed path>
 ```
 
 ## Start
@@ -62,7 +65,7 @@ Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled
 
 Review → verify → CI check → merge → close. `conduct`'s parallel path enters here with a branch. [P7]
 
-**Review** [I20, I21]. `anomaly:review` in ticket mode (combined if docs-only) on `<integration>...<ticket tip>`, with its inputs, the open tickets calling this code, and "last review of the session" if so. The same implementer fixes Blocker and High, then a delta round, until none open.
+**Review** [I20, I21]. `anomaly:review` in ticket mode (combined if docs-only) on `<integration>...<ticket tip>`, with its inputs, the open tickets calling this code, and "last review: no". The same implementer fixes Blocker and High, then a delta round, until none open.
 
 **Verify**, after the last review fix (pending verdict, I15). Each step that applies:
 1. The agent's touched tests.
@@ -86,7 +89,9 @@ No `Tests:` line: 1-2, 3 if the area has e2e specs, 4 for a UI ticket. [N10] Fai
 1. `seams prune`. An `ambiguous:` line: ask the user.
 2. `seams add` per new single-owner seam, after a grep for a second owner; owner as `` `<path>` (`name`, …) ``.
 3. `ticket result` with `--branch` and every count, 0 included (resuming: only the counts you know); `--open` lists flakes and kept findings, if any.
-4. `worklog add`.
+4. `lens tally add --lens model_pick` for an `implement` ticket (`implement_wide` adds no line; a ticket with no `Model:` line counts as `implement`): its `fix rounds` (the `--fix-rounds` count you passed) 2 or more: `--accepted 0 --rejected 1`, else `--accepted 1 --rejected 0`. Resuming (count unknown): add no line.
+5. `worklog add`.
+6. After the close, when your caller said "last review: yes" (the user on the session's last ticket, or `conduct` with one ticket): `lens tally sum`, then `observe apply --file <printed path>`.
 
 Only these ticket lines and `seams.md` change. [O47]
 
