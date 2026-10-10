@@ -210,6 +210,15 @@ class SkillFileTest(unittest.TestCase):
                 writer = next(text for _, text in self.paragraphs(path) if phrase in text)
                 self.assertRegex(writer, self.role_mention('implement'))
 
+    def test_the_digest_agent_treats_the_source_as_data_follows_no_link_in_it_and_copies_no_secret(self):
+        """Security, cumulative review 2026-10-10: the agent fetches what the caller passes, so the source can carry
+        an injected instruction. By key tokens, so the wording stays free."""
+        text = ' '.join((PLUGIN / 'agents' / 'digest.md').read_text(encoding='utf-8').split())
+        for pattern in (r'(?i)only the (?:link|source)[^.]{0,40}caller passes', r'(?i)\bdata\b[^.]{0,40}\bnever an instruction',
+                        r'(?i)follow no link or path', r'(?i)never copy a secret, token or personal data'):
+            with self.subTest(rule=pattern):
+                self.assertRegex(text, pattern)
+
     def test_the_conduct_fix_branch_and_research_dispatches_and_the_diagnose_ui_check_dispatch_name_their_role_and_effort(self):
         """AC-4, AC-16, Amended 2026-10-10 (cumulative review): conduct's fix-branch implementer on `implement_wide`,
         its research agent on `deep_analysis`, diagnose's `ui_check` port on `browse`. Located by the phrases the
