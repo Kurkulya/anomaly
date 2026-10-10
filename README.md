@@ -37,6 +37,9 @@ outside the plugin.
 **architecture** audits a repo in 7 areas against six principles, with an area score and a lock
 for each, and ends in an `interview` line, `diagnose` lines or a report.
 
+**research** compares options or vendors with evidence: a brief, topic agents, deciding sources
+re-read by the main session, and a decision matrix where every claim carries a source and a label.
+
 This repo is a local marketplace (`anomaly-local`) that holds one plugin, `anomaly`.
 Read this file from top to bottom: install, configure, then the data, then each part of the
 loop in the order you meet it, then the pipeline, from tickets to the stage skills.
@@ -56,9 +59,9 @@ claude plugin install anomaly@anomaly-local
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
 listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review`,
-`anomaly:ship`, `anomaly:diagnose` and `anomaly:architecture` beside them. `/anomaly:interview`,
-`/anomaly:specify` and `/anomaly:slice` are slash-only: they are not in that list, and you start
-them by typing them.
+`anomaly:ship`, `anomaly:diagnose`, `anomaly:architecture` and `anomaly:research` beside them.
+`/anomaly:interview`, `/anomaly:specify` and `/anomaly:slice` are slash-only: they are not in that
+list, and you start them by typing them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -2133,6 +2136,33 @@ principles, the area outline, the pitfalls and one **stack profile** per stack (
   fits: `/anomaly:interview Work unit architecture-<date>` for open choices,
   `/anomaly:diagnose <defect>` with a `Red command:` per clear defect (none when pass two is
   declined), or no line when nothing needs to change.
+
+## The research skill
+
+`anomaly:research` is model-invocable: it starts on "research with proofs", and the model suggests
+it in one line when a library, service or vendor choice rests on unverified facts; it starts only
+after your yes. It ends in a decision matrix whose every claim carries a source and one label. Its
+text is `plugins/anomaly/skills/research/SKILL.md` (8 KB or less) with `BRIEF-TEMPLATE.md` beside
+it: the brief, the evidence protocol, the labels, the search budget and the topic file shape. Its
+only pre-approved tool is the CLI.
+
+- **Scope and brief.** One dialog asks the kind (library, service or vendor), the work unit, the
+  options, the markets, the platforms and the user type. `worklog start <unit> research` runs, and the
+  brief is written to `.anomaly/<unit>/research/` at the next free number, with a file number for each
+  topic.
+- **Topics.** One `anomaly:survey` agent per topic (exactly one for a library run), in parallel, on the
+  `survey` model role, with effort when set. Each reads the brief and writes only its own topic file.
+- **Proofs.** The main session re-reads each deciding source from the live page. A "no clause" claim
+  needs the output of `terms-grep`, and a library fact needs the output of `pkg-facts`; a page that
+  failed to fetch proves nothing and stays `Unknown`. Each check is recorded in
+  `<NN>-verifications.md`.
+- **Matrix.** `<NN>-decision-matrix.md` names the facts that would flip the recommendation and ends in a
+  `Revisit by:` date. A library run has the main session write it; a service or vendor run has one
+  `anomaly:survey` agent do it. A vendor run may add passes (`-v2`, `-v3`), a stakeholder artifact and
+  vendor letters.
+- **Hand-off.** `worklog add` (stage `research`, `--docs` the unit folder), then one
+  `/anomaly:interview` line naming the latest matrix, or none for a standalone library run with one
+  clear winner.
 
 ## Development
 
