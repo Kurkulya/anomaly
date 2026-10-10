@@ -202,9 +202,10 @@ class SkillFileTest(unittest.TestCase):
                 self.assertEqual(len(writers), 1, writers)
                 self.assertNotIn('`Model:`', writers[0])
                 self.assertNotRegex(writers[0], self.role_mention('implement_wide'))
-        with self.subTest(file='skills/build/SKILL.md', dispatch='test_writer role'):
-            writer = next(text for _, text in self.paragraphs(self.BUILD_SKILL) if 'Dispatch the `test_writer` port' in text)
-            self.assertRegex(writer, self.role_mention('implement'))
+        for path, phrase in ((self.BUILD_SKILL, 'Dispatch the `test_writer` port'), (parallel, 'one `test_writer` dispatch per')):
+            with self.subTest(file=path.relative_to(PLUGIN).as_posix(), dispatch='test_writer role'):
+                writer = next(text for _, text in self.paragraphs(path) if phrase in text)
+                self.assertRegex(writer, self.role_mention('implement'))
 
     def docs_agent_lines(self):
         """The docs agent's text as lines; fails while the file is missing."""
