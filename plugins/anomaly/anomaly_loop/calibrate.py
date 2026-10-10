@@ -194,7 +194,8 @@ def plugin_part(context, target, plugin):
     when it is a path inside the plugin folder or its checkout's plugin folder (flags.target_path), or
     `<plugin name>:...` (flags.names_this_plugin). The part is a skill (`<plugin>:<skill>` or a path inside
     `skills/<skill>/`), an agent (`<plugin>:<agent>` or `agents/<agent>.md`), or else (name and unit None)
-    plugin code or docs, or a `<plugin>:...` that names no skill or agent. `plugin` is gitrepo.plugin_repo's answer."""
+    plugin code or docs, or a `<plugin>:...` that names no skill or agent. After `<plugin>:` only the first
+    word counts, so `anomaly:review step 10` is the review skill. `plugin` is gitrepo.plugin_repo's answer."""
     target = target.strip()
     if not target:
         return None
@@ -214,6 +215,7 @@ def plugin_part(context, target, plugin):
     qualifier, colon, name = target.rpartition(':')
     if not (colon and flags.names_this_plugin(context, qualifier, plugin)):
         return None
+    name = (name.split() or [''])[0]
     if (root / 'skills' / name / flags.SKILL_FILE).is_file():
         return PluginPart(name, False, root / 'skills' / name)
     if (root / addenda.AGENTS / f'{name}.md').is_file():
