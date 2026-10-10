@@ -543,12 +543,14 @@ class NoSettingsEditTest(TempPluginTest):
     def test_a_settings_file_name_or_an_allow_rule_in_plugin_files_is_reported(self):
         plant(self.root, {
             'anomaly_loop/x.py': "open('settings.json', 'w')\n",
+            'anomaly_loop/scans.py': "x = 'settings.json'\nprint('\"allow\": []')\n",
             'skills/build/SKILL.md': skill_text(constants.CLI_PATTERN, 'Add "allow": ["x"] to it.\n'),
             'skills/review/SKILL.md': skill_text(constants.CLI_PATTERN, 'Allow `Bash(git *)` once.\n'),
             'agents/code.md': 'edit managed-settings.json\n',
             'tests/test_x.py': "SETTINGS = 'settings.json'\n"})
         self.assertEqual(settings_edit_hits(self.root), [
             'agents/code.md:1: settings file or allow rule',
+            'anomaly_loop/scans.py:2: settings file or allow rule',
             'anomaly_loop/x.py:1: settings file or allow rule',
             'skills/build/SKILL.md:5: settings file or allow rule',
             'skills/review/SKILL.md:5: settings file or allow rule'])
