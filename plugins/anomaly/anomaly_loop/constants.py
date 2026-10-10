@@ -187,6 +187,7 @@ MODEL_ROLES = (                      # (role, core default), in the order `ports
     ('implement', 'sonnet'),
     ('implement_wide', 'opus'),
     ('digest', 'sonnet'),
+    ('survey', 'sonnet'),
     ('review', 'opus'),
     ('review_code', ''),             # never read: MODEL_FALLBACKS gives the value
     ('review_feature', ''),

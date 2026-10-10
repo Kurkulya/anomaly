@@ -65,6 +65,7 @@ models:
   implement: <model>
   implement_wide: <model>
   digest: <model>
+  survey: <model>
   review: <model>
   review_code: <model>
   review_feature: <model>
