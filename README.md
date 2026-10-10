@@ -1398,8 +1398,8 @@ The modes, in one line each (the full dispatch table is in
   its last delta round, or after its first round when it had no Blocker or High), stores its
   counts over all its rounds with `lens tally add`, `--revised` always passed; when the caller
   says "last review: yes" (you, `specify`, `slice`, or `conduct` in its cumulative review; `build`
-  says "no" and sums itself when its caller said "yes"), `lens tally sum` and one `observe apply`
-  put each lens into home once.
+  says "no" and sums itself when its caller said "yes", or when it asks you at its close and you
+  say yes), `lens tally sum` and one `observe apply` put each lens into home once.
 - A rule trace: in ticket or combined mode, when the ticket's `Tests:` line names
   `rule trace <brief path> <SKILL.md path>`, the skill also runs a rules-mode pass on that pair. Its
   High findings go back to the caller, and every delta round on that ticket runs the rules pass
