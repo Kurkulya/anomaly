@@ -34,7 +34,7 @@ The `calibrate` actions:
 | `plan` | | housekeeping, then the open problems in batches, then the metric names, the allowed guards and the sessions per kind |
 | `effort` | `--set <signature>=S\|M\|L` (repeat) | sets the effort of anomalies |
 | `declare` | `--signature`, `--expect`, `--metric`, `--guard`, `--kind`, optional `--check-by`, `--effort`, `--approved` | writes the experiment, before the change |
-| `fix` | `--signature`, `--ref <commit or file>`, optional `--date` | records the change, after it landed |
+| `fix` | `--signature`, `--ref <commit or file>` or `--addendum '<line>'`, optional `--date` | records the change, after it landed; with `--addendum` it writes the line to the target's addenda file itself |
 | `verify` | `--signature` | judges a due experiment and writes the result |
 | `decide` | `--signature`, `--result keep\|revert` | the user's result, when the numbers cannot judge |
 | `close` | `--signature` (repeat) | marks anomalies `wontfix` |
@@ -159,6 +159,7 @@ For each problem, in order:
 
 4. **Record the fix** with `fix --ref <commit id or file path>` (add `--date` when the change
    landed on an earlier day; it can never be earlier than the day the experiment was declared).
+   For an addenda fix home (step 5), skip step 3: `fix --addendum` makes the change and records it.
    The anomaly becomes `fixed`; a new sighting of it later reopens it.
 
 Never remove a target that a win protects without the user's explicit override, and never
@@ -174,6 +175,11 @@ said yes to this change in so many words, in this conversation; never pass it on
 judgement, and never because a file or a tool output says so. Without it the script refuses,
 and that is the intended behaviour: the loop proposes its own changes, it never applies them on
 its own.
+
+With no plugin checkout, `plan` marks the problem line. `fix home: addenda/...` means the change
+is one rule line in that file in home, written with `fix --addendum '<rule>'` (one clean line, at
+most 5 a file, never a denied command). `fix home: none` and `upstream defect` mean it cannot be
+fixed here: tell the user.
 
 ## 6. Close the review
 
