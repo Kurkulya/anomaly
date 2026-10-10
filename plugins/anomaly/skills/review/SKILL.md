@@ -50,7 +50,7 @@ A docs-only diff (no source, config, script or test file) uses combined mode. [I
 7. Only when no Blocker or High is open (in the rules pass too), `ticket reviewed` writes `Reviewed: <head sha>` (on the light path, in the adhoc ticket); spec and tickets skip it. [N12]
 8. `worklog add` with the mode, once per round.
 9. Once per agent, when done (after its last delta round, or its first if it had no Blocker or High; spec and tickets: no Blocker): `lens tally add` under its lens (`code`, `feature`, `security`, `plan`, or an org reviewer's adapter name), counts over all its rounds, 0/0 included. Accepted = fixed or kept as an `Open:` item; rejected = judged wrong, with one reason; revised = accepted, but fixed differently than proposed. [N5, N14]
-10. Once, at the end of the session's last review (the caller says "last review: yes": the user, `specify`, `slice`, or `conduct` in its cumulative review; `build` says "no" and sums itself): `lens tally sum`, then `observe apply --file <printed path>`; a lens already applied in the session is skipped, so a later run is lost.
+10. Once, at the end of the session's last review (the caller says "last review: yes": the user, `specify`, `slice`, or `conduct` in its cumulative review; `build` says "no" and sums itself when its caller said "yes"): `lens tally sum`, then `observe apply --file <printed path>`; a lens already applied in the session is skipped, so a later run is lost.
 
 ## Delta rounds [R8, R9]
 
