@@ -9,4 +9,5 @@ Loaded at dispatch of the `test_writer` port: a separate agent, never the implem
 - If the ticket has a `Repro:` line, its command is the red check: the committed test must fail for the same reason that command fails.
 - Write no production code. Do not commit: the main window commits the test alone.
 - Edit files only with Edit or Write, never with a shell edit or a heredoc. [X5]
+- A file at its byte cap: never cut existing rule text to fit; stop and report the file, its cap and the bytes needed.
 - Send your report as your final message text: each test with `file:line`, why it fails, and the run count. [I13]
