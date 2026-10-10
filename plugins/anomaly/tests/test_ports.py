@@ -16,6 +16,11 @@ PORT_NAMES = {'implementer', 'test_writer', 'conventions', 'reviewers', 'gather'
               'ci', 'mr', 'commit', 'branch', 'ui_check', 'key_line', 'adr_folder'}
 COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')
 LENSES = 'anomaly:code, anomaly:feature, anomaly:security'
+MODEL_ROLES = ('explore', 'implement', 'implement_wide', 'lookup', 'digest', 'review', 'review_code',
+               'review_feature', 'review_security', 'deep_analysis', 'browse')
+REVIEW_LENSES = ('review_code', 'review_feature', 'review_security')
+EFFORT_LEVELS = ('low', 'medium', 'high', 'xhigh', 'max')
+OVERRIDING_ENV = ('CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'CLAUDE_CODE_EFFORT_LEVEL')
 TEMPLATE = Path(__file__).resolve().parent.parent / 'templates' / 'profile.md'
 
 
@@ -184,14 +189,22 @@ class ProfileKeysTest(unittest.TestCase):
 
 
 class ModelRolesTest(PortsCase):
+    def resolved_models(self):
+        return ports.resolve(self.home, self.repo.root).models
+
     def test_no_models_key_gives_the_core_defaults(self):
         found = self.section(self.ports(), 'model')
-        self.assertEqual(found, {
+        self.assertEqual(list(found), list(MODEL_ROLES))
+        self.assertEqual({role: found[role] for role in MODEL_ROLES if role not in REVIEW_LENSES}, {
             'explore': ('sonnet', 'core default'),
-            'implement': ('sonnet for contained tickets, opus for cross-cutting ones', 'core default'),
+            'implement': ('sonnet', 'core default'),
+            'implement_wide': ('opus', 'core default'),
+            'lookup': ('haiku', 'core default'),
+            'digest': ('sonnet', 'core default'),
             'review': ('opus', 'core default'),
             'deep_analysis': ('opus', 'core default'),
             'browse': ('sonnet', 'core default')})
+        self.assertEqual({role: found[role][0] for role in REVIEW_LENSES}, {role: 'opus' for role in REVIEW_LENSES})
 
     def test_the_models_key_maps_each_role_it_names(self):
         self.write_profile('models:', '  explore: model-x', '  review: model-y', '  deep_analysis: model-z')
@@ -200,6 +213,60 @@ class ModelRolesTest(PortsCase):
         self.assertEqual(found['review'], ('model-y', 'profile'))
         self.assertEqual(found['deep_analysis'], ('model-z', 'profile'))
         self.assertEqual(found['browse'], ('sonnet', 'core default'))
+
+    def test_each_lens_role_falls_back_to_the_review_value(self):
+        self.write_profile('models:', '  review: model-y')
+        models = self.resolved_models()
+        for role in REVIEW_LENSES:
+            with self.subTest(role=role):
+                self.assertEqual(models[role].value, 'model-y')
+
+    def test_a_profile_lens_role_overrides_the_review_fallback_for_that_lens_only(self):
+        self.write_profile('models:', '  review: model-y', '  review_code: model-w')
+        models = self.resolved_models()
+        self.assertEqual(models['review_code'], repolayer.Setting('model-w', ports.PROFILE))
+        self.assertEqual(models['review_feature'].value, 'model-y')
+        self.assertEqual(models['review_security'].value, 'model-y')
+        self.assertEqual(models['review'].value, 'model-y')
+
+    def test_a_role_value_is_a_model_or_a_model_and_an_effort_level(self):
+        for effort in EFFORT_LEVELS:
+            with self.subTest(effort=effort):
+                self.write_profile('models:', f'  review_code: opus {effort}')
+                resolution = ports.resolve(self.home, self.repo.root)
+                self.assertEqual(resolution.problems, ())
+                setting = resolution.models['review_code']
+                self.assertEqual(setting.source, ports.PROFILE)
+                self.assertEqual(setting.value, f'opus {effort}')
+
+    def test_any_other_role_value_shape_is_a_problem_line_and_ports_prints_nothing_else(self):
+        for value in ('sonnet for contained tickets', 'sonnet turbo', 'opus high please'):
+            with self.subTest(value=value):
+                self.write_profile('models:', f'  implement: {value}')
+                code, out, err = run_cli('ports', '--home', str(self.home), '--repo', str(self.repo.root))
+                self.assertEqual(code, 2)
+                self.assertEqual(out, '')
+                self.assertEqual(len(err.splitlines()), 1)
+                self.assertTrue(err.startswith('anomaly: '), err)
+                self.assertIn('implement', err)
+
+    def test_ports_warns_once_for_each_env_var_that_overrides_the_profile_and_for_no_other(self):
+        for set_vars in ((), OVERRIDING_ENV[:1], OVERRIDING_ENV[1:], OVERRIDING_ENV):
+            with self.subTest(set_vars=set_vars):
+                code, out, err = run_cli('ports', '--home', str(self.home), '--repo', str(self.repo.root),
+                                         environ={name: 'x' for name in set_vars})
+                self.assertEqual(code, 0, err)
+                self.assertEqual(set(self.section(parse(out), 'model')), set(MODEL_ROLES))
+                lines = err.splitlines()
+                for name in OVERRIDING_ENV:
+                    self.assertEqual(len([line for line in lines if name in line]), 1 if name in set_vars else 0, name)
+                self.assertEqual(len(lines), len(set_vars))
+
+    def test_the_models_key_maps_a_new_role_with_an_effort_to_its_printed_model_line(self):
+        self.write_profile('models:', '  lookup: haiku medium')
+        value, source = self.section(self.ports(), 'model')['lookup']
+        self.assertEqual(value, 'haiku medium')
+        self.assertEqual(source, 'profile')
 
     def test_a_role_written_with_a_space_or_a_hyphen_maps_to_its_role(self):
         for spelling in ('deep analysis', 'Deep-Analysis'):
