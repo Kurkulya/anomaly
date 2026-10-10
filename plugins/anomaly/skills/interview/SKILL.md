@@ -51,7 +51,7 @@ Markdown, no emoji: bold labels, one blank line between blocks, options as a lis
 
 - Every question has `Assumes:` with its source and `Recommend:` with a real flaw in `Risk:`. A tool or library limit says whether a documented way around exists. [A2, CM12]
 - Low-risk items with an obvious answer go in the one defaults block, not as questions. [A9]
-- Facts are the skill's job: dispatch a sub-agent on the `models` role `explore`, never ask the user what a lookup can find. [GR5, K2]
+- Facts are the skill's job: dispatch `anomaly:facts` on the `explore` model role (model, then effort if set), never ask the user what a lookup can find. [GR5, K2]
 - A running lookup blocks only the questions downstream of it; the rest go on, and the round lists "Facts pending". [GR6, A3]
 - The user says how the code works: check the code, and show any clash. [DM7]
 - A decision is the user's: put it with options and wait. A question on an open answer waits for the next round, whose frontier is recomputed from the answers. [GR7, GR4, GR1]

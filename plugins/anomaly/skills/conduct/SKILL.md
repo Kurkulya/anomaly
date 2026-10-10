@@ -39,7 +39,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 ## Plan, before each wave
 
 4. The wave is the startable tickets in frontier order. `ticket gate` each: exit 0 runs; 1 waits, never built ahead; 2 prints the `anomaly:` line, stop. A held ticket becomes a `-2` part (its `Base:`) only on the user's word, as a `ticket amend` line. [AC-26, D-20, O33]
-5. One agent on `model explore` checks the wave's code claims and returns only the claims that are false or moved, one line each. [O14, L3, AC-16] A long check: say it takes minutes first; a stated tool limit cites its source and a workaround. [N7]
+5. `anomaly:facts` (`explore` role: model, effort if set) checks the wave's code claims and returns only the claims that are false or moved, one line each. [O14, L3, AC-16] A long check: say it takes minutes first; a stated tool limit cites its source and a workaround. [N7]
 6. Each such claim: `ticket amend`, no `--after`. A claim whose fix changes the scope goes to the user; the wave waits. [O14, AC-17]
 7. Research the wave needs: an agent writes `<unit>/research/NN-slug.md`; `ticket amend <ticket> 'research notes: <path>'` puts the path, not the text, on the ticket build reads. [O13, D-6, AC-20]
 8. Show the plan: one line per ticket, `<NN-slug> | touches: <paths of its Touches: line>`. [N7, AC-18] Two or more tickets whose touches are pairwise disjoint: ask once, parallel or sequential; only a parallel pick reads PARALLEL.md. [O44, AC-19] Any other wave is sequential and starts without a question. [N1]
@@ -68,5 +68,5 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 
 17. `anomaly:review` cumulative on `<base>...<branch>` in `<wt>`, "last review: yes". One ticket: skip. [O36c, AC-38]
 18. One fix branch off the tip (`branch` port, slug `<key>-fixes`), the `implementer` port: every fix, and every open Low and Nit whose fix needs no decision; list the others to the user. Merge `--no-ff`; the message goes through a scratchpad file and `-F`. [O38, N9, AC-39]
-19. One full `command verify` in `<wt>`, foreground; the `ui_check` port (`browse` model, the `app` lines) for UI ACs. With no Blocker or High open and green: `mr reviewed`, `mr verified` on the tip; else stop and report. [O39, AC-40]
+19. One full `command verify` in `<wt>`, foreground; the `ui_check` port (`browse` model and effort, the `app` lines) for UI ACs. With no Blocker or High open and green: `mr reviewed`, `mr verified` on the tip; else stop and report. [O39, AC-40]
 20. `anomaly:ship` for the ready gate, with the integration branch checked out in `<wt>`; list every proof that cannot run here to the user in chat. This run wrote no `worklog add` yet: write it now. Stop: ship offers `/anomaly:observe`. [O41, N15, O42, AC-32, AC-41]

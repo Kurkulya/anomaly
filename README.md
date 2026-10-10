@@ -124,7 +124,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `reviewers` | optional port: reviewers added beside `anomaly:code`, `anomaly:feature` and `anomaly:security`, as a comma or line list |
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
-| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `lookup`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
+| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
 | `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
@@ -176,13 +176,14 @@ first line). An extend port lists every such line after the repo's own docs. The
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
 one `anomaly:` line naming the role. Without the key: `explore` haiku, `implement` sonnet,
-`implement_wide` opus, `lookup` haiku, `digest` sonnet, `review` opus, `deep_analysis` opus,
+`implement_wide` opus, `digest` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
 too (`[profile]` when the profile sets only `review`). A model or effort change is a measured
 experiment ([ADR-0018](docs/adr/0018-model-changes-are-measured-experiments.md)). `ports` warns
 when `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` (the profile's models have no effect) or
 `CLAUDE_CODE_EFFORT_LEVEL` (the profile's efforts have no effect) is set.
+A dispatch passes the first word as the Agent tool's `model` and any second word as its `effort`.
 
 **Repo layer.** The commands `verify` (the full verify), `e2e`, `install` and `codegen` run from
 the repository root. `hook_path` is not a command: it is a folder relative to the repository
@@ -282,7 +283,6 @@ command hook_path = [unresolved]
 model explore = haiku [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
-model lookup = haiku [core default]
 model digest = sonnet [core default]
 model review = opus [core default]
 model review_code = opus [core default]
@@ -450,11 +450,11 @@ sorted into anomaly, memory or both (memory is how the agent behaves next time; 
 what the environment must change; a "both" memory names the anomaly's signature). You get one
 table (signature, kind, category, target, scope, impact, `new` or `matches (n seen)`) and one
 question; nothing is written before your answer. For a session other than the current one, one
-sonnet subagent reads the transcript and returns a digest, so the transcript never enters the
-main window. "log this: ..." records one sighting with no questions and a one-line reply.
-The skill also records lens stats (one line per reviewer, accepted and rejected) and lets you
-correct a session's kind. The `review` skill records its own lenses itself, under the fixed names
-that `lens tally add` holds (see lens tally).
+`anomaly:digest` agent on the `digest` model role reads the transcript and returns a digest, so the
+transcript never enters the main window. "log this: ..." records one sighting with no questions and
+a one-line reply. The skill also records lens stats (one line per reviewer, accepted and rejected)
+and lets you correct a session's kind. The `review` skill records its own lenses itself, under the
+fixed names that `lens tally add` holds (see lens tally).
 
 The judgement is the skill's; the writing is a script. Two subcommands, used by the skill:
 
@@ -809,7 +809,7 @@ What the skill does:
    fragment `#/...` or `#!...`, are kept only as a short digest, so two videos or two items on
    one site stay two keys); a text is compared by its lower-case words. A repeat shows the
    earlier idea and stops.
-2. Reads it. A long page is read by one `sonnet` subagent that returns a short digest.
+2. Reads it. A long page goes to one `anomaly:digest` agent on the `digest` role for a short digest.
 3. Weighs it: the open anomalies it would address, the metrics it would move, what it
    conflicts with (recorded decisions, plugin rules, wins), and the strongest case against.
 4. Proposes a verdict and, after the user's answer, records it:
@@ -1351,7 +1351,8 @@ The modes, in one line each (the full dispatch table is in
   diff (no source, config, script or test file) uses combined mode.
 - The agents come from the `reviewers` port: an org reviewer gets the same range, its own heading
   and its own lens. Org conventions sections for the touched areas go to `anomaly:code` only. The
-  model is the `review` model role. The first round goes out in one message, in the background.
+  model and effort are those of the agent's lens model role (see Reviewer agents). The first round
+  goes out in one message, in the background.
 - Cumulative mode reads `stories.md` + `decisions.md` as the spec, passes every
   `.anomaly/*/seams.md` ledger, and asks for a keep, rewrite or delete verdict per
   characterization test file.
@@ -1370,12 +1371,15 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships five read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
-gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model: no agent file pins
-one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
-characters or fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are
-readers, not reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin
-no model either, and keep the same size and description limits.
+The plugin ships five read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review
+ones, `anomaly:plan`, the planning gate's, and `anomaly:docs`, the docs check (below the table). Only
+the `review` skill dispatches the first four, and it passes the model and effort of its lens model
+role: `review_code` for `anomaly:code`, `review_feature` for `anomaly:feature`, `review_security`
+for `anomaly:security`, `review` for `anomaly:plan` and org reviewers. No agent file pins one. Each
+has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or
+fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are readers, not
+reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model
+either, and keep the same size and description limits.
 
 | Agent | Checks | Modes |
 |---|---|---|
@@ -1998,11 +2002,12 @@ the CLI.
   The integration worktree is made once with `git worktree add`; the main checkout stays on the base
   branch. With no `origin` there is no push, MR or CI step and no question about it: the `ports`
   lines decide.
-- **Plan.** Before each wave, one agent on the `explore` model role checks the wave's code claims and
-  returns only the false or moved ones; each becomes a `ticket amend` line, and a claim that changes
-  the scope goes to you first. The wave plan is one line per ticket with its `Touches:` paths. A
-  ticket whose gate is closed waits. Research notes go to `research/NN-slug.md` in the unit folder,
-  and a `ticket amend` line puts their path on the ticket, so `build` passes it on.
+- **Plan.** Before each wave, one `anomaly:facts` agent on the `explore` model role checks the
+  wave's code claims and returns only the false or moved ones; each becomes a `ticket amend` line,
+  and a claim that changes the scope goes to you first. The wave plan is one line per ticket with
+  its `Touches:` paths. A ticket whose gate is closed waits. Research notes go to
+  `research/NN-slug.md` in the unit folder, and a `ticket amend` line puts their path on the
+  ticket, so `build` passes it on.
 - **Run.** `anomaly:build` once per ticket, in `frontier` order. With an `origin`, one plain
   `git push` after each merge (never forced, never to the base branch); the first push calls
   `anomaly:ship` for the draft MR; a `ci` port that is not on its core default starts `ci watch` in

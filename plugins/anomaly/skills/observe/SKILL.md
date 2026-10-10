@@ -95,7 +95,7 @@ script refuses a text, reword it and run again; do not try to get around the che
 
 1. Run `list`.
 2. Decide which session to look at. By default it is the current one: use this conversation.
-   When the user names another session, start one subagent (model sonnet) and ask it to read
+   When the user names another session, start one `anomaly:digest` agent (`digest` model role: model, then effort if set) and ask it to read
    that session's transcript, found as `<id>.jsonl` under the transcripts folder (default
    `~/.claude/projects`, one folder per project), and to return a digest of at most 40 lines:
    the friction points, the things that went well, and every place the user interrupted, rejected

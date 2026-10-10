@@ -178,7 +178,6 @@ MODEL_ROLES = (                      # (role, core default), in the order `ports
     ('explore', 'haiku'),
     ('implement', 'sonnet'),
     ('implement_wide', 'opus'),
-    ('lookup', 'haiku'),
     ('digest', 'sonnet'),
     ('review', 'opus'),
     ('review_code', ''),             # never read: MODEL_FALLBACKS gives the value
