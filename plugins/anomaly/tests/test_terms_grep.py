@@ -36,7 +36,7 @@ class TermsGrepTest(unittest.TestCase):
         (line,) = self.hit_lines(out)
         self.assertIn('A' * DEFAULT_CONTEXT + 'needle', line)
         self.assertNotIn('A' * (DEFAULT_CONTEXT + 1), line)
-        self.assertIn('needle' + 'B' * (DEFAULT_CONTEXT - len('needle')), line)
+        self.assertIn('needle' + 'B' * DEFAULT_CONTEXT, line)
         self.assertNotIn('B' * (DEFAULT_CONTEXT + 1), line)
 
     def test_context_sets_the_characters_each_side(self):
@@ -54,6 +54,38 @@ class TermsGrepTest(unittest.TestCase):
         _, whole, _ = run_cli('terms-grep', '--terms', 'foo', '--word', url)
         self.assertIn("'foo': 3 hit(s)", plain)
         self.assertIn("'foo': 1 hit(s)", whole)
+
+    def test_a_comma_splits_terms_and_a_phrase_matches_across_a_tag_and_a_line_break(self):
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle,two words', self.page('two<b>\n</b>words needle'))
+        self.assertEqual(code, 0)
+        self.assertIn("'needle': 1 hit(s)", out)
+        self.assertIn("'two words': 1 hit(s)", out)
+
+    def test_an_unclosed_script_keeps_its_text_and_a_later_closed_style_is_dropped(self):
+        text = terms_grep.clean('<script>kept <style>dropped</style> after')
+        self.assertIn('kept', text)
+        self.assertNotIn('dropped', text)
+        self.assertIn('after', text)
+
+    def test_a_non_ascii_tag_that_folds_to_script_is_an_ordinary_tag(self):
+        # U+017F (long s) folds to 's' under Unicode case folding
+        self.assertEqual(terms_grep.clean('a <ſcript>b c'), 'a b c')
+
+    def test_unclosed_openers_search_for_their_closing_tag_once(self):
+        closer = terms_grep.HIDDEN_CLOSE['script']
+        counted = mock.Mock(search=mock.Mock(side_effect=closer.search))
+        with mock.patch.dict(terms_grep.HIDDEN_CLOSE, script=counted):
+            terms_grep.drop_hidden('<script>' * 1000)
+        self.assertEqual(counted.search.call_count, 1)
+
+    def test_unclosed_comments_are_not_handed_to_the_comment_regex(self):
+        page = '<!--' * 1000 + 'x'
+        comment = terms_grep.COMMENT
+        recorded = mock.Mock(sub=mock.Mock(side_effect=comment.sub))
+        with mock.patch.object(terms_grep, 'COMMENT', recorded):
+            text = terms_grep.clean(page)
+        self.assertEqual(len(recorded.sub.call_args.args[1]), 0)
+        self.assertEqual(text, page)
 
     def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
         folder = tempfile.TemporaryDirectory()

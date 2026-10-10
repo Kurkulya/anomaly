@@ -43,7 +43,7 @@ cut: there is no behaviour to break.
 - Write each break by hand: one change to the code the cut test checks. Use the repo's
   mutation tool only when it is already installed; never install one.
 - One break probe at a time. Apply the break, run the cover (the stack profile's "Break code"), and
-  restore the file. A passing cover does not hold: `keep`, unless the test is useless (below).
+  restore the file. A passing cover does not hold: the `keep` verdict, unless the test is useless (below).
 - Run the cut test on the same break. A cut needs its named cover to fail on the break. A test that
   catches none of its target's breaks is `cut` when its named cover fails, and `rewrite`
   (reason "useless") only when no named cover fails.

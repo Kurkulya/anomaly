@@ -32,7 +32,15 @@ TEXT_TYPES = ('text/html', 'application/xhtml+xml', 'text/plain')
 META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""", re.I)
 SHORT_PAGE = 2000
 HIT_LIMIT = 6
+# TODO(VK, revisit 2026-10-17): a file: URL reads any local file, and a redirect can reach loopback or internal
+# hosts — see ADR-0020
 SCHEMES = ('http', 'https', 'file')
+COMMENT = re.compile(r'<!--.*?-->', re.S)
+HIDDEN_NAMES = ('script', 'style', 'noscript', 'template')
+# tag names match as ASCII, because re.I alone folds ſ to s; so `<scripté>` counts as a script opener
+HIDDEN_OPEN = re.compile(rf'<({"|".join(HIDDEN_NAMES)})\b', re.I | re.A)
+HIDDEN_CLOSE = {name: re.compile(rf'</{name}\s*>', re.I | re.A) for name in HIDDEN_NAMES}
+TAG = re.compile(r'<[^>]+>')
 
 
 class FetchError(Exception):
@@ -64,11 +72,36 @@ def fetch(url):
         return content_type, body.decode('utf-8', errors='replace')
 
 
+def up_to_last(raw, regex, closer):
+    """`regex` matches as spaces in `raw` up to the end of its last `closer`. No match can end past it, and
+    leaving that tail out keeps the regex from scanning to the page end once per unclosed opener (quadratic
+    on a page of them)."""
+    end = raw.rfind(closer)
+    end = 0 if end == -1 else end + len(closer)
+    return regex.sub(' ', raw[:end]) + raw[end:]
+
+
+def drop_hidden(raw):
+    """Each script, style, noscript and template element as a space, as `<(name)\\b.*?</\\1\\s*>` would, in one
+    pass: once a name has no closing tag left, its later openers are skipped, not each scanned to the page end."""
+    parts, kept_from, at, unclosed = [], 0, 0, set()
+    while (opener := HIDDEN_OPEN.search(raw, at)) is not None:
+        name = opener[1].lower()
+        closer = None if name in unclosed else HIDDEN_CLOSE[name].search(raw, opener.end())
+        if closer is None:
+            unclosed.add(name)
+            at = opener.end()
+        else:
+            parts += [raw[kept_from:opener.start()], ' ']
+            kept_from = at = closer.end()
+    return ''.join(parts) + raw[kept_from:]
+
+
 def clean(raw):
     """Visible text with tags as spaces and every whitespace run, &nbsp; included, as one space."""
-    raw = re.sub(r'<!--.*?-->', ' ', raw, flags=re.S)
-    raw = re.sub(r'<(script|style|noscript|template)\b.*?</\1\s*>', ' ', raw, flags=re.S | re.I)
-    raw = re.sub(r'<[^>]+>', ' ', raw)
+    raw = up_to_last(raw, COMMENT, '-->')
+    raw = drop_hidden(raw)
+    raw = up_to_last(raw, TAG, '>')
     raw = html.unescape(raw)
     return re.sub(r'\s+', ' ', raw).strip()
 
@@ -119,10 +152,10 @@ def run_terms_grep(args, environ):
                 print('date line:', m.group(0))
                 break
         for term in terms:
-            hits = [m.start() for m in pattern(term, args.word).finditer(text)]
+            hits = [m.span() for m in pattern(term, args.word).finditer(text)]
             print(f"\n--- '{term}': {len(hits)} hit(s)")
-            for h in hits[:HIT_LIMIT]:
-                print('   …', text[max(0, h - args.context): h + args.context], '…')
+            for start, end in hits[:HIT_LIMIT]:
+                print('   …', text[max(0, start - args.context): end + args.context], '…')
             if len(hits) > HIT_LIMIT:
                 print(f'   (+{len(hits) - HIT_LIMIT} more)')
     return 1 if failed else 0

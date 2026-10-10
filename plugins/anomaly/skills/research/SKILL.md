@@ -27,7 +27,8 @@ not in one). `<research>` is `<checkout>/.anomaly/<unit>/research/`. It is git-e
 nothing here is committed. Each new file takes the next free two-digit `NN` in `<research>`
 at the time it is written, so it cannot clash with files already there. Before the first
 write, make sure the file at `git rev-parse --git-path info/exclude` has a `.anomaly/` line;
-add it with the Edit tool, or create the file with the Write tool if it is missing.
+add it with the Edit tool, or create the file with the Write tool if it is missing. Use that
+command for the path: in a worktree `.git` is a file.
 
 **Kind.** The size of a run is its kind, set by the first scope question:
 - **library**: one topic agent reads docs, changelogs, issues and migration notes for each

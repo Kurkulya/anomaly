@@ -48,7 +48,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature test-aud
   --untracked-files=no` must match `evidence/status-0-tracked.txt`. If not, stop and
   ask, or read files with `git show <sha>:<path>`. Untracked test outputs do not stop the
   run; they go in `timings`.
-- **No cut without a cover** (rule in `classes.md`). No cover → `keep` or `rewrite`.
+- **No cut without a cover** (rule in `classes.md`). No cover → a `keep` or `rewrite` verdict.
 - **Every timing carries its CPU load.** A number a later step needs is marked
   `re-time isolated`.
 - **Every count comes with the command that made it.**
@@ -101,7 +101,7 @@ agent writes `timings`, with the load next to every number.
 Dispatch one fresh `anomaly:survey` agent (`survey` role: model, effort if set) with the
 cover-check brief, which holds its exact output path and word limit (under 60 files, the
 main session does it). It re-reads every cover and writes `covers-check` only. Then the
-main window edits the `audit-<scope>` tables: each failed row becomes `keep` or `rewrite`,
+main window edits the `audit-<scope>` tables: each failed row gets a `keep` or `rewrite` verdict,
 with a correction line (`outputs.md`).
 
 ## Phase 4 — break probes

@@ -68,7 +68,7 @@ shared template? Where do production errors go? Is any flag "temporarily" off?
 ## Area 7 — Decision records
 
 **Questions.** Where do the whys live: ADRs, CLAUDE.md prose, commit bodies, comments,
-nobody? How many ADRs vs how many "why" paragraphs? Then run the five docs checks.
+nobody? How many ADRs vs how many "why" paragraphs? Then run `docs scan` and the two docs checks.
 
 **Base counts.**
 
@@ -78,32 +78,24 @@ grep -cE "because|measured|instead of|trade-off|deliberate|rejected" CLAUDE.md  
 git log --format=%h -- CLAUDE.md | wc -l                                         # how often it is rewritten
 ```
 
-**The five docs checks.**
+**`docs scan`.** Run the `docs scan` call of `SKILL.md`. It owns the overdue revisit dates, the
+deferrals with no owner or date and the dead paths in `CLAUDE.md`: report its lines as it prints
+them. It reads TODO only; count the other deferral words with
+`git grep -nwE "FIXME|HACK|follow-up" -- <source files> | grep -v /tests/ | wc -l`.
 
-1. **Revisit dates passed.** Each dated revisit before today is overdue.
-   ```bash
-   git grep -noE "[Rr]evisit[^0-9]{0,12}[0-9]{4}-[0-9]{2}-[0-9]{2}" -- docs/adr CLAUDE.md <source dir>
-   ```
-2. **Deferrals with no owner or date.**
-   ```bash
-   git grep -nE "TODO|FIXME|HACK|follow-up" -- <source files> | grep -v /tests/ | grep -vE "TODO\([^)]*revisit 20[0-9]{2}-[0-9]{2}-[0-9]{2}\)" | wc -l
-   ```
-3. **Dead paths in CLAUDE.md.** List the paths it names, then run `git ls-files <path>`
-   on each; an empty result is a dead path.
-   ```bash
-   grep -oE '`[A-Za-z0-9_.-]+/[A-Za-z0-9_./*-]+`' CLAUDE.md | tr -d '`' | sort -u
-   ```
-4. **Decisions in commits with no ADR.** For each hit, grep `docs/adr/` for its hash or
+**The two docs checks.**
+
+1. **Decisions in commits with no ADR.** For each hit, grep `docs/adr/` for its hash or
    subject; no match means the why lives only in the commit.
    ```bash
    git log --no-merges --format="%h %ad %s" --date=short -i --grep="instead of" --grep="rejected" --grep="deliberate" --grep="measured" | head -15
    ```
-5. **ADR claims the code drifted from.** For each ADR, take the checkable claims in its
+2. **ADR claims the code drifted from.** For each ADR, take the checkable claims in its
    Decision (a file exists, a value, a count, an import is absent) and re-run the check.
    With more than about 5 ADRs, delegate to `anomaly:facts` (`explore` role: model, effort if set) with the ADR paths and
    a ≤900-word cap. It has no git: pass it the `git ls-files` path list, and re-count with git
    every number it returns.
 
-**Count and report:** ADR count, "why" paragraphs in CLAUDE.md, rewrite count, overdue
-revisit dates, unkeyed deferrals with age, dead paths, commit decisions with no ADR,
-drifted ADR claims.
+**Count and report:** ADR count, "why" paragraphs in CLAUDE.md, rewrite count, the
+`docs scan` lines (overdue revisit dates, unkeyed deferrals, dead paths), commit decisions
+with no ADR, drifted ADR claims.
