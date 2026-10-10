@@ -1735,6 +1735,9 @@ class ModelPickSkillTest(unittest.TestCase):
         self.assertRegex(summing[0], r'(?i)\buser\b')
         self.assertIn('last review: yes', summing[0])
         self.assertIn('`conduct`', summing[0])
+        # Amended 2026-10-10 (D-33, cumulative review): a user who said neither yes nor no is asked at the close
+        self.assertRegex(summing[0], r'(?i)\bask')
+        self.assertIn('last ticket', summing[0])
 
     def test_build_tells_review_its_rounds_are_not_the_last(self):
         """AC-18, D-33: the Review paragraph passes "last review: no" in place of "last review of the session"."""

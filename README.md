@@ -1348,8 +1348,10 @@ never the spec or stories file.
   rejected 1 when its `fix rounds` is 2 or more, else accepted 1; a resumed build that does not know the
   count adds no line.
   `build` tells `review` "last review: no"; after the close, when its caller said "last review:
-  yes" (you on the session's last ticket, or `conduct` with one ticket), it runs `lens tally sum`
-  and `observe apply` itself. A `conduct` unit of more tickets sums in its cumulative review.
+  yes" (you, or `conduct` with one ticket), it runs `lens tally sum` and `observe apply` itself. When
+  you called it without saying "last review: yes" or "no", it asks at its close whether this is the
+  session's last ticket and does the same on a yes. A `conduct` unit of more tickets sums in its
+  cumulative review.
 - Rules whose experiments are still running say "pending verdict", with no date: the
   review-before-verify order, the isolated re-run of failures in untouched files, the seam
   ledger steps and codegen after a tip merge.
