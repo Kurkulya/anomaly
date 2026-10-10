@@ -306,3 +306,30 @@ class PruneTest(SeamsTestCase):
 
     def test_a_merge_that_is_not_a_commit_is_an_error(self):
         assert_cli_error(self, self.prune('--merge', 'no-such-commit'), 'no-such-commit')
+
+    def two_path_line(self):
+        """A ledger line whose owner field lists two files, each with its own name."""
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n')
+        self.repo.write('plugins/x/b.py', 'def two():\n    pass\n')
+        self.change('add the two owner files')
+        line = '- pair · `plugins/x/a.py` (`one`), `plugins/x/b.py` (`two`) · replaces a copy (ticket 01)\n'
+        write_text(self.ledger, line)
+        return line
+
+    def test_a_change_to_the_first_of_two_owner_files_that_holds_its_own_name_keeps_the_line(self):
+        line = self.two_path_line()
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n\n\ndef more():\n    pass\n')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line)
+        self.assertNotIn('pair', out)
+
+    def test_a_change_to_the_second_of_two_owner_files_that_lost_its_own_name_removes_the_line(self):
+        self.two_path_line()
+        self.repo.write('plugins/x/b.py', 'def other():\n    pass\n')   # `two` is gone
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), '')
+        self.assertIn('reshaped', [line for line in out.splitlines() if 'pair' in line][0])
