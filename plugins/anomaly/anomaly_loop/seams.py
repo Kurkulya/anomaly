@@ -6,15 +6,17 @@
 Both are pending the calibrate verdict of experiment `seam-ledger-goes-stale` (rule I34); the help
 says "pending verdict" with no date, which would go stale.
 
-A ledger line is `- <name> · <owner> · <rest>`; the owner part starts with the owner file (in
-backticks or bare), and any further backticked names after it (`parse`, `Ticket`) are the names the
-file is expected to still mention. A line "names" a file when its owner file is that path or the end
-of it (a bare `paths.py` matches `plugins/x/paths.py`); when a bare name matches several changed
-files and none has exactly that path, the line is `ambiguous`: it is listed and left alone. A merge
-is read as the changes of the merge commit against its first parent:
-- deleted  the file is gone: the line is removed
-- renamed  the owner field takes the new path (a bare name keeps its form); no other field changes
-- reshaped the file changed and no longer mentions one of the names the line lists (as a whole word;
+A ledger line is `- <name> · <owner> · <rest>`; the owner part is one or more owner paths (in
+backticks or bare), each followed by its names in parentheses: `a.py` (`parse`, `Ticket`), `b.py`
+(`load`). The names after a path are the names that file is expected to still mention; a later path
+is never a name of an earlier one. A line "names" a file when one of its owner paths is that path or
+the end of it (a bare `paths.py` matches `plugins/x/paths.py`); when a bare name matches several
+changed files and none has exactly that path, that path is `ambiguous`: it is listed and left alone.
+A merge is read as the changes of the merge commit against its first parent, and each owner path is
+judged on its own, with its own names:
+- deleted  a file is gone: the line is removed
+- renamed  that owner path takes the new path (a bare name keeps its form); no other field or path changes
+- reshaped a file changed and no longer mentions one of the names listed for it (as a whole word;
            a heuristic, not a parse): the line is removed, because its claim is probably no longer
            true; `seams add` writes the new one
 Every other line, and every byte of it, stays; so do lines that are not ledger lines. The ledger is
@@ -48,23 +50,28 @@ def path_before(change):
     return change.old_path if change.status == 'R' else change.path
 
 
-def owner_file(field):
+def owner_groups(field):
+    """The owner paths of a line, each with the names listed for it: a list of (path, start of the path
+    in the field, names). A path is the bare first word or a backticked part outside parentheses; its
+    names are the backticked parts inside the parentheses that follow it, each cut to its leading
+    identifier (`resolve(home)` gives resolve, `RepoLayer.risk_patterns` gives risk_patterns)."""
+    groups, depth, pos = [], 0, 0
     words = field.split()
-    return words[0].strip('`') if words else ''
-
-
-def listed_names(field):
-    """The names a line lists for its owner file: the backticked parts after the path, each cut to its
-    leading identifier (`resolve(home)` gives resolve, `RepoLayer.risk_patterns` gives risk_patterns)."""
-    spans = BACKTICKED.findall(field)
-    if spans and spans[0] == owner_file(field):
-        spans = spans[1:]
-    names = []
-    for span in spans:
-        found = NAME.match(span)
-        if found:
-            names.append(found.group(0).rstrip('.').split('.')[-1])
-    return names
+    if words and not words[0].startswith('`'):
+        pos = field.index(words[0])
+        groups.append((words[0], pos, []))
+        pos += len(words[0])
+    for found in BACKTICKED.finditer(field, pos):
+        between = field[pos:found.start()]
+        depth = max(0, depth + between.count('(') - between.count(')'))
+        pos = found.end()
+        if depth == 0:
+            groups.append((found.group(1), found.start(1), []))
+            continue
+        name = NAME.match(found.group(1))
+        if name and groups:
+            groups[-1][2].append(name.group(0).rstrip('.').split('.')[-1])
+    return groups
 
 
 def has_name(text, name):
@@ -78,32 +85,53 @@ def names_path(owner, path):
 
 # ---------- prune ----------
 
-def judge(body, changes, content_at):
-    """What the merge did to one ledger line: None, or (verb, detail, new body); a new body of None
-    removes the line. `content_at(path)` is the text of a file as merged, or None."""
-    fields = line_fields(body)
-    if fields is None:
-        return None
-    field = fields[1]
-    owner = owner_file(field)
+def judge_owner(owner, names, changes, content_at):
+    """What the merge did to one owner path of a line: None, or (verb, detail, new path); the new path is
+    only set for a rename."""
     matches = [c for c in changes if c.status not in 'AC' and names_path(owner, path_before(c))]
     if not matches:
         return None
     exact = [c for c in matches if path_before(c) == owner]
     if len(matches) > 1 and not exact:
-        return 'ambiguous', f'{owner} matches {", ".join(path_before(c) for c in matches)}', body
+        return 'ambiguous', f'{owner} matches {", ".join(path_before(c) for c in matches)}', None
     change = (exact or matches)[0]
     if change.status == 'D':
         return 'deleted', change.path, None
-    gone = [name for name in listed_names(field) if not has_name(content_at(change.path) or '', name)]
+    gone = [name for name in names if not has_name(content_at(change.path) or '', name)]
     if gone:
         return 'reshaped', f'{change.path} no longer mentions {", ".join(gone)}', None
     if change.status != 'R':
         return None
     prefix = change.old_path[:len(change.old_path) - len(owner)]
     moved = change.path[len(prefix):] if change.path.startswith(prefix) else change.path
-    fields[1] = field.replace(owner, moved, 1)
-    return 'renamed', f'{change.old_path} -> {change.path}', SEAM_BULLET + TICKET_FIELD_SEPARATOR.join(fields)
+    return 'renamed', f'{change.old_path} -> {change.path}', moved
+
+
+def judge(body, changes, content_at):
+    """What the merge did to one ledger line: None, or (verb, detail, new body); a new body of None
+    removes the line. Each owner path is judged on its own, with its own names; a path deleted or
+    reshaped removes the line. `content_at(path)` is the text of a file as merged, or None."""
+    fields = line_fields(body)
+    if fields is None:
+        return None
+    field = fields[1]
+    verdicts = []
+    for owner, start, names in owner_groups(field):
+        verdict = judge_owner(owner, names, changes, content_at)
+        if verdict is not None:
+            verdicts.append((owner, start, verdict))
+    for _, _, (verb, detail, _) in verdicts:
+        if verb in ('deleted', 'reshaped'):
+            return verb, detail, None
+    renames = [(owner, start, verdict) for owner, start, verdict in verdicts if verdict[0] == 'renamed']
+    if not renames:
+        return (verdicts[0][2][0], verdicts[0][2][1], body) if verdicts else None
+    details = []
+    for owner, start, (_, detail, moved) in reversed(renames):
+        field = field[:start] + moved + field[start + len(owner):]
+        details.insert(0, detail)
+    fields[1] = field
+    return 'renamed', ', '.join(details), SEAM_BULLET + TICKET_FIELD_SEPARATOR.join(fields)
 
 
 def prune(text, changes, content_at):
