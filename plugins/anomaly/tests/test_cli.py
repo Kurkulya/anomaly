@@ -1705,9 +1705,10 @@ class ModelPickSkillTest(unittest.TestCase):
         """AC-17, Amended 2026-10-10: `ticket show` cannot give the count back."""
         self.assertRegex(self.pick_item(), r'(?i)\bunknown\b[^.]{0,60}\b(?:adds? no|no|never|skip\w*)\b[^.]{0,30}(?:line|`model_pick`)')
 
-    def test_build_sums_and_applies_after_the_close_only_when_the_user_called_it_and_its_ticket_is_the_last(self):
-        """AC-18, Amended 2026-10-10 (D-33): the tally is added at each close; only the sum waits. `conduct` sums in
-        its cumulative review, so a conduct-called build never sums."""
+    def test_build_sums_and_applies_after_the_close_only_when_its_caller_said_last_review_yes(self):
+        """AC-18, Amended 2026-10-10 (D-33): the tally is added at each close; only the sum waits. Build always tells
+        review "last review: no"; its own caller says "last review: yes" on the user's last ticket, or `conduct` with
+        one ticket (a unit of more tickets sums in conduct's cumulative review)."""
         items = self.close_items()
         close = ' '.join(items)
         for token in ('model_pick', 'lens tally sum', 'observe apply'):
@@ -1718,7 +1719,8 @@ class ModelPickSkillTest(unittest.TestCase):
         self.assertIn('observe apply', summing[0])
         self.assertLess(summing[0].index('lens tally sum'), summing[0].index('observe apply'))
         self.assertRegex(summing[0], r'(?i)\buser\b')
-        self.assertRegex(summing[0], r'(?i)\blast\b')
+        self.assertIn('last review: yes', summing[0])
+        self.assertIn('`conduct`', summing[0])
 
     def test_build_tells_review_its_rounds_are_not_the_last(self):
         """AC-18, D-33: the Review paragraph passes "last review: no" in place of "last review of the session"."""
