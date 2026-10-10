@@ -59,3 +59,5 @@
 | **MR** | The one merge request of a work unit (a pull request on GitHub), opened as a draft and made ready through `ship`. | PR (in plugin text) |
 | **stack profile** | One file per stack (language and test runner) in a skill's `reference/stacks/` that gives the commands and greps the skill runs on that stack; a stack with no file gets a drafted one. | profile (alone; that is the environment mapping) |
 | **lock** | A guard that stops an architecture finding from coming back: an import or lint rule at error level, or a failing test. | guard rail |
+| **cover** | The kept test that a test cut relies on: it must fail on each break of the cut test's behaviour. | replacement |
+| **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the README uses "mutation probe" and "probe edit") |

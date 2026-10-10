@@ -40,6 +40,9 @@ for each, and ends in an `interview` line, `diagnose` lines or a report.
 **research** compares options or vendors with evidence: a brief, topic agents, deciding sources
 re-read by the main session, and a decision matrix where every claim carries a source and a label.
 
+**tests** audits a repo's tests on any stack, through a stack profile, and reports the tests that
+can be cut, each with a cover that fails on a break, with no source changed.
+
 This repo is a local marketplace (`anomaly-local`) that holds one plugin, `anomaly`.
 Read this file from top to bottom: install, configure, then the data, then each part of the
 loop in the order you meet it, then the pipeline, from tickets to the stage skills.
@@ -59,9 +62,9 @@ claude plugin install anomaly@anomaly-local
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
 listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review`,
-`anomaly:ship`, `anomaly:diagnose`, `anomaly:architecture` and `anomaly:research` beside them.
-`/anomaly:interview`, `/anomaly:specify` and `/anomaly:slice` are slash-only: they are not in that
-list, and you start them by typing them.
+`anomaly:ship`, `anomaly:diagnose`, `anomaly:architecture`, `anomaly:research` and
+`anomaly:tests` beside them. `/anomaly:interview`, `/anomaly:specify` and `/anomaly:slice` are
+slash-only: they are not in that list, and you start them by typing them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -2163,6 +2166,36 @@ only pre-approved tool is the CLI.
 - **Hand-off.** `worklog add` (stage `research`, `--docs` the unit folder), then one
   `/anomaly:interview` line naming the latest matrix, or none for a standalone library run with one
   clear winner.
+
+## The tests skill
+
+`anomaly:tests` is model-invocable: it starts on "test audit", "audit the tests" or "which tests can
+we cut". It audits one repo's tests and changes no source. Its text is
+`plugins/anomaly/skills/tests/SKILL.md` (8 KB or less) with `reference/` beside it: the topic map,
+classes, verdicts and cover rule, the shared grep recipes, the timing rules, the agent briefs, the
+output shapes, the pitfalls and one **stack profile** per stack (`fe`, `flutter`, `go`, `python`).
+Its only pre-approved tool is the CLI.
+
+- **Setup.** `worklog start test-audit-<date> tests`, then the stack profile is picked from the
+  repo's files (several stacks are audited apart; no match gets a drafted stack profile that is used
+  only after your yes and saved only in `research/`). Each topic (decision rule, e2e reason list,
+  bans, characterization) takes the audited repo's own test rule first, else the skill's own rule
+  text, else "no rule found"; a class with no rule gets no cut. Writes go only under
+  `.anomaly/test-audit-<date>/research/`, plus the git exclude line.
+- **Audit.** Under 60 test files the main session audits alone. From 60 files, value agents (one
+  `anomaly:survey` agent per scope, on the `survey` model role, with effort when set): 2 for 60 to
+  300 files, where the main session times the suite after them, and 3 to 5 above 300, followed by one
+  runtime agent that writes the timings. Every timing carries the CPU load beside it. Every row
+  answers what would break unnoticed if the test were gone; coverage is never the proof.
+- **Cover check.** Under 60 test files the main session re-reads every cover; above that a fresh
+  `anomaly:survey` agent does. A cover that is itself cut, tests another unit or asserts less does
+  not hold, and the row becomes `keep` or `rewrite`.
+- **Break probes.** After your yes, each cut candidate gets 1 to 3 breaks, written by hand in a
+  scratchpad copy of the tip, and a cut needs its cover to fail on the break. Without your yes those
+  candidates stay `open`, as "not probed".
+- **Hand-off.** `worklog add` (stage `tests`, `--docs` the unit folder), then the line that fits:
+  `/anomaly:interview Work unit test-audit-<date>` for open choices, `/anomaly:diagnose <defect>`
+  per clear defect, or no line when nothing needs to change.
 
 ## Development
 
