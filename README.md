@@ -1222,6 +1222,45 @@ stops the command with its file and line number, so a broken line cannot count a
   the median of each number over the runs (the mean of the two for two runs). Pass bars are
   not printed; they belong to the agent's own acceptance criteria (see Reviewer agents).
 
+### Facts bench
+
+`plugins/anomaly/tests/bench/facts/` is a fixture for a reader agent, not a reviewer: a small
+repository under `base/` (a job queue in `jobs/`, and `docs/design.md` with a stale claim) and
+`facts.json`. The agent answers three questions by reading `base/` only, and the questions need
+judgment, not a search: a 3-file call chain (which function in each file carries a command from
+the entry point to the write), a moved claim (the design notes cite a place that no longer holds
+the check; where is it now) and the callers of one function that can pass `None` (some look the
+same but cannot).
+
+```
+python plugins/anomaly/scripts/anomaly.py bench facts <facts.json> <answers> [<answers> [<answers>]]
+```
+
+`facts.json` is a JSON object with `fixture` (a name), `questions` (`id`, `kind` of `call-chain`,
+`moved-claim` or `none-callers`, and the `ask` text), `facts` and `decoys`. An expected fact has an
+`id`, the `question` it answers and `places`, written as in `defects.json`, with the file as
+`base/` has it. A decoy has the same keys and is a plausible wrong answer, such as the place the
+stale claim cites. The fixture holds 3 questions, 6 expected facts and 5 decoys.
+
+Each answers file is the text of one run. An answer is one line, with an em dash (U+2014) after the
+place:
+
+```
+- <path>:<line> — <fact>
+```
+
+The path is bare and the line is one number (no backticks, no range, no bold), and a line names
+only a place that is an answer: a place the reader rejects, or quotes as context, goes in prose.
+Every other line is prose and is ignored; empty text, or text of blanks only, is refused. A bullet
+that holds a `<path>:<digits>` place and an em dash but has another shape (a backticked path, a
+line range, bold) is refused, with the file and line number, as `bench score` refuses a broken
+finding line. The finding-line parser is not used. An answer matches an item by the same rule as a finding matches a
+defect: the planted file and a line within the planted range plus or minus 3. An expected fact is
+**found** when an answer matches it; a decoy is **hit** when an answer matches it, and each hit is
+named. The output has one line for each run (the facts found, the facts missed and the decoys hit,
+each with its ids), then the median over the runs of the found and decoy-hit counts. Give one to
+three answers files.
+
 ## The build skill
 
 `anomaly:build` takes one ticket from a red acceptance test to a reviewed, verified commit merged
@@ -1711,6 +1750,7 @@ python plugins/anomaly/scripts/anomaly.py nudge     --home <dir> --data <dir> [-
 python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc|amend ...
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py bench     score <defects.json> <findings>...
+python plugins/anomaly/scripts/anomaly.py bench     facts <facts.json> <answers>...
 python plugins/anomaly/scripts/anomaly.py check     pre-merge|pre-push|stories|slice ...
 python plugins/anomaly/scripts/anomaly.py seams     prune|add ...
 python plugins/anomaly/scripts/anomaly.py ci        watch|log <target> [--project <group/project>] [--repo <dir>] ...
@@ -1742,7 +1782,7 @@ python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] 
   repository that holds `--repo` (default: the current folder), and a `warning:` line on stderr for
   each of `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` and `CLAUDE_CODE_EFFORT_LEVEL` that is set; see Ports
   and the repo layer.
-- `bench` takes the action `score`; its inputs and scoring rules are in Benchmark.
+- `bench` takes the action `score` or `facts`; their inputs and scoring rules are in Benchmark.
 - `check` and `seams` take an action; their options are in The pre-merge check and the seam
   ledger.
 - `ci` takes an action (`watch` or `log`); its options and exit codes are in CI.
