@@ -13,8 +13,8 @@ Two adapters: deps.dev (package, version and project endpoints, no token; downlo
 and pub.dev (package and score endpoints; licence from the score `license:<id>` tags, repository from
 the pubspec `repository` only; deprecated from the package `isDiscontinued` key, Unknown when the
 key is absent; no stars, issues or Scorecard). A column an adapter cannot fill prints Unknown. A
-control character in a table cell or a FETCH FAILED note prints as `?`, and so does a lone
-surrogate in any cell.
+control character in a cell (table or --json) or a FETCH FAILED note prints as `?`, and so does a
+lone surrogate in any cell.
 
 A failed fetch or a malformed response (missing key, null or wrong type) prints FETCH FAILED for that
 package with every column Unknown; an ecosystem with no adapter prints `no adapter: <system>`; both
@@ -67,9 +67,12 @@ def quote(part):
 
 
 def text(value):
-    """A cell: the value as plain text, Unknown when the source has none; a lone surrogate from the
-    JSON becomes `?`, so printing never fails on it."""
-    return UNKNOWN if value is None or value == '' else str(value).encode('utf-8', 'replace').decode('utf-8')
+    """A cell of the table and of --json: the value as plain text, Unknown when the source has none; a
+    lone surrogate from the JSON and a control character (printable) become `?`, so printing never
+    fails on it and sends no terminal escape."""
+    if value is None or value == '':
+        return UNKNOWN
+    return printable(str(value).encode('utf-8', 'replace').decode('utf-8'))
 
 
 def printable(value):
@@ -83,7 +86,7 @@ def first_ten(stamp):
 
 
 def row_of(package, **cells):
-    return {'package': package, **{name: text(cells.get(name)) for name in COLUMNS[1:]}}
+    return {'package': printable(package), **{name: text(cells.get(name)) for name in COLUMNS[1:]}}
 
 
 def deps_dev_facts(system, name):
@@ -143,7 +146,7 @@ def detect_ecosystem(folder):
 
 def cell(value):
     """A Markdown table cell: `|` escaped, line breaks as spaces, so a value cannot split its row."""
-    return printable(value).replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
+    return value.replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
 
 
 def render(rows):

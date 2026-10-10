@@ -210,13 +210,16 @@ class TableTests(CommandTestCase):
         self.assertEqual(table_rows(out), [["pypi:examplepkg"] + PYPI_VALUES])
         self.assertEqual(set(calls), {PYPI_PACKAGE_URL, PYPI_VERSION_URL, PYPI_PROJECT_URL})
 
-    def test_a_control_character_in_a_cell_prints_as_a_question_mark(self):
+    def test_a_control_character_in_a_cell_prints_as_a_question_mark_in_the_table_and_in_json(self):
         # ESC from C0 and U+009B (CSI) from C1
         package = {"latest": {"version": "1.0.0", "pubspec": {"repository": "https://example.com/a\x1bb\x9bc"}}}
         code, out, _ = self.run_main(["pub:crafted"], crafted_fetch(package))
         self.assertEqual(code, 0)
         self.assertEqual(table_rows(out)[0][5], "https://example.com/a?b?c")
         self.assertNotIn("\x1b", out)
+        self.assertNotIn("\x9b", out)
+        code, out, _ = self.run_main(["--json", "pub:crafted"], crafted_fetch(package))
+        self.assertEqual((code, json.loads(out)[0]["repository"]), (0, "https://example.com/a?b?c"))
         self.assertNotIn("\x9b", out)
 
     def test_a_lone_surrogate_prints_as_a_question_mark_in_the_table_and_in_json(self):
