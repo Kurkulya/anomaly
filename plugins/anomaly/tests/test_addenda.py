@@ -101,6 +101,8 @@ class AppendTest(AddendaCase):
         with self.assertRaises(RecordError) as refused:
             addenda.append_line(self.path, 'Name the skill in the note.', 'slow-check', '0a1b2c3d')
         self.assertIn('slow-check', str(refused.exception))
+        self.assertIn('observe.md', str(refused.exception))
+        self.assertRegex(str(refused.exception), r'(?i)remove')   # how to clear the old line
         self.assertEqual(self.path.read_bytes(), before)
         addenda.append_line(self.path, 'Name the skill in the note.', 'slow', '0a1b2c3d')   # a prefix is another experiment
         self.assertEqual(len(addenda.read_lines(self.path)), 2)

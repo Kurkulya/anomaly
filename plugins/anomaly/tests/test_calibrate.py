@@ -395,7 +395,9 @@ class DeclareCommandTest(CalibrateCase):
     def test_the_plugin_name_is_matched_in_any_case_and_a_path_inside_the_plugin_counts(self):
         write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
         write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
-        targets = ('Anomaly:Observe', str(self.plugin / 'skills' / 'observe' / 'SKILL.md'), 'skills/observe/SKILL.md')
+        write_text(self.plugin / 'skills' / 'review' / 'SKILL.md', '# review\n')
+        targets = ('Anomaly:Observe', str(self.plugin / 'skills' / 'observe' / 'SKILL.md'), 'skills/observe/SKILL.md',
+                   'anomaly:review step 10: delta')
         for number, target in enumerate(targets):
             signature = f'loop-step-{number}'
             write_anomaly_with(self.home, signature, category='automated-checks', target=target, impact=2,
