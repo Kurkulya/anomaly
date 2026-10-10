@@ -975,8 +975,8 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   `--from <draft>` replaces the task text (the two are exclusive): the draft is a light-path ticket
   a skill wrote (title, `Covers:`, `Blocked by: none`, `Status: ready-for-agent`, `Tests:`,
   `Repro: <command>`, an AC, a `## Hypotheses` section of 3 to 5 numbered lines that each say
-  `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, or one that names a blocker,
-  is refused with each problem named and nothing is written; a valid one is written unchanged, a
+  `confirmed` or `refuted` and `probe`). A draft with a line or the section missing, one that names a blocker,
+  or one whose `Model:` is empty or not `implement` or `implement_wide` (the `check slice` rule) is refused with each problem named and nothing is written; a valid one is written unchanged, a
   key line kept and none added. A `Repro:` that holds `;`, `&&`, `||`, `|`, `>` or `<` gets a
   `warning:` on stderr (it should be one plain command) and is still written. The slug comes from
   the title unless `--slug` gives it.

@@ -1060,6 +1060,17 @@ class DraftCheckTest(unittest.TestCase):
         self.assertEqual(len(problems), 1, problems)
         self.assertIn('Tests', problems[0])
 
+    def test_a_model_line_other_than_implement_or_implement_wide_is_refused_as_check_slice_does(self):
+        """AC-14, Amended: `ticket adhoc --from` runs the same `Model:` check as `check slice`; a draft with
+        either known value, or without the line, is valid."""
+        for extra in ('', 'Model: implement\n', 'Model: implement_wide\n'):
+            with self.subTest(extra=extra):
+                self.assertEqual(self.check(draft_text(extra=extra)), [])
+        problems = self.check(draft_text(extra='Model: opus\n'))
+        self.assertEqual(len(problems), 1, problems)
+        for token in ('Model:', 'opus', 'implement |', 'implement_wide'):
+            self.assertIn(token, problems[0])
+
     def test_a_draft_needs_a_hypotheses_section_of_three_to_five_numbered_lines_each_with_its_probe_result(self):
         """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: `ticket adhoc --from` refuses a draft with
         no `## Hypotheses` section, with 2 or 6 items, or with an item that names neither confirmed nor refuted."""
