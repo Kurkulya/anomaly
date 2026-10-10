@@ -400,6 +400,7 @@ STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
 COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
+MODEL_SHAPE = 'Model: ' + ' | '.join(ticket.IMPLEMENTER_ROLES)   # the line is optional
 KEY_VALUE_SHAPE = '<key> | no-ticket'   # the value of the key line, whatever the line is called
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
 REPRO_SHAPE = 'Repro: <command>'
@@ -487,6 +488,11 @@ def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
     errors += [f'{name}:{number}: {message}'
                for number, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
                                                          (key_line, f'{key_line}: {KEY_VALUE_SHAPE}')))]
+    if ticket.find_lines(lines, 'Model'):
+        errors += [f'{name}:{number}: {message}' for number, message in key_errors(lines, (('Model', MODEL_SHAPE),))]
+        if parsed.model.strip() and parsed.model not in ticket.IMPLEMENTER_ROLES:
+            errors.append(f'{name}:{where(lines, "Model")}: Model: "{parsed.model}" is not an implementer role '
+                          f'({MODEL_SHAPE})')
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
         match = None if number - 1 in skip or D_LINE.match(body) else line_anchor(body)
