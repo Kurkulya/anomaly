@@ -176,10 +176,26 @@ PER_STACK_PORTS = ('implementer', 'test_writer', 'conventions')
 MODELS_KEY = 'models'                # profile key: one `role: model` line per role
 MODEL_ROLES = (                      # (role, core default), in the order `ports` prints them
     ('explore', 'sonnet'),
-    ('implement', 'sonnet for contained tickets, opus for cross-cutting ones'),
+    ('implement', 'sonnet'),
+    ('implement_wide', 'opus'),
+    ('lookup', 'haiku'),
+    ('digest', 'sonnet'),
     ('review', 'opus'),
+    ('review_code', ''),             # no core default of its own: the fallback below
+    ('review_feature', ''),
+    ('review_security', ''),
     ('deep_analysis', 'opus'),
     ('browse', 'sonnet'),
+)
+MODEL_FALLBACKS = {                  # a role the profile leaves out takes the resolved value of the role named here
+    'review_code': 'review',
+    'review_feature': 'review',
+    'review_security': 'review',
+}
+MODEL_EFFORTS = ('low', 'medium', 'high', 'xhigh', 'max')   # a role value is `<model>` or `<model> <effort>`
+OVERRIDING_ENV = (                   # (variable, what it overrides): when set, the profile's model or effort has no effect
+    ('CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'the model of every subagent'),
+    ('CLAUDE_CODE_EFFORT_LEVEL', 'the effort level of every dispatch'),
 )
 REPO_COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')   # hook_path: a folder, not a command
 INSTRUCTION_FILES = ('CLAUDE.md', 'AGENTS.md')   # a line `<label>: `<text>`` names a command explicitly
