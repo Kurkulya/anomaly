@@ -124,7 +124,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `reviewers` | optional port: reviewers added beside `anomaly:code`, `anomaly:feature` and `anomaly:security`, as a comma or line list |
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
-| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `lookup`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
+| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
 | `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
@@ -176,7 +176,7 @@ first line). An extend port lists every such line after the repo's own docs. The
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
 one `anomaly:` line naming the role. Without the key: `explore` haiku, `implement` sonnet,
-`implement_wide` opus, `lookup` haiku, `digest` sonnet, `review` opus, `deep_analysis` opus,
+`implement_wide` opus, `digest` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
 too (`[profile]` when the profile sets only `review`). A model or effort change is a measured
@@ -282,7 +282,6 @@ command hook_path = [unresolved]
 model explore = haiku [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
-model lookup = haiku [core default]
 model digest = sonnet [core default]
 model review = opus [core default]
 model review_code = opus [core default]

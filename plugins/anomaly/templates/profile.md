@@ -64,7 +64,6 @@ models:
   explore: <model>
   implement: <model>
   implement_wide: <model>
-  lookup: <model>
   digest: <model>
   review: <model>
   review_code: <model>
