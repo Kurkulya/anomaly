@@ -1,0 +1,82 @@
+{
+  "fixture": "facts",
+  "questions": [
+    {
+      "id": "Q1",
+      "kind": "call-chain",
+      "ask": "An operator runs the `reprioritize` command. Trace that command from the command-line entry point down to the code that writes the changed job record. Name one function in each file on the path, in order from the entry to the write."
+    },
+    {
+      "id": "Q2",
+      "kind": "moved-claim",
+      "ask": "docs/design.md says where the retry limit is enforced. Check that claim against the code. Where is the code that decides whether a failed job gets another attempt?"
+    },
+    {
+      "id": "Q3",
+      "kind": "none-callers",
+      "ask": "`render_owner` in jobs/report.py reads `owner.name` and does not check for None. Which call sites of `render_owner` can pass it None at run time? Give each such call site and leave out the ones where None cannot arrive."
+    }
+  ],
+  "facts": [
+    {
+      "id": "F1",
+      "question": "Q1",
+      "places": [
+        {"file": "jobs/cli.py", "lines": [7, 10]},
+        {"file": "jobs/cli.py", "lines": [13, 17]}
+      ]
+    },
+    {
+      "id": "F2",
+      "question": "Q1",
+      "places": [{"file": "jobs/service.py", "lines": [13, 17]}]
+    },
+    {
+      "id": "F3",
+      "question": "Q1",
+      "places": [{"file": "jobs/store.py", "lines": [27, 30]}]
+    },
+    {
+      "id": "F4",
+      "question": "Q2",
+      "places": [{"file": "jobs/retry.py", "lines": [3, 8]}]
+    },
+    {
+      "id": "F5",
+      "question": "Q3",
+      "places": [{"file": "jobs/report.py", "lines": [27, 28]}]
+    },
+    {
+      "id": "F6",
+      "question": "Q3",
+      "places": [{"file": "jobs/notify.py", "lines": [7, 8]}]
+    }
+  ],
+  "decoys": [
+    {
+      "id": "X1",
+      "question": "Q1",
+      "places": [{"file": "jobs/bulk.py", "lines": [5, 9]}]
+    },
+    {
+      "id": "X2",
+      "question": "Q1",
+      "places": [{"file": "jobs/store.py", "lines": [9, 11]}]
+    },
+    {
+      "id": "X3",
+      "question": "Q2",
+      "places": [{"file": "jobs/service.py", "lines": [24, 24]}]
+    },
+    {
+      "id": "X4",
+      "question": "Q3",
+      "places": [{"file": "jobs/admin.py", "lines": [13, 14]}]
+    },
+    {
+      "id": "X5",
+      "question": "Q3",
+      "places": [{"file": "jobs/report.py", "lines": [12, 12]}]
+    }
+  ]
+}
