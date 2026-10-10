@@ -430,6 +430,26 @@ class AmendTest(TicketTestCase):
         self.assertEqual(self.read(path), STORIES_TEXT.replace(
             '- AC-2:', f'Amended 2026-10-04: {AMEND_NOTE}\n- AC-2:'))
 
+    def test_after_an_ac_writes_the_line_right_below_a_ticket_checkbox_ac_line_open_or_checked(self):
+        """AC-28, D-23: a ticket writes its ACs as `- [ ] AC-n:` or `- [x] AC-n:`."""
+        text = TICKET_TEXT.replace('- [ ] AC-2:', '- [x] AC-2:')
+        path = self.ticket_path(text)
+        for ac in ('AC-1', 'AC-2'):
+            code, out, err = self.run_ticket('amend', str(path), '--after', ac, f'{ac} note')
+            self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(path), text.replace(
+            '- [ ] AC-1: first criterion\n', '- [ ] AC-1: first criterion\nAmended 2026-10-04: AC-1 note\n').replace(
+            '- [x] AC-2: second criterion\n', '- [x] AC-2: second criterion\nAmended 2026-10-04: AC-2 note\n'))
+
+    def test_the_after_help_names_ticket_files_too(self):
+        """AC-28, D-23: the `--after` help of `ticket amend` names ticket files besides stories.md and decisions.md."""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            cli.main(['ticket', 'amend', '--help'], environ={})
+        found = re.search(r'--after ID\s+(.*?)(?=\s--\w|\Z)', ' '.join(out.getvalue().split()))
+        self.assertIsNotNone(found, out.getvalue())
+        self.assertIn('ticket', found.group(1))
+
     def test_an_ac_line_inside_a_fenced_block_is_an_example_and_is_not_the_target(self):
         fenced = '```\n- AC-1: an example\n```\n'
         path = self.unit_file('stories.md', STORIES_TEXT.replace('- AC-1:', fenced + '- AC-1:'))

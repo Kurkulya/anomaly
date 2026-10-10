@@ -1842,5 +1842,50 @@ class LensReplaceDocsTest(unittest.TestCase):
         self.assertTrue(clause in text, f'observe SKILL.md lacks: {clause}')
 
 
+class AmendedLinesDocsTest(unittest.TestCase):
+    """Calibrate-fixes-1 ticket 03 (AC-9 .. AC-12, D-15): the feature reviewer names the file and the AC-n or D-n of
+    each proposed Amended line; review's main window asks one yes at the end and writes them with `ticket amend`.
+    Short phrases only: the review BRIEFS.md has a byte cap."""
+    FEATURE = PLUGIN / 'agents' / 'feature.md'
+    BRIEFS = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
+
+    def main_window_text(self):
+        """The text from the first `## ` heading that names the main window to the end of BRIEFS.md, whitespace folded."""
+        lines = self.BRIEFS.read_text(encoding='utf-8').splitlines()
+        start = next((i for i, line in enumerate(lines) if line.startswith('## ') and 'main window' in line.lower()), None)
+        self.assertIsNotNone(start, 'review BRIEFS.md has no main-window section')
+        return ' '.join(' '.join(lines[start:]).split())
+
+    def test_the_feature_agent_item_11_asks_for_the_target_file_and_the_ac_n_or_d_n_of_each_proposed_amended_line(self):
+        """AC-9."""
+        item = next(line for line in self.FEATURE.read_text(encoding='utf-8').splitlines() if line.startswith('11. '))
+        item = ' '.join(item.split())
+        self.assertIn('Amended', item)
+        self.assertRegex(item, r'\bfile\b')
+        self.assertIn('AC-n or D-n', item)
+
+    def test_the_main_window_shows_one_list_of_all_rounds_asks_one_yes_and_runs_ticket_amend_with_after_for_each(self):
+        """AC-10."""
+        text = self.main_window_text()
+        for phrase in ('end of the review', 'one list', 'all rounds', 'one yes',
+                       "`ticket amend <file> --after <AC-n|D-n> '<text>'`"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_a_proposed_line_that_names_no_ac_n_or_d_n_is_written_with_ticket_amend_and_no_after(self):
+        """AC-11."""
+        text = self.main_window_text()
+        self.assertRegex(text, r'no `?AC-n`? or `?D-n`?')
+        self.assertIn("`ticket amend <file> '<text>'`", text)
+        self.assertIn('without `--after`', text)
+
+    def test_the_main_window_writes_the_lines_also_when_build_is_the_caller_and_a_no_writes_none_and_lists_them(self):
+        """AC-12."""
+        text = self.main_window_text()
+        self.assertRegex(text, r'also when `?build`? is the caller')
+        self.assertIn('a no writes none', text)
+        self.assertRegex(text, r'lists? them in the handoff')
+
+
 if __name__ == '__main__':
     unittest.main()
