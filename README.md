@@ -175,7 +175,7 @@ first line). An extend port lists every such line after the repo's own docs. The
 **Model roles.** `models` maps each role to a model, and optionally an effort: a role value is
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
-one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
+one `anomaly:` line naming the role. Without the key: `explore` haiku, `implement` sonnet,
 `implement_wide` opus, `lookup` haiku, `digest` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
@@ -279,7 +279,7 @@ command e2e = [unresolved]
 command install = [unresolved]
 command codegen = [unresolved]
 command hook_path = [unresolved]
-model explore = sonnet [core default]
+model explore = haiku [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
 model lookup = haiku [core default]
@@ -1191,7 +1191,7 @@ that repeats an existing one, and D10, a check deleted with no cover, plant the 
 feature 8 (3 decoys), 5 in rules mode (2 decoys) and 1 in cumulative mode (F-D9, a
 characterization check that mocks internals; 1 decoy), security 10 (3 decoys), docs 2 (1 decoy, an ADR claim the code still holds).
 
-Each findings file is the text of one run. A finding is one line in the shape every agent prints:
+Each findings file is the text of one run. A finding is one line in the shape every reviewer agent prints:
 
 ```
 - [<Blocker|High|Medium|Low|Nit>] <path>:<line> — <problem> — fix: <fix> — <observed|unverified>
@@ -1260,6 +1260,25 @@ defect: the planted file and a line within the planted range plus or minus 3. An
 named. The output has one line for each run (the facts found, the facts missed and the decoys hit,
 each with its ids), then the median over the runs of the found and decoy-hit counts. Give one to
 three answers files.
+
+Pass bar for the `explore` role: three runs on haiku and three on sonnet. Haiku passes when its
+median found count is at least sonnet's and no haiku run hits a decoy. Then `explore` defaults to
+haiku; else `anomaly:lookup` (a find-and-quote agent) is added and `explore` stays sonnet. Before
+the medians are compared, check that each run produced answer lines: a run whose answers all
+failed to parse also shows found 0. The bar is not printed by the command.
+
+Scores, 2026-10-10 (3 runs each, every run produced 7 to 9 answer lines):
+
+| Model | Found, per run | Median found | Decoys hit, per run | Median hit |
+|---|---|---|---|---|
+| haiku | 4, 5, 5 of 6 | 5 | 0, 0, 0 | 0 |
+| sonnet | 5, 6, 5 of 6 | 5 | 2, 0, 0 | 0 |
+
+Haiku passes, so `explore` defaults to haiku and no `anomaly:lookup` agent exists. The two sonnet
+decoy hits were X4 and X5, from one run that put rejected call sites in answer lines. The runs were
+general-purpose subagents that carried the `agents/facts.md` brief text, with only the Read tool
+(no Grep or Glob in that session), each on its own copy of `base/`; F6 (the caller in a module no
+other file imports) was found only by the one run that guessed its file name.
 
 ## The build skill
 
@@ -1351,10 +1370,12 @@ The modes, in one line each (the full dispatch table is in
 
 ## Reviewer agents
 
-The plugin ships five read-only agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
+The plugin ships five read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
 gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model: no agent file pins
 one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
-characters or fewer and a file of 6 KB or less.
+characters or fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are
+readers, not reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin
+no model either, and keep the same size and description limits.
 
 | Agent | Checks | Modes |
 |---|---|---|
@@ -1363,6 +1384,8 @@ characters or fewer and a file of 6 KB or less.
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
 | `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
 | `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
+| `anomaly:facts` | questions about a repository that need inference across lines (a call chain, whether a claim still holds, which callers can pass a value); tools Read, Grep and Glob; model role `explore`; answers in `- <path>:<line> — <fact>` lines (see Facts bench) | one mode: the questions the dispatcher passes |
+| `anomaly:digest` | a transcript or a long page (a local file or a link) as a digest in its own words; tools Read and WebFetch; model role `digest` | one mode: the source and the word limit the dispatcher passes |
 
 `anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
 does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
@@ -1374,7 +1397,7 @@ touched; for an ADR claim, the ADR line that holds the claim. The `docs/` fixtur
 review: its `commits.md` gives the two commit messages to use when you build the repository (first
 `base/`, then `change/`), and the agent reviews the whole history.
 
-Each agent prints one finding per line in the shape above, with the fix always after ` — fix: `
+Each of the first five agents prints one finding per line in the shape above, with the fix always after ` — fix: `
 and nothing after the closing `observed` or `unverified`; then a `fine: <class> — ...` line for
 each clean class or category. It asks no questions. It never runs tests, builds or other repo
 code, so a test outcome is unverified unless a cited CI log shows it; the only runs are the ones
