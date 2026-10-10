@@ -32,8 +32,9 @@ With several runs each number is the median over the runs (the mean of the two f
 (`tests/bench/facts/facts.json`): `{"fixture": <name>, "questions": [...], "facts": [...],
 "decoys": [...]}`. A question has an `id`, a `kind` (`call-chain`, `moved-claim` or `none-callers`)
 and its `ask` text; an expected fact or a decoy (a plausible wrong answer) has an `id`, the `question`
-it answers and `places`, written as above. An answer line is `- <path>:<line> — <fact>`; every other
-line is prose. An answer names a place of an item by the rule above, so the finding-line parser is
+it answers and `places`, written as above. An answer line is `- <path>:<line> — <fact>`; a bullet
+that holds a `<path>:<digits>` place and an em dash but has another shape (a backticked path, a line
+range, bold) is refused; every other line is prose. An answer names a place of an item by the rule above, so the finding-line parser is
 not used. Per run: the expected facts found, the ones missed, and each decoy hit; with several runs
 the median of the counts.
 """
@@ -62,7 +63,10 @@ LABEL_OF_NAME = {name.casefold(): label for label, name in OWASP_2021}
 SHAPE = ('- [<severity>] <path>:<line> <dash> <problem> <dash> fix: <fix> <dash> <observed|unverified>, '
          'where <dash> is an em dash (U+2014)')
 FACT_KINDS = ('call-chain', 'moved-claim', 'none-callers')
-ANSWER = re.compile(r'^\s*-\s+(?P<path>\S+):(?P<line>\d+)\s+—\s+(?P<fact>\S.*?)\s*$')
+ANSWER = re.compile(r'^\s*-\s+(?P<path>[^\s`*]+):(?P<line>\d+)\s+—\s+(?P<fact>\S.*?)\s*$')
+LOOKS_LIKE_ANSWER = re.compile(r'^\s*-\s+.*\S:\d+.*—')
+ANSWER_SHAPE = ('- <path>:<line> <dash> <fact>, with a bare path and one line number (no backticks, no range, '
+                'no bold), where <dash> is an em dash (U+2014)')
 
 
 @dataclass(frozen=True)
@@ -81,7 +85,6 @@ class Item:
     min_severity: str = ''
     category: tuple = ()
     unverified: bool = False
-    question: str = ''   # facts bench: the id of the question this expected fact or decoy answers
 
 
 @dataclass(frozen=True)
@@ -345,8 +348,7 @@ def parse_fact_items(source, kind, raw, questions):
         places = entry.get('places')
         if not isinstance(places, list) or not places:
             raise RecordError(f'{source}: {where}: places is a list with at least one place')
-        items.append(Item(entry['id'], tuple(parse_place(source, where, place) for place in places),
-                          question=entry['question']))
+        items.append(Item(entry['id'], tuple(parse_place(source, where, place) for place in places)))
     return tuple(items)
 
 
@@ -370,11 +372,19 @@ def load_facts(source):
 
 
 def parse_answers(text, source):
-    """The answer lines of one run's text. Every other line is prose and is skipped."""
+    """The answer lines of one run's text. Prose is skipped; a line that starts like an answer (a bullet
+    with a `<path>:<digits>` place and an em dash) but does not have the shape raises RecordError naming
+    `source` and its line number."""
     if not text.strip():
         raise RecordError(f'{source}: no text')
-    return [Answer(match['path'], int(match['line']), match['fact'])
-            for match in map(ANSWER.match, text.splitlines()) if match]
+    answers = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = ANSWER.match(line)
+        if match:
+            answers.append(Answer(match['path'], int(match['line']), match['fact']))
+        elif LOOKS_LIKE_ANSWER.match(line):
+            raise RecordError(f'{source}:{number}: not an answer line; the shape is {ANSWER_SHAPE}')
+    return answers
 
 
 def score_facts(facts, answers):
@@ -408,7 +418,7 @@ def render_facts(facts, runs):
 
 
 def register(commands, common):
-    command = commands.add_parser('bench', help='score a reviewer agent against a seeded-defect fixture')
+    command = commands.add_parser('bench', help='score a reviewer or reader agent against a bench fixture')
     actions = command.add_subparsers(dest='action', required=True, metavar='action')
     score = actions.add_parser('score', parents=[common],
                                help='found, found at min severity, missed and false High of 1 to 3 runs (the median)')
