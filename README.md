@@ -1345,7 +1345,8 @@ never the spec or stories file.
   parallel path enters here with a branch. Every commit and merge message goes through a
   scratchpad file and `-F`. `build` never pushes. The `model_pick` tally is for an `implement`
   ticket (a ticket with no `Model:` line counts as `implement`; `implement_wide` adds no line):
-  rejected 1 when its `fix rounds` is 2 or more, else accepted 1; a resumed build adds no line.
+  rejected 1 when its `fix rounds` is 2 or more, else accepted 1; a resumed build that does not know the
+  count adds no line.
   `build` tells `review` "last review: no"; after the close, when its caller said "last review:
   yes" (you on the session's last ticket, or `conduct` with one ticket), it runs `lens tally sum`
   and `observe apply` itself. A `conduct` unit of more tickets sums in its cumulative review.
