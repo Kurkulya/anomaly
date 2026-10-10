@@ -45,6 +45,7 @@ Write each `tickets/NN-slug.md` with Write, from 01, in dependency order, in the
 - `Status:` only `ready-for-agent`, or `ready-for-human` with its reason, for work only a person can do. [Q1, Q4, Q10]
 - Add `Gate:` when a date or an outside step blocks the ticket. [N6]
 - A ticket that changes a rule gets `Restates:`, the files that repeat it, found by grep. [N4]
+- `Model:` is `implement_wide` when the ticket has `Restates:` or its `Touches:` names a seam another ticket owns, in `seams.md` or in the seam row → ticket table of step 3; else `implement`. [AC-13, D-14]
 - `Out of scope:` names the sibling ticket that owns the next thing. [Q13]
 - Each `T-n` term line and each ADR draft (`.anomaly/<work unit>/adr/…`, written by `specify`) lands in the first ticket that needs it, named in its `Touches:`. [AC-23]
 - It never writes the lines formats.md lists as written later (`Result:` and the rest). [T16]

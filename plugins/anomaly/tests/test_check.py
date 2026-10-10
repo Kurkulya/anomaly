@@ -905,6 +905,18 @@ class CheckSliceTest(unittest.TestCase):
                 self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', **{key.lower(): ''}))
                 self.assert_error(f'01-first.md:{line}:', f'{key}: is empty')
 
+    def test_a_model_line_other_than_implement_or_implement_wide_is_an_error_naming_the_two_values(self):
+        """AC-14: a ticket without a `Model:` line runs on `implement`, so the clean set of setUp (no line) stays
+        error-free; the line sits after Tests, at line 8."""
+        for value in ('implement', 'implement_wide'):
+            with self.subTest(value=value):
+                self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body=f'Model: {value}\n'))
+                self.assertEqual(self.slice(), ([], []))
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='Model: opus\n'))
+        self.assert_error('01-first.md:8:', 'Model:', 'opus', 'implement |', 'implement_wide')
+        self.put('01-first', slice_ticket('01', covers='AC-1, AC-2', body='Model: \n'))
+        self.assert_error('01-first.md:8:', 'Model: is empty')
+
     def test_the_key_line_is_key_in_core_or_the_line_the_key_line_port_names_and_a_jira_line_is_not_read(self):
         """AC-9, through the CLI; the `Jira:` line is no longer read in place of the key line (ADR-0017)."""
         home = self.folder.parent / 'home'

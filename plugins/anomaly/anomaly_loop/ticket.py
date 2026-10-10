@@ -38,10 +38,12 @@ from .files import RecordError
 from .records import require_one_line
 
 LINE_ORDER = ('Status', 'Metrics', 'Reviewed', 'Verified', 'Red', 'Red-changed', 'Result')
-HEADER_KEYS = (KEY_LINE_CORE, 'Covers', 'Blocked by', 'Tests')   # where a line goes when none before it exists
-SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', KEY_LINE_CORE, 'Tests', 'Repro', 'Base', 'Reviewed', 'Verified', 'Red',
-              'Red-changed')   # Base: the work unit's integration branch, which build reads here;
-                               # KEY_LINE_CORE marks the slot of the key line, shown under the `key_line` name
+HEADER_KEYS = (KEY_LINE_CORE, 'Covers', 'Blocked by', 'Tests', 'Model')   # where a line goes when none before it exists
+SHOWN_KEYS = ('Status', 'Blocked by', 'Covers', KEY_LINE_CORE, 'Tests', 'Model', 'Repro', 'Base', 'Reviewed', 'Verified',
+              'Red', 'Red-changed')   # Base: the work unit's integration branch, which build reads here;
+                                      # KEY_LINE_CORE marks the slot of the key line, shown under the `key_line` name
+IMPLEMENTER_ROLES = ('implement', 'implement_wide')   # the values of a ticket's `Model:` line: the implementer's model role
+MODEL_DEFAULT = IMPLEMENTER_ROLES[0]                  # a ticket without the line runs on this role
 METRIC_COUNTS = (('full suites', 'suites'), ('type-checks', 'type_checks'), ('reviewer passes', 'reviewer_passes'),
                  ('High', 'high'), ('fix rounds', 'fix_rounds'), ('changed lines', 'changed_lines'))   # Metrics: label, count
 WAITS_FOR_PERSON = (TICKET_STATUS_HUMAN, TICKET_STATUS_NEEDS_INFO, TICKET_STATUS_WONTFIX)   # the statuses only a person moves on
@@ -203,6 +205,7 @@ class Ticket:
     result: str
     has_result_line: bool
     open: str                    # the text after `Open:` or `Open (Low):` on the Result line
+    model: str                   # the raw Model: value; MODEL_DEFAULT when there is no such line
 
 
 def parse(text, slug='', key_line=KEY_LINE_CORE):
@@ -230,6 +233,7 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
     started = STARTED.search(metrics)
     result = value_of(lines, 'Result')
     open_items = OPEN_ITEMS.search(result or '')
+    model = value_of(lines, 'Model')
     return Ticket(
         title=title, status=status.group(0) if status else TICKET_STATUS_UNKNOWN, blocked_by=blocked or '',
         has_blocked_line=blocked is not None, blockers=blockers,
@@ -238,7 +242,8 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
         reviewed=value_of(lines, 'Reviewed') or '', verified=value_of(lines, 'Verified') or '',
         red=(sha, path) if red is not None else None, red_changed=values_of(lines, 'Red-changed'),
         metrics=metrics, started=started.group(1) if started else '', result=result or '',
-        has_result_line=result is not None, open=open_items.group(1) if open_items else '')
+        has_result_line=result is not None, open=open_items.group(1) if open_items else '',
+        model=MODEL_DEFAULT if model is None else model)
 
 
 def state_lines(text, key_line=KEY_LINE_CORE):

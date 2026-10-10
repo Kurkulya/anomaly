@@ -9,4 +9,5 @@ For `anomaly:plan` in `tickets` mode only. Inputs: the work unit's `tickets/` fo
 5. `Restates:` complete. A ticket that changes a rule lists, in `Restates:`, every file that repeats it. Run a grep for the rule's words; a hit not listed is Medium. [slice N4]
 6. AC coverage. Every story AC appears in some `Covers:`, `Covers:` is complete, and the AC text is copied exactly. An AC covered by no ticket is a Blocker. [slice P5]
 7. `Tests:` level per AC. Every AC has a `Tests:` level: unit, integration, e2e, UI walkthrough, real-data probe or mutation probe. A missing level is Medium. [slice P5]
-8. Report with specifics, propose no other plan, and say so when a check is clean. This gate runs last; only a Blocker stops it and the rest go in the handoff. [slice P8, N8]
+8. `Model:` follows the slice rule. `implement_wide` when the ticket has `Restates:` or its `Touches:` names a seam another ticket owns (in `seams.md` or the slice seam row → ticket table), else `implement` (a missing line is `implement`). A line that breaks the rule is Medium. [slice AC-13]
+9. Report with specifics, propose no other plan, and say so when a check is clean. This gate runs last; only a Blocker stops it and the rest go in the handoff. [slice P8, N8]
