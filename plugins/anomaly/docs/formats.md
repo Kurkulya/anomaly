@@ -72,7 +72,7 @@ Decisions:
 - `Gate:` only when the ticket was gated. `Restates:` only on a ticket that changes a rule.
 - `Model:` is the implementer's model role; a ticket without it runs on `implement`.
 - `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
-  CLI; a later stage writes `Amended` through `ticket amend` (`--after AC-n | D-n` for stories.md and decisions.md). `slice` writes none of them.
+  CLI; a later stage writes `Amended` through `ticket amend` (`--after AC-n | D-n` for stories.md and decisions.md; `--after AC-n` also finds a ticket's `- [ ] AC-n:` or `- [x] AC-n:` line). `slice` writes none of them.
 - A light-path ticket from `diagnose` has `Blocked by: none` (`ticket show` warns without a `Blocked by:` line), `Covers: AC-1`, `Status: ready-for-agent`,
   the `Tests:` line, then `Repro: <command>` (runnable as written, red at hand-over). AC-1 is the exact symptom gone with the repro
   green. The body holds Symptom, Root cause, Fix, Risk, and the seam or a no-correct-seam finding, and a

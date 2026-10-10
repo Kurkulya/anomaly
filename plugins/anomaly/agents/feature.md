@@ -31,7 +31,7 @@ This section stands on its own: `anomaly:code` reads it in combined mode. [F9]
 8. Deferral targets: every "spec N, ticket NN or ADR owns X" claim in docs, comments, TODOs and `Result:` lines is checked against that target's own text. [N1]
 9. Claims in changed docs match their cited source. [F4]
 10. The implementer's known items: check each one; report it again only when its claim is false. [R7f]
-11. Open tickets that will call the reviewed code: a mismatch becomes a proposed `Amended` line for that ticket, written as prose under `Proposed Amended:`, not a finding against this diff. [X1]
+11. Open tickets that will call the reviewed code: a mismatch becomes a proposed `Amended` line for that ticket, written as prose under `Proposed Amended:` with its target ticket file and the AC-n or D-n it goes after (if any), not a finding against this diff. [X1]
 12. A ticket marked no-behaviour-change: run the same CLI command over the fixtures at the base and at the tip and compare the output byte for byte (observed). You may not check out the base: when the brief gives no base copy, propose the commands for `review` to run on a scratchpad copy and mark the claim unverified. [X2]
 
 ## Modes
