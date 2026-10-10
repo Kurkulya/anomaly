@@ -188,6 +188,11 @@ class PrintTest(AddendaCase):
     def test_with_no_addenda_file_nothing_is_printed(self):
         self.assertEqual(self.printed('review'), '')
 
+    def test_a_skill_that_takes_no_addenda_prints_none_even_with_a_file(self):
+        """D-25 Amended: `worklog start <key> measure` must not print a measure.md."""
+        self.add('measure', 'A rule for measure.')
+        self.assertEqual(self.printed('measure'), '')
+
 
 if __name__ == '__main__':
     unittest.main()

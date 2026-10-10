@@ -89,7 +89,10 @@ def file_block(path, heading):
 
 def print_addenda(home, skill):
     """Print the addendum of `skill` under HEADER, then the addendum of each agent it dispatches
-    (SKILL_AGENTS) under HAND_OVER. With no addenda file nothing is printed, not even an empty line."""
+    (SKILL_AGENTS) under HAND_OVER. With no addenda file, or for a skill in NO_ADDENDA, nothing is printed,
+    not even an empty line."""
+    if skill in NO_ADDENDA:
+        return
     out = file_block(addendum_path(home, skill), HEADER.format(skill=skill))
     for agent in SKILL_AGENTS.get(skill, ()):
         out += file_block(addendum_path(home, agent, agent=True), HAND_OVER.format(agent=agent))
