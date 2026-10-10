@@ -39,6 +39,7 @@ class RegistryTest(unittest.TestCase):
 
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
+    BUILD_SKILL_MAX_BYTES = 9 * 1024   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
@@ -76,7 +77,8 @@ class SkillFileTest(unittest.TestCase):
         for path in self.skills():
             if path.parent.name not in constants.LOOP_SKILLS:
                 with self.subTest(skill=path.parent.name):
-                    self.assertLessEqual(path.stat().st_size, self.SKILL_MAX_BYTES)
+                    cap = self.BUILD_SKILL_MAX_BYTES if path.parent.name == 'build' else self.SKILL_MAX_BYTES
+                    self.assertLessEqual(path.stat().st_size, cap)
         for path in self.agents():
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
