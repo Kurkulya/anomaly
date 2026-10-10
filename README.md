@@ -448,8 +448,8 @@ model id: haiku 0.05, or 0.25 when the call's prompt (input plus cache writes pl
 over 100,000 tokens; sonnet 1; opus 2; fable 5. They are the API list prices relative to sonnet,
 kept as one dated constant with its pricing URL (`MODEL_FACTORS` in `constants.py`). A call on a
 model with no factor adds 0 and is counted in `unknown_model_by_agent` (per agent, `{}` when none),
-never guessed. `skipped_entries` counts assistant entries without `message.model` or
-`message.usage` (a `<synthetic>` entry is not counted) and `skipped_spawns` the spawn files without
+never guessed. `skipped_entries` counts assistant entries without `message.model` (or with one that
+is not a string) or `message.usage` (a `<synthetic>` entry is not counted) and `skipped_spawns` the spawn files without
 a `.meta.json`. Rows scanned before these fields existed lack them; `measure --full` fills them,
 but only for transcripts still on disk.
 

@@ -122,6 +122,14 @@ class TokensTest(Base):
         self.assertEqual((row['skipped_entries'], row['skipped_spawns']), (3, 0))
         self.assertEqual(row['tokens']['main']['claude-opus-4']['output'], 5)
 
+    def test_an_assistant_entry_with_a_model_that_is_not_a_string_is_counted_as_skipped(self):
+        """Cumulative review 2026-10-10: `model.lower()` crashed measure on a numeric `message.model`."""
+        self.session([assistant(ts(0), 'm1', out=5),
+                      assistant(ts(1), 'm2', model=123, out=999, attributionAgent='Explore')])   # an agent: reaches model_factor
+        row, _ = self.summarize()
+        self.assertEqual(row['skipped_entries'], 1)
+        self.assertEqual(row['tokens']['main']['claude-opus-4']['output'], 5)
+
 
 class ModelWeightedTest(Base):
     """`model_weighted_by_agent`: per agent (the key of `tokens_by_agent`), the weighted tokens of each
