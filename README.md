@@ -1378,8 +1378,8 @@ never the spec or stories file.
 section), and gives their findings back per axis: one heading per agent, as each agent reported
 them, never merged or re-ranked. The `build` and `conduct` skills call it, and you may too. Its
 text is `plugins/anomaly/skills/review/SKILL.md` (8 KB or less); the per-agent brief it fills,
-`BRIEFS.md` (3 KB or less), is loaded at dispatch; its last section is for the main window after
-each round. Its only pre-approved tool is the CLI.
+`BRIEFS.md` (3 KB or less), is loaded at dispatch; its last section is for the main window.
+Its only pre-approved tool is the CLI.
 
 The modes, in one line each (the full dispatch table is in
 [SKILL.md](plugins/anomaly/skills/review/SKILL.md)):

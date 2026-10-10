@@ -44,7 +44,7 @@ class SkillFileTest(unittest.TestCase):
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
-    REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window after each round (AC-53)
+    REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window (AC-53)
     DOCS_AGENT = PLUGIN / 'agents' / 'docs.md'
     REVIEW_SKILL = PLUGIN / 'skills' / 'review' / 'SKILL.md'
     REVIEW_BRIEF = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
