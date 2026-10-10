@@ -1261,6 +1261,25 @@ named. The output has one line for each run (the facts found, the facts missed a
 each with its ids), then the median over the runs of the found and decoy-hit counts. Give one to
 three answers files.
 
+Pass bar for the `explore` role: three runs on haiku and three on sonnet. Haiku passes when its
+median found count is at least sonnet's and no haiku run hits a decoy. Then `explore` defaults to
+haiku; else `anomaly:lookup` (a find-and-quote agent) is added and `explore` stays sonnet. Before
+the medians are compared, check that each run produced answer lines: a run whose answers all
+failed to parse also shows found 0. The bar is not printed by the command.
+
+Scores, 2026-10-10 (3 runs each, every run produced 7 to 9 answer lines):
+
+| Model | Found, per run | Median found | Decoys hit, per run | Median hit |
+|---|---|---|---|---|
+| haiku | 4, 5, 5 of 6 | 5 | 0, 0, 0 | 0 |
+| sonnet | 5, 6, 5 of 6 | 5 | 2, 0, 0 | 0 |
+
+Haiku passes, so `explore` defaults to haiku and no `anomaly:lookup` agent exists. The two sonnet
+decoy hits were X4 and X5, from one run that put rejected call sites in answer lines. The runs were
+general-purpose subagents that carried the `agents/facts.md` brief text, with only the Read tool
+(no Grep or Glob in that session), each on its own copy of `base/`; F6 (the caller in a module no
+other file imports) was found only by the one run that guessed its file name.
+
 ## The build skill
 
 `anomaly:build` takes one ticket from a red acceptance test to a reviewed, verified commit merged
