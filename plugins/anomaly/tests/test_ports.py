@@ -187,7 +187,7 @@ class ProfileKeysTest(unittest.TestCase):
         template = profile.parse_profile(TEMPLATE.read_text(encoding='utf-8'))
         self.assertLessEqual(new, set(template))
         self.assertEqual(re.findall(r'^  (\w+): <model>$', TEMPLATE.read_text(encoding='utf-8'), re.M),
-                         list(MODEL_ROLES))   # one template line per role; the removed `lookup` has none
+                         list(MODEL_ROLES))   # one template line per role
 
 
 class ModelRolesTest(PortsCase):

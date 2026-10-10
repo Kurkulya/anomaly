@@ -96,8 +96,9 @@ class SkillFileTest(unittest.TestCase):
                 self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')], tools[path.stem])
                 self.assertNotIn('model', fields)
 
-    DISPATCH_ROLES = ('review_code', 'review_feature', 'review_security', 'review', 'digest', 'browse', 'explore')   # implement and implement_wide are the implementer dispatch (ticket 06)
-    BARE_MODEL = re.compile(r'\bmodel\s+`?(?:sonnet|haiku|opus)\b|`?\b(?:sonnet|haiku|opus)\b`?\s+sub-?agent', re.I)
+    DISPATCH_ROLES = tuple(role for role, _ in constants.MODEL_ROLES
+                           if role not in ('implement', 'implement_wide'))   # these two are the implementer dispatch, checked apart (ticket 06)
+    MODEL_NAME = re.compile(r'\b(?:sonnet|haiku|opus)\b', re.I)
     BUILT_IN_EXPLORE = re.compile(r'\bExplore\b|`explore`\s+sub-?agents?|\bexplore\s+agent')   # the built-in agent, or the old "explore sub-agent" wording
     OLD_FACTS_DISPATCH = re.compile(r'\bmodel\s+`?explore\b|`explore`\s+sub-?agents?', re.I)
 
@@ -127,11 +128,12 @@ class SkillFileTest(unittest.TestCase):
         return found
 
     def test_no_dispatch_in_a_skill_or_agent_file_names_a_bare_model(self):
-        """AC-4, D-7: a model outside a model role cannot be tuned or measured; observe and assess named `sonnet`."""
+        """AC-4, D-7: a model outside a model role cannot be tuned or measured; observe and assess named `sonnet`.
+        No skill or agent file holds a model name at all."""
         for path in self.dispatch_files():
             for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
                 with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
-                    self.assertIsNone(self.BARE_MODEL.search(line), line)
+                    self.assertIsNone(self.MODEL_NAME.search(line), line)
 
     def test_no_skill_names_the_built_in_explore_agent(self):
         """AC-9: facts go to `anomaly:facts`; the old `explore` sub-agent wording is the built-in's too."""
@@ -161,18 +163,21 @@ class SkillFileTest(unittest.TestCase):
 
     def test_the_review_skill_names_the_lens_role_of_each_reviewer(self):
         """AC-4, D-3."""
-        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
-        for role in ('review_code', 'review_feature', 'review_security'):
+        paragraph = next((text for _, text in self.paragraphs(self.REVIEW_SKILL) if '`review_code`' in text), '')
+        for role, agent in (('review_code', 'code'), ('review_feature', 'feature'), ('review_security', 'security')):
             with self.subTest(role=role):
-                self.assertIn(role, text)
+                self.assertIn(f'`{role}` for `anomaly:{agent}`', paragraph)
+        with self.subTest(rule='effort'):
+            self.assertRegex(paragraph, r'(?i)\beffort\b')
 
     def test_every_dispatch_that_names_a_model_role_or_a_model_agent_also_says_to_pass_the_effort(self):
         """AC-4, Amended 2026-10-10 (ports value `<model> <effort>`): the rule is per paragraph, where a paragraph is
         one list item, table row or text block with its wrapped lines. A paragraph that names a role (`model <role>`,
         `<role> model`, `<role> role`, for every role but the implementer's) or the agent `anomaly:facts`,
-        `anomaly:digest` or `anomaly:docs` must also hold the word `effort`."""
+        `anomaly:digest` or `anomaly:docs`, the phrase "model role(s)" or a backticked lens role (the review
+        skill's model line) must also hold the word `effort`."""
         dispatches = [self.role_mention(role) for role in self.DISPATCH_ROLES]
-        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs)\b'))
+        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs)\b|(?i:\bmodel roles?\b)|`review_(?:code|feature|security)`'))
         for path in self.dispatch_files():
             for number, text in self.paragraphs(path):
                 if any(pattern.search(text) for pattern in dispatches):
