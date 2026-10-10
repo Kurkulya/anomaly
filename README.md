@@ -1514,15 +1514,15 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `warning:` prefix as for `check stories` (a clean run prints `slice check passed for <folder>`).
   Nothing is written.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
-  parent, and compares them with the ledger lines (`- <name> · <owner file> · <rest>`). A line
-  names a file when its owner file is that path or the end of it; a bare name that matches
-  several changed files, none with exactly that path, is printed as `ambiguous:` and the line is
-  left alone. A deleted owner file removes the line; a renamed one gives the owner field (and
-  no other field) its new path; a changed one that no longer mentions a name the line lists in
-  backticks after the file (a whole word, a heuristic and not a parse) removes the line, since
-  its claim is probably no longer true. Each change is printed as `deleted:`, `renamed:` or
-  `reshaped:` with the old line, because the ledger is not tracked by git; `--dry-run` only
-  prints. Other lines and every other byte stay.
+  parent, and compares them with the ledger lines (`- <name> · <owner> · <rest>`). The owner is
+  one or more owner paths, each followed by its names in parentheses; a non-file part after a path
+  is one more name of it. Each path is judged alone and matches a changed file when it is that
+  path or the end of it; a bare name that matches several changed files, none with exactly that
+  path, is printed as `ambiguous:` and the line is left alone, even if another path was renamed.
+  A deleted path removes the line; a renamed one gives that path (only) its new path; a changed
+  one that no longer mentions a name listed for it (a heuristic) removes the line, as its claim is
+  probably stale. Each change is printed as `deleted:`, `renamed:` or `reshaped:` with the old line
+  (git does not track the ledger); `--dry-run` only prints. Other lines and every other byte stay.
 - `seams add` appends one line, `- <name> · <owner file> · replaces <old way> (ticket NN)`, with
   `NN` two digits. A field cannot hold ` · ` or a line break. The same line is added only once. The
   ledger file may be new when its folder exists.
