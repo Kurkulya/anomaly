@@ -55,6 +55,12 @@ class TermsGrepTest(unittest.TestCase):
         self.assertIn("'foo': 3 hit(s)", plain)
         self.assertIn("'foo': 1 hit(s)", whole)
 
+    def test_a_comma_splits_terms_and_a_phrase_matches_across_a_tag_and_a_line_break(self):
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle,two words', self.page('two<b>\n</b>words needle'))
+        self.assertEqual(code, 0)
+        self.assertIn("'needle': 1 hit(s)", out)
+        self.assertIn("'two words': 1 hit(s)", out)
+
     def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
