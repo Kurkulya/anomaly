@@ -11,5 +11,6 @@ Check in this order. Run the claim check in the background and say you are waiti
 5. Open questions. Any `Open:` D-n, TBD or unanswered question left at the gate is a Blocker. [spec table]
 6. ADR drafts. An ADR cites commits on the main line, not scratch files or line numbers that will move. A scratch cite is Medium. [specify N2]
 7. Gates the runner cannot run. An AC whose proof needs a device, an account or a service the build cannot reach is a risk now: a Medium warning. [specify N4]
+8. Unsettled rule pairs. Two rules of the brief, the stories or the decisions whose interaction is unsettled are a Blocker only when the finding names one concrete case where the two rules give different actions. A doubt that names no concrete case is not a Blocker. [calibrate-fixes-1 D-14]
 
 Print one finding per line in the agent's shape. Then `fine:` lines for each clean check.
