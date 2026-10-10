@@ -263,6 +263,13 @@ class DeclareCommandTest(CalibrateCase):
         self.assertEqual((code, err), (0, ''))
         self.assertNotIn('backlog', out)
 
+    def test_model_weighted_tokens_per_dispatch_of_an_agent_is_declared_and_per_session(self):
+        metric = 'model-weighted tokens per dispatch anomaly:facts'
+        code, out, err = self.declare('--metric', metric, '--guard', 'interrupts')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.anomaly('slow-check').experiment.metric, metric)
+        self.assertNotIn('backlog', out)
+
     def test_a_given_check_date_and_effort_are_kept(self):
         self.declare('--check-by', '2026-11-01', '--effort', 'S')
         anomaly = self.anomaly('slow-check')
