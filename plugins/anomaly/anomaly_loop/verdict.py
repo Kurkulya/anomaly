@@ -7,6 +7,12 @@ METRIC_NAMES (case and outer spaces do not matter; anything else is refused):
   - `weighted tokens without security`: a session's weighted tokens less the core security
     reviewer's (its `tokens_by_agent` entry), by the statistic of weighted tokens, so a switch-over
     leaves the new coverage out (ADR-0013). Registered here only, not a digest trend;
+  - `model-weighted tokens per dispatch <agent>`, for any agent name (kept in its case): the agent's
+    `model_weighted_by_agent` (each API call's weighted tokens times its model's factor,
+    constants.MODEL_FACTORS) divided by its `subagents.by_type` count, by the statistic of weighted
+    tokens. A session without a dispatch of the agent, or with a call of the agent on a model with
+    no factor (`unknown_model_by_agent`), has no value: it is skipped, never read as 0; verify
+    counts the second kind. Resolved by name in resolve_metric, so it is not in REGISTRY;
   - `sightings since the fix`: the anomaly's own sightings (the rare-event primary, judged by
     recurrence), and `<category> sightings` for each category (e.g. `rework sightings`,
     `late-catch sightings`): sightings of problems of that category. Sightings are rare, so they are
@@ -29,7 +35,7 @@ kind when it has one; for a switch-over (an experiment with a `skill`) the sessi
 the new skill against those since the fix that ran it and no other build skill, fall-backs counted
 apart (trends.fix_windows, ADR-0013). Each reading carries the trends.Change of its two windows;
 what a real change is, and when a reading is unknown, is decided by trends.real_change alone (see
-there). Weighted tokens below means either tokens metric (TOKEN_NAMES). Here the
+there). Weighted tokens below means any tokens metric (is_token_metric). Here the
 primary, and active minutes read next to weighted tokens, are tested both ways (permutation.TWO_WAY),
 and the guard as a rise only (permutation.WORSE): a guard that fell, or that stayed at 0, is never
 worse. A sighting metric tests the per-session counts; sightings that belong to no session of the
@@ -68,6 +74,7 @@ SIGHTINGS_SINCE_FIX = 'sightings since the fix'
 THIN_TEXT = f'rose by fewer than {GUARD_MIN_SIGHTINGS} sightings'
 TIME, TOKENS = 'active minutes', 'weighted tokens'
 TOKENS_WITHOUT_SECURITY = 'weighted tokens without security'
+PER_DISPATCH = 'model-weighted tokens per dispatch'   # the metric name is this and an agent name
 TOKEN_NAMES = (TOKENS, TOKENS_WITHOUT_SECURITY)   # read with active minutes beside them; shown shortened
 
 
@@ -104,6 +111,40 @@ def weighted_without_security(row):
     return None if total is None else total - (security or 0)
 
 
+def per_agent_number(row, field, agent):
+    """The number a row's `field` table (keyed by agent) holds for `agent`, or None."""
+    table = row.get(field)
+    return records.number(table.get(agent)) if isinstance(table, dict) else None
+
+
+def dispatches_of(row, agent):
+    """How often a row's session dispatched `agent` (`subagents.by_type`), or None without the table."""
+    spawns = row.get('subagents')
+    return per_agent_number(spawns, 'by_type', agent) if isinstance(spawns, dict) else None
+
+
+def lacks_factor(row, agent):
+    """True when a row's session has a call of `agent` on a model with no factor."""
+    return bool(per_agent_number(row, 'unknown_model_by_agent', agent))
+
+
+def model_weighted_per_dispatch(agent):
+    """The measure of a row for the metric `model-weighted tokens per dispatch <agent>`: the agent's
+    `model_weighted_by_agent` divided by its dispatches; None (no value, not 0) for a row without a
+    dispatch of the agent or without the field (an older row), and for a row whose agent had a call on
+    a model with no factor: its sum would be short."""
+    def measure(row):
+        dispatches, total = dispatches_of(row, agent), per_agent_number(row, 'model_weighted_by_agent', agent)
+        return None if not dispatches or total is None or lacks_factor(row, agent) else total / dispatches
+    return measure
+
+
+def skipped_for_model(rows, agent):
+    """How many of the sessions `rows` the metric of `agent` leaves out for a call on a model with
+    no factor (a session without a dispatch of the agent is left out for that, not counted here)."""
+    return sum(bool(dispatches_of(row, agent)) and lacks_factor(row, agent) for row in rows)
+
+
 def sighting_metric(lines_of):
     def samples(context, anomaly, rows, days):
         return sighting_counts(context, lines_of(context, anomaly), rows, days, experiment_kind(anomaly),
@@ -131,11 +172,26 @@ REGISTRY = {metric.name: metric for metric in (
     *(Metric(f'{category} sightings', fmean, sighting_metric(category_sightings(category)), per_session=False)
       for category in CATEGORIES),
 )}
-METRIC_NAMES = tuple(REGISTRY)
+METRIC_NAMES = (*REGISTRY, f'{PER_DISPATCH} <agent>')   # the last one stands for a metric per agent name
+
+
+def per_dispatch_agent(name):
+    """The agent of a resolved metric name `model-weighted tokens per dispatch <agent>`, else None."""
+    return name[len(PER_DISPATCH) + 1:] if name.startswith(f'{PER_DISPATCH} ') else None
+
+
+def is_token_metric(name):
+    """True for a registered tokens metric (TOKEN_NAMES, or one per agent): read with active minutes."""
+    return name in TOKEN_NAMES or per_dispatch_agent(name) is not None
 
 
 def resolve_metric(name):
-    metric = REGISTRY.get(' '.join(str(name or '').lower().split()))
+    text = ' '.join(str(name or '').split())
+    metric = REGISTRY.get(text.lower())
+    if metric is None and text.lower().startswith(f'{PER_DISPATCH} ') and ' ' not in text[len(PER_DISPATCH) + 1:]:
+        agent = text[len(PER_DISPATCH) + 1:]   # an agent name keeps its case; only one name is allowed
+        metric = Metric(f'{PER_DISPATCH} {agent}', REGISTRY[TOKENS].statistic,
+                        row_metric(model_weighted_per_dispatch(agent)), per_session=True)
     if metric is None:
         raise RecordError(f'unknown metric {name!r}: name exactly one of: {", ".join(METRIC_NAMES)}')
     return metric
@@ -217,10 +273,12 @@ Reading.__doc__ = ('One metric around a fix: before and after are trends.Sample 
                    'the number counted since the fix for a sighting metric, else None. For a reading judged '
                    'by the permutation test, change is the trends.Change of the windows (trends.real_change); '
                    'else None.')
-Verdict = namedtuple('Verdict', 'result reason readings sightings_since fix_day_sightings fall_backs',
-                     defaults=(None,))
-Verdict.__doc__ = ('The result and reason, the Readings, the sightings counts, and for a switch-over the number '
-                   'of fall-back sessions (in neither side), else None.')
+Verdict = namedtuple('Verdict', 'result reason readings sightings_since fix_day_sightings fall_backs no_factor',
+                     defaults=(None, None))
+Verdict.__doc__ = ('The result and reason, the Readings, the sightings counts, for a switch-over the number '
+                   'of fall-back sessions (in neither side), else None, and for a model-weighted tokens per '
+                   'dispatch primary the number of sessions in the two windows left out for a call on a model '
+                   'with no factor, else None.')
 
 
 def is_rare_event(name):
@@ -271,7 +329,7 @@ def judge_rare_event(primary, guard, look, kind=''):
 def judge(primary, guard, time=None, kind=''):
     """(result, reason) from the readings, in the order of the module doc (ADR-0002); a rare-event
     primary goes on to judge_rare_event once the guard is not worse. `time` is the active-minutes
-    reading, given when the primary is a tokens metric (TOKEN_NAMES); `kind` is the experiment's session kind."""
+    reading, given when the primary is a tokens metric (is_token_metric); `kind` is the experiment's session kind."""
     looks = {'primary': None if is_rare_event(primary.name) else compare(primary), 'guard': guard_look(guard),
              'time': compare(time) if time else None}
     if looks['guard'] == 'worse':
@@ -307,7 +365,7 @@ def verdict(context, anomaly):
         raise RecordError(f'anomaly {anomaly.signature}: fixed_by {anomaly.fixed_by!r} has no fix date, so '
                           'there is no before and after; the user decides')
     primary, guard = resolve_metric(experiment.metric), resolve_metric(experiment.guard)
-    metrics = [primary, guard] + ([REGISTRY[TIME]] if primary.name in TOKEN_NAMES and guard.name != TIME else [])
+    metrics = [primary, guard] + ([REGISTRY[TIME]] if is_token_metric(primary.name) and guard.name != TIME else [])
     before, after = trends.fix_windows(context, fix_day, experiment.kind, experiment.skill)
     before_days, after_days = trends.fix_window_days(fix_day, context.today, experiment.skill)
     readings = []
@@ -331,7 +389,9 @@ def verdict(context, anomaly):
     rule = RARE_EVENT_RULE if is_rare_event(primary.name) else VERDICT_RULE
     skipped = (len(trends.fall_backs(context, fix_day, experiment.kind, experiment.skill))
                if experiment.skill else None)
-    return Verdict(result, f'{reason}; {rule}', readings, own, on_fix_day, skipped)
+    agent = per_dispatch_agent(primary.name)
+    no_factor = None if agent is None else skipped_for_model(before + after, agent)
+    return Verdict(result, f'{reason}; {rule}', readings, own, on_fix_day, skipped, no_factor)
 
 
 def fix_day_line(anomaly, found):
@@ -350,7 +410,7 @@ def fix_day_line(anomaly, found):
 def format_value(name, value):
     if value is None:
         return '-'
-    return trends.size(value) if name in TOKEN_NAMES else trends.plain(value, REGISTRY[name].statistic)
+    return trends.size(value) if is_token_metric(name) else trends.plain(value, REGISTRY[name].statistic)
 
 
 def reading_line(reading, role):

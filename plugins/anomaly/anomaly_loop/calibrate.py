@@ -380,6 +380,8 @@ def run_verify(args, environ):
     lines += [verdict.reading_line(r, role) for r, role in zip(found.readings, roles)]
     if found.fall_backs is not None:
         lines.append(f'- fall-backs: {found.fall_backs} (in neither side)')
+    if found.no_factor:
+        lines.append(f'- sessions skipped for a model with no factor: {found.no_factor}')
     if not verdict.is_rare_event(found.readings[0].name):
         lines.append(f'- {verdict.SIGHTINGS_SINCE_FIX}: {found.sightings_since}')
     on_fix_day = verdict.fix_day_line(seen, found)
