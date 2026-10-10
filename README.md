@@ -1191,7 +1191,7 @@ that repeats an existing one, and D10, a check deleted with no cover, plant the 
 feature 8 (3 decoys), 5 in rules mode (2 decoys) and 1 in cumulative mode (F-D9, a
 characterization check that mocks internals; 1 decoy), security 10 (3 decoys), docs 2 (1 decoy, an ADR claim the code still holds).
 
-Each findings file is the text of one run. A finding is one line in the shape every agent prints:
+Each findings file is the text of one run. A finding is one line in the shape every reviewer agent prints:
 
 ```
 - [<Blocker|High|Medium|Low|Nit>] <path>:<line> — <problem> — fix: <fix> — <observed|unverified>
