@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest import mock
 
 from anomaly_loop import calibrate, constants, records, trends
 from tests.fixtures import (NOW, GitFixture, assert_cli_error, context, metrics_row, run_cli, write_anomaly_with,
@@ -23,6 +24,13 @@ def spread(centre, n):
     if isinstance(centre, (list, tuple)):
         return list(centre)
     return [centre * (1 + SPREAD * (i - (n - 1) / 2)) for i in range(n)]
+
+
+def no_managed_settings(test):
+    """run_cli runs in-process, so no managed settings file of the host may add a deny rule to the test."""
+    patch = mock.patch.dict('anomaly_loop.scans.MANAGED_DIRS', {}, clear=True)
+    patch.start()
+    test.addCleanup(patch.stop)
 
 
 class CalibrateCase(unittest.TestCase):
@@ -57,10 +65,10 @@ class CalibrateCase(unittest.TestCase):
 
     def lay_out_plugin(self):
         """The plugin folder as an installed copy: no git checkout, so a fix goes to an addenda file in home.
-        Two skills and two agents, `measure` (which takes no addenda), and code and docs outside any of them."""
+        Three skills and two agents, `measure` (which takes no addenda), and code and docs outside any of them."""
         write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
         for name, steps in (('observe', 'references/steps.md'), ('research', 'references/notes.md'),
-                            ('measure', 'references/numbers.md')):
+                            ('review', 'references/modes.md'), ('measure', 'references/numbers.md')):
             write_text(self.plugin / 'skills' / name / 'SKILL.md', f'# {name}\n')
             write_text(self.plugin / 'skills' / name / steps, f'{name} steps\n')
         for name in ('facts', 'digest'):
@@ -515,6 +523,7 @@ class FixAddendumTest(CalibrateCase):
         super().setUp()
         self.plugin = self.lay_out_plugin()
         self.settings = self.root / 'settings'   # CLAUDE_CONFIG_DIR: the live deny rules are these and the managed ones
+        no_managed_settings(self)
 
     def experiment_on(self, signature, target):
         """An experiment declared on 1 October, with the change not yet made."""
@@ -545,7 +554,7 @@ class FixAddendumTest(CalibrateCase):
             path = self.home / 'addenda' / Path(file_name)
             self.assertEqual(path.read_text(encoding='utf-8'), self.tagged(line, signature, unit) + '\n', target)
             anomaly = self.anomaly(signature)
-            self.assertEqual((anomaly.fixed_by, anomaly.status), (f'{TODAY.isoformat()} · {path}', 'fixed'), target)
+            self.assertEqual((anomaly.fixed_by, anomaly.status), (f'{TODAY.isoformat()} · addenda/{file_name}', 'fixed'), target)
             self.assertIn(f'fixed: {signature}', out)
 
     def test_without_git_the_output_says_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
@@ -558,6 +567,20 @@ class FixAddendumTest(CalibrateCase):
         assert_cli_error(self, self.fix_addendum('slow-measure', 'Round the numbers.'), 'measure takes no addenda')
         self.assertFalse((self.home / 'addenda').exists())
         self.assertEqual(self.anomaly('slow-measure').fixed_by, '')
+
+    def test_a_target_that_is_no_skill_or_agent_or_a_line_that_is_empty_or_too_long_is_refused_and_writes_nothing(self):
+        line = 'Ask which repo before logging.'
+        cases = (('not-the-plugin', 'repo:demo', line, ()),
+                 ('plugin-code', 'anomaly_loop/calibrate.py', line, ()),
+                 ('empty-line', 'anomaly:observe', ' ', ()),
+                 ('long-line', 'anomaly:observe', ('Ask first. ' * 30)[:constants.SIGHTING_MAX_CHARS + 1],
+                  (str(constants.SIGHTING_MAX_CHARS),)))
+        for signature, target, text, fragments in cases:
+            with self.subTest(signature):
+                self.experiment_on(signature, target)
+                assert_cli_error(self, self.fix_addendum(signature, text), *fragments)
+                self.assertFalse((self.home / 'addenda').exists())
+                self.assertEqual(self.anomaly(signature).fixed_by, '')
 
     def test_ref_and_addendum_together_are_refused(self):
         self.experiment_on('slow-check', 'anomaly:observe')
@@ -702,7 +725,10 @@ class BatchTest(CalibrateCase):
                  ('inside-a-skill', 'skills/research/references/notes.md', 'addenda/research.md'),
                  ('agent-file', 'agents/digest.md', 'addenda/agents/digest.md'),
                  ('prose-two-skills', 'anomaly:observe step 3 and review apply', 'addenda/observe.md'),
-                 ('prose-agent', 'anomaly:facts reads too much', 'addenda/agents/facts.md'))
+                 ('prose-agent', 'anomaly:facts reads too much', 'addenda/agents/facts.md'),
+                 ('prose-slash', 'anomaly:review asks and/or skips', 'addenda/review.md'),
+                 ('prose-two-names', 'anomaly:observe and anomaly:review', 'addenda/observe.md'),
+                 ('prose-colon', 'anomaly:review step 10: delta', 'addenda/review.md'))
         for signature, target, _ in cases:
             write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
         for signature, target, file_name in cases:
@@ -813,6 +839,7 @@ class CommitTest(unittest.TestCase):
         self.data = root / 'data'
         self.plugin = root / 'plugin'   # an installed copy: outside the repository, so no checkout
         self.settings = root / 'settings'
+        no_managed_settings(self)
         self.repo.write('README.md', 'x\n')
         write_anomaly_with(self.home, 'slow-check', category='automated-checks', impact=2, occurrences=2)
         self.repo.commit(['README.md', 'anomaly-home/anomalies/slow-check.md'], 'chore: start', TODAY)
