@@ -1,0 +1,64 @@
+"""Offline tests for the `terms-grep` command (AC-20).
+
+The command is driven through the CLI entry (`run_cli`) with a `file://` URL on a temporary file,
+so no test reaches the network.
+"""
+import tempfile
+import unittest
+from pathlib import Path
+
+from tests.fixtures import run_cli
+
+DEFAULT_CONTEXT = 300
+
+
+class TermsGrepTest(unittest.TestCase):
+    def page(self, body, name='terms.html'):
+        """A temporary HTML page holding `body`; returns its file:// URL."""
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        path = Path(folder.name) / name
+        path.write_text(f'<html><body><p>{body}</p></body></html>', encoding='utf-8', newline='\n')
+        return path.as_uri()
+
+    def hit_lines(self, out):
+        """The printed context lines of the hits (the lines that start with the ellipsis marker)."""
+        return [line for line in out.splitlines() if line.lstrip().startswith('…')]
+
+    def test_a_match_prints_context_characters_each_side_default_300(self):
+        url = self.page('A' * 500 + 'needle' + 'B' * 500)
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle', url)
+        self.assertEqual(code, 0)
+        (line,) = self.hit_lines(out)
+        self.assertIn('A' * DEFAULT_CONTEXT + 'needle', line)
+        self.assertNotIn('A' * (DEFAULT_CONTEXT + 1), line)
+        self.assertIn('needle' + 'B' * (DEFAULT_CONTEXT - len('needle')), line)
+        self.assertNotIn('B' * (DEFAULT_CONTEXT + 1), line)
+
+    def test_context_sets_the_characters_each_side(self):
+        url = self.page('A' * 500 + 'needle' + 'B' * 500)
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle', '--context', '20', url)
+        self.assertEqual(code, 0)
+        (line,) = self.hit_lines(out)
+        self.assertIn('A' * 20 + 'needle', line)
+        self.assertNotIn('A' * 21, line)
+        self.assertNotIn('B' * 21, line)
+
+    def test_word_matches_whole_words_only(self):
+        url = self.page('foo food foobar')
+        _, plain, _ = run_cli('terms-grep', '--terms', 'foo', url)
+        _, whole, _ = run_cli('terms-grep', '--terms', 'foo', '--word', url)
+        self.assertIn("'foo': 3 hit(s)", plain)
+        self.assertIn("'foo': 1 hit(s)", whole)
+
+    def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        missing = (Path(folder.name) / 'nowhere.html').as_uri()
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle', missing)
+        self.assertEqual(code, 1)
+        self.assertIn('FETCH FAILED', out)
+
+
+if __name__ == '__main__':
+    unittest.main()
