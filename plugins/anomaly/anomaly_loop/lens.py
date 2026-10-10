@@ -1,7 +1,7 @@
-"""lens tally: count what each reviewer's findings came to, run by run, and hand one batch per session
-to `observe apply`.
+"""lens tally: count what each lens (a reviewer, the interview, build's model pick) came to, run by run,
+and hand one batch per session to `observe apply`.
 
-  lens tally add --session S --lens L --accepted N --rejected N [--revised N]   store one reviewer's counts over its rounds
+  lens tally add --session S --lens L --accepted N --rejected N [--revised N]   store one lens's counts over its rounds
   lens tally sum --session S                                                    sum a session's runs into one batch
 
 `observe` keeps one lens line per lens per session (observe.record_lenses), so a review that runs
@@ -19,7 +19,7 @@ same batch, and a lens already put into home is skipped by observe.
 
 Session and lens names are single tokens (privacy.check_identifier, ADR-0003). The session also names
 the batch file, so it holds no ":" either (privacy.check_file_token), in `add` as in `sum`. A lens is
-one of the review lenses (allowed_names): each core reviewer under its short name (`anomaly:code` is
+one of the known lenses (allowed_names): each core reviewer under its short name (`anomaly:code` is
 `code`) and each org reviewer under its adapter name, read from the `reviewers` port (ports.resolve),
 `plan`, the plan-gate reviewer, `interview`, the interview's own recommendations, and `model_pick`,
 build's verdict on a ticket's model pick.
@@ -32,7 +32,7 @@ LABEL = 'lens tally'
 REVIEWERS_PORT = 'reviewers'
 PLAN_LENS = 'plan'   # the plan-gate reviewer (`anomaly:plan`) is no port reviewer, so its lens is always allowed
 INTERVIEW_LENS = 'interview'   # the interview's recommendations (accepted, rejected, revised) are no port reviewer's, so this lens is always allowed too
-MODEL_PICK_LENS = 'model_pick'   # build's verdict on an `implement` ticket's model pick (rejected, accepted) is no port reviewer's either
+MODEL_PICK_LENS = 'model_pick'   # build's verdict on an `implement` ticket's model pick (accepted, rejected) is no port reviewer's either
 
 
 def is_run(row):
@@ -86,7 +86,7 @@ def check_lens(home, lens):
     """Refuse a lens that is not one of allowed_names(home), naming the allowed ones."""
     allowed = allowed_names(home)
     if lens not in allowed:
-        raise RecordError(f'{LABEL}: lens {lens} is not a review lens; use one of: {", ".join(allowed)}')
+        raise RecordError(f'{LABEL}: lens {lens} is not a known lens; use one of: {", ".join(allowed)}')
 
 
 def data_folder(args, environ):
@@ -98,7 +98,7 @@ def register(commands, common):
     actions = command.add_subparsers(dest='action', required=True, metavar='action')
     tally = actions.add_parser('tally', help='store the counts of each review run, then sum a session')
     steps = tally.add_subparsers(dest='step', required=True, metavar='step')
-    add = steps.add_parser('add', parents=[common], help="store one reviewer's accepted and rejected counts over its rounds")
+    add = steps.add_parser('add', parents=[common], help="store one lens's accepted and rejected counts over its rounds")
     add.add_argument('--session', required=True, help='the session id (one word)')
     add.add_argument('--lens', required=True,
                      help=f"the lens name: {', '.join(core_lenses())}, {PLAN_LENS}, {INTERVIEW_LENS}, {MODEL_PICK_LENS} or an org reviewer's adapter name")

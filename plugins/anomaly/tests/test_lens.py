@@ -156,7 +156,7 @@ class AddTest(LensCase):
         self.assertEqual([row['lens'] for row in self.tally_lines()], [lens.INTERVIEW_LENS])
 
     def test_a_lens_name_outside_the_allowed_set_is_refused_with_the_allowed_names_and_nothing_is_written(self):
-        """AC-97: on an empty profile the allowed lens names are the three core lenses, `plan` and `interview`."""
+        """AC-97: on an empty profile the allowed lens names are the three core lenses, `plan`, `interview` and `model_pick`."""
         assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security', lens.PLAN_LENS, lens.INTERVIEW_LENS,
                          'model_pick')
         self.assertFalse(self.data.exists())
