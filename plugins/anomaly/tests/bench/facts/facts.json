@@ -34,7 +34,7 @@
     {
       "id": "F3",
       "question": "Q1",
-      "places": [{"file": "jobs/store.py", "lines": [16, 19]}]
+      "places": [{"file": "jobs/store.py", "lines": [17, 19]}]
     },
     {
       "id": "F4",

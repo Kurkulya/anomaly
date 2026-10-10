@@ -64,7 +64,7 @@ SHAPE = ('- [<severity>] <path>:<line> <dash> <problem> <dash> fix: <fix> <dash>
          'where <dash> is an em dash (U+2014)')
 FACT_KINDS = ('call-chain', 'moved-claim', 'none-callers')
 ANSWER = re.compile(r'^\s*-\s+(?P<path>[^\s`*]+):(?P<line>\d+)\s+—\s+(?P<fact>\S.*?)\s*$')
-LOOKS_LIKE_ANSWER = re.compile(r'^\s*-\s+.*\S:\d+.*—')
+LOOKS_LIKE_ANSWER = re.compile(r'^\s*-\s+[`*]*[^\s`*]+[`*]*:\d+\S*\s+—')
 ANSWER_SHAPE = ('- <path>:<line> <dash> <fact>, with a bare path and one line number (no backticks, no range, '
                 'no bold), where <dash> is an em dash (U+2014)')
 
