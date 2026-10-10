@@ -95,6 +95,16 @@ class AppendTest(AddendaCase):
         addenda.append_line(agent, 'Cite the line.', 'vague-answer', '0a1b2c3d')
         self.assertEqual(addenda.read_lines(agent), ['Cite the line. [exp: vague-answer · 0a1b2c3d]'])
 
+    def test_a_second_line_of_the_same_experiment_is_refused_and_another_experiment_is_accepted(self):
+        addenda.append_line(self.path, 'Ask which repo before logging.', 'slow-check', '0a1b2c3d')
+        before = self.path.read_bytes()
+        with self.assertRaises(RecordError) as refused:
+            addenda.append_line(self.path, 'Name the skill in the note.', 'slow-check', '0a1b2c3d')
+        self.assertIn('slow-check', str(refused.exception))
+        self.assertEqual(self.path.read_bytes(), before)
+        addenda.append_line(self.path, 'Name the skill in the note.', 'slow', '0a1b2c3d')   # a prefix is another experiment
+        self.assertEqual(len(addenda.read_lines(self.path)), 2)
+
     def test_a_sixth_line_is_refused_naming_the_file_and_the_cap_and_the_file_is_unchanged(self):
         self.assertEqual(constants.ADDENDA_MAX_LINES, 5)
         for number in range(constants.ADDENDA_MAX_LINES):

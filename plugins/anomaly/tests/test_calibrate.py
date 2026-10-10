@@ -75,6 +75,7 @@ class CalibrateCase(unittest.TestCase):
             write_text(self.plugin / 'agents' / f'{name}.md', f'You are the {name} agent.\n')
         write_text(self.plugin / 'anomaly_loop' / 'calibrate.py', '# code\n')
         write_text(self.plugin / 'docs' / 'notes.md', '# notes\n')
+        write_text(self.root / 'x' / 'SKILL.md', '# x\n')   # the skill folder that `skills/../../x` reaches from the plugin
         return self.plugin
 
     def rows(self, days, active=10.0, weighted=1000.0, skills=('implement',), prefix='s'):
@@ -574,12 +575,14 @@ class FixAddendumTest(CalibrateCase):
                  ('plugin-code', 'anomaly_loop/calibrate.py', line, ()),
                  ('empty-line', 'anomaly:observe', ' ', ()),
                  ('long-line', 'anomaly:observe', ('Ask first. ' * 30)[:constants.SIGHTING_MAX_CHARS + 1],
-                  (str(constants.SIGHTING_MAX_CHARS),)))
+                  (str(constants.SIGHTING_MAX_CHARS),)),
+                 ('escape', 'anomaly:../../x escape', line, ()))
         for signature, target, text, fragments in cases:
             with self.subTest(signature):
                 self.experiment_on(signature, target)
                 assert_cli_error(self, self.fix_addendum(signature, text), *fragments)
                 self.assertFalse((self.home / 'addenda').exists())
+                self.assertEqual(list(self.root.glob('*.md')), [])   # nothing beside home either
                 self.assertEqual(self.anomaly(signature).fixed_by, '')
 
     def test_ref_and_addendum_together_are_refused(self):
@@ -743,7 +746,8 @@ class BatchTest(CalibrateCase):
     def test_without_a_checkout_plugin_code_and_docs_are_an_upstream_defect_not_an_addenda_fix(self):
         self.lay_out_plugin()
         for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md'),
-                                  ('prose-no-such-skill', 'anomaly:nosuchskill frontier')):
+                                  ('prose-no-such-skill', 'anomaly:nosuchskill frontier'),
+                                  ('prose-escape', 'anomaly:../../x escape')):
             write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
             line = self.plan_line(signature)
             self.assertIn('upstream defect', line, target)
