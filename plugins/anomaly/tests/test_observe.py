@@ -244,13 +244,31 @@ class LensTest(ObserveCase):
         self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=3, rejected=1, revised=1),
                            dict(session=SID, lens='reviewer-b', accepted=1, rejected=1),
                            dict(session=OTHER_SID, lens='reviewer-a', accepted=2, rejected=0)], now=before)
-        code, out, err = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=5, rejected=1, revised=2)])
+        code, out, err = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=5, rejected=1, revised=2),
+                                            dict(session=OTHER_SID, lens='reviewer-c', accepted=1, rejected=0)])
         self.assertEqual((code, err), (0, ''), out)
         self.assertEqual(self.lenses(), [
             dict(session_id=SID, date=TODAY, lens='reviewer-a', accepted=5, rejected=1, revised=2),
             dict(session_id=SID, date=before.date().isoformat(), lens='reviewer-b', accepted=1, rejected=1),
-            dict(session_id=OTHER_SID, date=before.date().isoformat(), lens='reviewer-a', accepted=2, rejected=0)])
+            dict(session_id=OTHER_SID, date=before.date().isoformat(), lens='reviewer-a', accepted=2, rejected=0),
+            dict(session_id=OTHER_SID, date=TODAY, lens='reviewer-c', accepted=1, rejected=0)])
         self.assertIn('lens: reviewer-a replaced (accepted 5, rejected 1, revised 2)', out.splitlines())
+        self.assertIn('lens: reviewer-c logged (accepted 1, rejected 0)', out.splitlines())
+
+    def test_a_replace_keeps_every_other_line_byte_for_byte_a_damaged_one_included(self):
+        """AC-1 (review round 1): only the matched line changes; a line that is not JSON and a hand-written line
+        with its own spacing and key order stay exactly as they were, in place."""
+        damaged = 'not json'
+        spaced = (f'{{"lens": "reviewer-b",  "session_id": "{SID}", "date": "2026-09-01", '
+                  f'"rejected": 1, "accepted": 1}}')
+        stored = f'{{"session_id":"{SID}","date":"2026-09-01","lens":"reviewer-a","accepted":3,"rejected":1}}'
+        write_text(self.home / 'lenses.jsonl', '\n'.join([stored, damaged, spaced]) + '\n')
+        code, out, err = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=4, rejected=1)])
+        self.assertEqual((code, err), (0, ''), out)
+        lines = (self.home / 'lenses.jsonl').read_bytes().decode('utf-8').split('\n')
+        self.assertEqual(lines[1:], [damaged, spaced, ''])
+        self.assertEqual(json.loads(lines[0]), dict(session_id=SID, date=TODAY, lens='reviewer-a',
+                                                    accepted=4, rejected=1))
 
     def test_a_larger_accepted_rejected_or_revised_alone_replaces_the_line(self):
         """AC-1: one larger value is enough when none is smaller; a missing stored `revised` counts as 0."""

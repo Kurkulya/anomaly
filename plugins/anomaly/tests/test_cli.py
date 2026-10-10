@@ -1821,6 +1821,27 @@ class LensReplaceDocsTest(unittest.TestCase):
             with self.subTest(old=old):
                 self.assertFalse(old in step, f'review step 10 still says: {old}')
 
+    def test_the_readme_and_review_step_10_state_that_a_later_apply_replaces_the_line(self):
+        """AC-6, the new contract (review round 1): the `lens tally sum` bullet and the review section line of the
+        README, and step 10."""
+        step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
+        phrase = "a later apply replaces the session's line of each lens"
+        self.assertTrue(phrase in ' '.join(step.split()), f'review step 10 lacks: {phrase}')
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = ' '.join(self.README.read_text(encoding='utf-8').split())
+        for phrase in ("replaces the session's line with larger ones", "replacing the session's earlier line"):
+            with self.subTest(phrase=phrase):
+                self.assertTrue(phrase in text, f'README.md lacks: {phrase}')
+
+    def test_observe_says_a_capture_adds_no_entry_for_the_names_lens_tally_holds(self):
+        """Review round 1 (user decision): the capture would add a second, smaller line for a name `lens tally`
+        already counts; a later apply replaces or refuses it (ADR-0021)."""
+        text = ' '.join((PLUGIN / 'skills' / 'observe' / 'SKILL.md').read_text(encoding='utf-8').split())
+        sentence = ('A capture adds no entry for those names: their tally already holds the counts, and a later '
+                    'apply replaces or refuses a line (ADR-0021).')
+        self.assertTrue(sentence in text, f'observe SKILL.md lacks: {sentence}')
+
 
 if __name__ == '__main__':
     unittest.main()
