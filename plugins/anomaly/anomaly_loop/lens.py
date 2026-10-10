@@ -5,7 +5,8 @@ and hand one batch per session to `observe apply`.
   lens tally sum --session S                                                    sum a session's runs into one batch
 
 `observe` keeps one lens line per lens per session (observe.record_lenses), so a review that runs
-several times in a session cannot hand it each run: the runs are stored apart and summed once.
+several times in a session cannot hand it each run: the runs are stored apart and each sum holds
+the session's totals so far, which replace the session's line in home (ADR-0021).
 `add` appends {session, lens, accepted, rejected} to `lens-tally.jsonl` in the data folder, never in
 home (the tally is throwaway until it is summed); `revised` (accepted findings whose fix differed
 from the one the reviewer proposed, never more than accepted) is added only when it is passed. `sum`
@@ -15,7 +16,8 @@ when at least one run of that lens had it; a run without it counts 0 there) to
 `lens-batch-<session>.json` in the data folder; it prints that path and nothing else, and the review
 skill then runs `observe apply --file <path>`. A session with no runs is an error (a mistyped session
 id must not look like an empty review). The tally is never rewritten, so summing again gives the
-same batch, and a lens already put into home is skipped by observe.
+same batch, or larger totals after a new run: observe writes nothing for the same totals and
+replaces the session's line with larger ones.
 
 Session and lens names are single tokens (privacy.check_identifier, ADR-0003). The session also names
 the batch file, so it holds no ":" either (privacy.check_file_token), in `add` as in `sum`. A lens is
