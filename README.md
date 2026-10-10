@@ -1249,8 +1249,12 @@ place:
 - <path>:<line> — <fact>
 ```
 
-Every other line is prose and is ignored; empty text, or text of blanks only, is refused. The
-finding-line parser is not used. An answer matches an item by the same rule as a finding matches a
+The path is bare and the line is one number (no backticks, no range, no bold), and a line names
+only a place that is an answer: a place the reader rejects, or quotes as context, goes in prose.
+Every other line is prose and is ignored; empty text, or text of blanks only, is refused. A bullet
+that holds a `<path>:<digits>` place and an em dash but has another shape (a backticked path, a
+line range, bold) is refused, with the file and line number, as `bench score` refuses a broken
+finding line. The finding-line parser is not used. An answer matches an item by the same rule as a finding matches a
 defect: the planted file and a line within the planted range plus or minus 3. An expected fact is
 **found** when an answer matches it; a decoy is **hit** when an answer matches it, and each hit is
 named. The output has one line for each run (the facts found, the facts missed and the decoys hit,
