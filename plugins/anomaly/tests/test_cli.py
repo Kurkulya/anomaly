@@ -84,13 +84,15 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_the_reviewers_the_docs_agent_facts_and_digest_each_with_its_own_tools_and_no_pinned_model(self):
+    def test_the_agents_are_the_reviewers_the_docs_agent_facts_digest_and_survey_each_with_its_own_tools_and_no_pinned_model(self):
         """AC-52: the docs agent is the fifth file; the size, description and tools checks run over every agent,
         so they cover it once the file exists. AC-8, D-29: facts and digest are the sixth and seventh; the reviewers
-        and the docs agent keep Bash, facts reads and searches only, digest reads and fetches."""
+        and the docs agent keep Bash, facts reads and searches only, digest reads and fetches. AC-15, D-2, D-21:
+        survey is the eighth; it also runs Bash, writes files and searches and fetches the web."""
         review_tools = ['Read', 'Grep', 'Glob', 'Bash']
         tools = {**dict.fromkeys([*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem], review_tools),   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
-                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch']}
+                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch'],
+                 'survey': ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'WebSearch', 'WebFetch']}
         self.assertEqual({path.stem for path in self.agents()}, set(tools))
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
