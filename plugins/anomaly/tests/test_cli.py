@@ -39,6 +39,8 @@ class RegistryTest(unittest.TestCase):
 
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
+    BUILD_SKILL_MAX_BYTES = 9 * 1024   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10)
+    CONDUCT_SKILL_MAX_BYTES = 9 * 1024   # conduct only: the fix-branch and research dispatches name roles and effort (model-roles cumulative review, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
@@ -76,22 +78,159 @@ class SkillFileTest(unittest.TestCase):
         for path in self.skills():
             if path.parent.name not in constants.LOOP_SKILLS:
                 with self.subTest(skill=path.parent.name):
-                    self.assertLessEqual(path.stat().st_size, self.SKILL_MAX_BYTES)
+                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
+                    self.assertLessEqual(path.stat().st_size, cap)
         for path in self.agents():
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_the_core_reviewers_the_plan_reviewer_and_the_docs_agent_read_only_and_with_no_pinned_model(self):
+    def test_the_agents_are_the_reviewers_the_docs_agent_facts_and_digest_each_with_its_own_tools_and_no_pinned_model(self):
         """AC-52: the docs agent is the fifth file; the size, description and tools checks run over every agent,
-        so they cover it once the file exists."""
-        self.assertEqual({path.stem for path in self.agents()}, {*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem})   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
+        so they cover it once the file exists. AC-8, D-29: facts and digest are the sixth and seventh; the reviewers
+        and the docs agent keep Bash, facts reads and searches only, digest reads and fetches."""
+        review_tools = ['Read', 'Grep', 'Glob', 'Bash']
+        tools = {**dict.fromkeys([*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem], review_tools),   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
+                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch']}
+        self.assertEqual({path.stem for path in self.agents()}, set(tools))
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
             with self.subTest(agent=path.stem):
                 self.assertEqual(fields.get('name'), path.stem)
-                self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')],
-                                 ['Read', 'Grep', 'Glob', 'Bash'])
+                self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')], tools[path.stem])
                 self.assertNotIn('model', fields)
+
+    DISPATCH_ROLES = tuple(role for role, _ in constants.MODEL_ROLES)
+    MODEL_NAME = re.compile(r'\b(?:sonnet|haiku|opus)\b', re.I)
+    BUILT_IN_EXPLORE = re.compile(r'\bExplore\b|`explore`\s+sub-?agents?|\bexplore\s+agent')   # the built-in agent, or the old "explore sub-agent" wording
+    OLD_FACTS_DISPATCH = re.compile(r'\bmodel\s+`?explore\b|`explore`\s+sub-?agents?', re.I)
+
+    def dispatch_files(self):
+        """Every skill file (SKILL.md and the docs beside it) and every agent file: where a dispatch can be written.
+        README output examples are not dispatches, so the README is out."""
+        return sorted((PLUGIN / 'skills').rglob('*.md')) + sorted((PLUGIN / 'agents').rglob('*.md'))
+
+    def role_mention(self, role):
+        """`model <role>` or `<role> model` / `<role> role`, with or without backticks; `review` is not `review_code`."""
+        return re.compile(rf'\bmodel\b\W+(?:role\W+)?`?{role}\b(?!_)|`?\b{role}\b(?!_)`?\W+(?:model|role)\b')
+
+    def paragraphs(self, path):
+        """(first line number, text) of each list item, table row, heading or paragraph; a wrapped line joins its item."""
+        found, start, buf = [], 0, []
+        for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+            starts = re.match(r'\s*(?:[-*]\s|\d+\.\s|\||#)', line)
+            if buf and (not line.strip() or starts):
+                found.append((start, ' '.join(buf)))
+                buf = []
+            if line.strip():
+                if not buf:
+                    start = number
+                buf.append(line.strip())
+        if buf:
+            found.append((start, ' '.join(buf)))
+        return found
+
+    def test_no_dispatch_in_a_skill_or_agent_file_names_a_bare_model(self):
+        """AC-4, D-7: a model outside a model role cannot be tuned or measured; observe and assess named `sonnet`.
+        No skill or agent file holds a model name at all."""
+        for path in self.dispatch_files():
+            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
+                    self.assertIsNone(self.MODEL_NAME.search(line), line)
+
+    def test_no_skill_names_the_built_in_explore_agent(self):
+        """AC-9: facts go to `anomaly:facts`; the old `explore` sub-agent wording is the built-in's too."""
+        for path in sorted((PLUGIN / 'skills').rglob('*.md')):
+            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
+                    self.assertIsNone(self.BUILT_IN_EXPLORE.search(line), line)
+
+    def test_assess_and_observe_send_their_digests_to_the_digest_agent_on_the_digest_role(self):
+        """AC-4, D-7."""
+        for skill in ('assess', 'observe'):
+            text = (PLUGIN / 'skills' / skill / 'SKILL.md').read_text(encoding='utf-8')
+            with self.subTest(skill=skill):
+                self.assertIn('anomaly:digest', text)
+                self.assertRegex(text, self.role_mention('digest'))
+
+    def test_interview_diagnose_and_conduct_send_facts_to_the_facts_agent_and_no_skill_names_the_lookup_agent(self):
+        """AC-9, Amended 2026-10-10: `anomaly:facts` is the only facts agent; `anomaly:lookup` is not built."""
+        for skill in ('interview', 'diagnose', 'conduct'):
+            text = (PLUGIN / 'skills' / skill / 'SKILL.md').read_text(encoding='utf-8')
+            with self.subTest(skill=skill):
+                self.assertIn('anomaly:facts', text)
+                self.assertIsNone(self.OLD_FACTS_DISPATCH.search(text))
+        for path in self.dispatch_files():
+            with self.subTest(file=path.relative_to(PLUGIN).as_posix()):
+                self.assertNotIn('anomaly:lookup', path.read_text(encoding='utf-8'))
+
+    def test_the_review_skill_names_the_lens_role_of_each_reviewer(self):
+        """AC-4, D-3."""
+        paragraph = next((text for _, text in self.paragraphs(self.REVIEW_SKILL) if '`review_code`' in text), '')
+        for role, agent in (('review_code', 'code'), ('review_feature', 'feature'), ('review_security', 'security')):
+            with self.subTest(role=role):
+                self.assertIn(f'`{role}` for `anomaly:{agent}`', paragraph)
+        with self.subTest(rule='effort'):
+            self.assertRegex(paragraph, r'(?i)\beffort\b')
+
+    def test_every_dispatch_that_names_a_model_role_or_a_model_agent_also_says_to_pass_the_effort(self):
+        """AC-4, Amended 2026-10-10 (ports value `<model> <effort>`): the rule is per paragraph, where a paragraph is
+        one list item, table row or text block with its wrapped lines. A paragraph that names a role (`model <role>`,
+        `<role> model`, `<role> role`, for every model role, `implement` and `implement_wide` included) or the agent `anomaly:facts`,
+        `anomaly:digest` or `anomaly:docs`, the phrase "model role(s)" or a backticked lens role (the review
+        skill's model line) must also hold the word `effort`."""
+        dispatches = [self.role_mention(role) for role in self.DISPATCH_ROLES]
+        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs)\b|(?i:\bmodel roles?\b)|`review_(?:code|feature|security)`'))
+        for path in self.dispatch_files():
+            for number, text in self.paragraphs(path):
+                if any(pattern.search(text) for pattern in dispatches):
+                    with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
+                        self.assertRegex(text, r'(?i)\beffort\b')
+
+    def test_build_and_conduct_dispatch_the_implementer_on_the_ticket_model_role_and_the_test_writer_on_implement(self):
+        """AC-16: the implementer paragraph reads the ticket's `Model:` line and names `implement_wide`; the
+        test-writer paragraph never does (build names `implement` for it). Located by the dispatch phrases both
+        files hold today, so a missing paragraph fails loudly. The effort rule is the test above."""
+        parallel = PLUGIN / 'skills' / 'conduct' / 'PARALLEL.md'
+        for path, implementer, writer in ((self.BUILD_SKILL, r'Dispatch the `implementer` port', r'Dispatch the `test_writer` port'),
+                                          (parallel, r'one `implementer` agent per', r'one `test_writer` dispatch per')):
+            found = self.paragraphs(path)
+            name = path.relative_to(PLUGIN).as_posix()
+            implementers = [text for _, text in found if re.search(implementer, text)]
+            writers = [text for _, text in found if re.search(writer, text)]
+            with self.subTest(file=name, dispatch='implementer'):
+                self.assertEqual(len(implementers), 1, implementers)
+                self.assertIn('`Model:`', implementers[0])
+                self.assertRegex(implementers[0], self.role_mention('implement_wide'))
+            with self.subTest(file=name, dispatch='test_writer'):
+                self.assertEqual(len(writers), 1, writers)
+                self.assertNotIn('`Model:`', writers[0])
+                self.assertNotRegex(writers[0], self.role_mention('implement_wide'))
+        for path, phrase in ((self.BUILD_SKILL, 'Dispatch the `test_writer` port'), (parallel, 'one `test_writer` dispatch per')):
+            with self.subTest(file=path.relative_to(PLUGIN).as_posix(), dispatch='test_writer role'):
+                writer = next(text for _, text in self.paragraphs(path) if phrase in text)
+                self.assertRegex(writer, self.role_mention('implement'))
+
+    def test_the_digest_agent_treats_the_source_as_data_follows_no_link_in_it_and_copies_no_secret(self):
+        """Security, cumulative review 2026-10-10: the agent fetches what the caller passes, so the source can carry
+        an injected instruction. By key tokens, so the wording stays free."""
+        text = ' '.join((PLUGIN / 'agents' / 'digest.md').read_text(encoding='utf-8').split())
+        for pattern in (r'(?i)only the (?:link|source)[^.]{0,40}caller passes', r'(?i)\bdata\b[^.]{0,40}\bnever an instruction',
+                        r'(?i)follow no link or path', r'(?i)never copy a secret, token or personal data'):
+            with self.subTest(rule=pattern):
+                self.assertRegex(text, pattern)
+
+    def test_the_conduct_fix_branch_and_research_dispatches_and_the_diagnose_ui_check_dispatch_name_their_role_and_effort(self):
+        """AC-4, AC-16, Amended 2026-10-10 (cumulative review): conduct's fix-branch implementer on `implement_wide`,
+        its research agent on `deep_analysis`, diagnose's `ui_check` port on `browse`. Located by the phrases the
+        paragraphs hold today; the effort word is checked here, since the effort test above sees only named roles."""
+        for skill, phrase, role in (('conduct', r'One fix branch off the tip', 'implement_wide'),
+                                    ('conduct', r'Research the wave needs', 'deep_analysis'),
+                                    ('diagnose', r'`ui_check` port', 'browse')):
+            texts = [text for _, text in self.paragraphs(PLUGIN / 'skills' / skill / 'SKILL.md') if re.search(phrase, text)]
+            with self.subTest(skill=skill, dispatch=role):
+                self.assertEqual(len(texts), 1, texts)
+                self.assertRegex(texts[0], self.role_mention(role))
+                self.assertRegex(texts[0], r'(?i)\beffort\b')
 
     def docs_agent_lines(self):
         """The docs agent's text as lines; fails while the file is missing."""
@@ -694,6 +833,17 @@ class PlanReviewerTest(unittest.TestCase):
         self.assertIn('`Covers:` is complete', self.text(self.TICKETS))
         self.assertIn('`Restates:` lists must not share a file', self.text(self.TICKETS))
 
+    def test_tickets_mode_checks_the_model_line_against_the_slice_rule_and_reports_a_break_as_medium(self):
+        """AC-15: one numbered check item names the `Model:` line, the rule's two triggers, `seams.md` and the
+        severity Medium."""
+        items = [line for line in self.text(self.TICKETS).splitlines() if re.match(r'\d+\. ', line) and '`Model:`' in line]
+        self.assertEqual(len(items), 1, items)
+        item = items[0]
+        for token in ('`implement_wide`', '`Restates:`', '`Touches:`', '`seams.md`', 'Medium'):
+            with self.subTest(token=token):
+                self.assertIn(token, item)
+        self.assertRegex(item, r'`implement`(?!_)')
+
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
             self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
@@ -1215,6 +1365,19 @@ class SliceSkillTest(unittest.TestCase):
         self.assertRegex(lowered, r'\badr\b')
         self.assertRegex(lowered, r'first ticket')
 
+    def test_it_writes_the_model_line_by_the_restates_and_seam_rule(self):
+        """AC-13, D-14 (Amended 2026-10-10): one line of the skill holds the whole rule: `implement_wide` when the
+        ticket has `Restates:` or its `Touches:` names a seam owned by another ticket in `seams.md` or in the
+        seam row -> ticket table of step 3, else `implement`."""
+        lines = [line for line in self.text().splitlines() if '`Model:`' in line]
+        self.assertEqual(len(lines), 1, lines)
+        rule = lines[0]
+        for token in ('`implement_wide`', '`Restates:`', '`Touches:`', '`seams.md`'):
+            with self.subTest(token=token):
+                self.assertIn(token, rule)
+        self.assertRegex(rule, r'`implement`(?!_)')
+        self.assertRegex(rule, r'(?i)seam row|row\W+(?:→|->)\W*ticket table')
+
     def test_it_runs_check_slice_then_the_tickets_review_and_a_blocker_stops_it_before_the_next_build_step(self):
         """AC-24, with the Blocker, warning and last-review rules of the review amendments."""
         text = self.text()
@@ -1275,7 +1438,8 @@ class DiagnoseSkillTest(unittest.TestCase):
         return re.sub(r'(?s)```.*?```', '', body)
 
     def test_the_diagnose_skill_is_model_invocable_limited_to_the_cli_and_says_it_acts_on_a_reported_bug(self):
-        """AC-27. The size limit is 5 KB (the ticket), tighter than the 8 KB of the all-skills check."""
+        """AC-27. The size limit is 5248 bytes (the ticket's 5 KB, raised 2026-10-10 for the facts agent and effort
+        wording), tighter than the 8 KB of the all-skills check."""
         fields = frontmatter.split(self.text())[0]
         self.assertEqual(fields.get('name'), 'diagnose')
         self.assertNotEqual(fields.get('disable-model-invocation'), 'true')
@@ -1284,7 +1448,7 @@ class DiagnoseSkillTest(unittest.TestCase):
         self.assertLessEqual(len(description), 250)
         self.assertRegex(description.lower(), r'reported bug|diagnose')
         self.assertNotRegex(description, r'(?i)^\s*(use|run|ask)\b|\b(you|your)\b')
-        self.assertLessEqual(self.SKILL.stat().st_size, 5120)
+        self.assertLessEqual(self.SKILL.stat().st_size, 5248)
 
     def test_a_red_capable_command_runs_before_any_hypothesis(self):
         """AC-27. Checked on the prose, so the CLI-call block cannot satisfy the order. Adhoc
@@ -1300,7 +1464,7 @@ class DiagnoseSkillTest(unittest.TestCase):
         2026-10-08-diagnose-hypothesis-list-in-chat): the ranked hypotheses are a `Hypotheses` section of the
         ticket draft, each with its probe result (confirmed or refuted), and not a chat message; the explore
         brief still asks for facts only, with no question that points at a cause. Loose regexes on the lowered
-        prose, so a short wording passes (5 KB limit)."""
+        prose, so a short wording passes (5248 bytes limit)."""
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'hypotheses[^\n]*\bdraft\b|\bdraft\b[^\n]*hypotheses')
         self.assertRegex(lowered, r'confirmed|refuted')
@@ -1311,7 +1475,7 @@ class DiagnoseSkillTest(unittest.TestCase):
 
     def test_the_probe_step_probes_each_listed_hypothesis_in_rank_order(self):
         """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: step 6 probes each listed hypothesis, in rank
-        order, not only the first or the likely one. Loose regex on the lowered prose (5 KB limit)."""
+        order, not only the first or the likely one. Loose regex on the lowered prose (5248 bytes limit)."""
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'each (listed )?hypothes[^\n]{0,40}rank order|rank order[^\n]{0,40}each')
 
@@ -1458,9 +1622,9 @@ class ConductSkillTest(unittest.TestCase):
     SKILL = PLUGIN / 'skills' / 'conduct' / 'SKILL.md'
     KICKOFF = SKILL.parent / 'KICKOFF.md'
     PARALLEL = SKILL.parent / 'PARALLEL.md'
-    SKILL_MAX_BYTES = 8 * 1024
+    SKILL_MAX_BYTES = SkillFileTest.CONDUCT_SKILL_MAX_BYTES
     KICKOFF_MAX_BYTES = 1024
-    PARALLEL_MAX_BYTES = 3 * 1024
+    PARALLEL_MAX_BYTES = 3200
 
     def text(self):
         self.assertTrue(self.SKILL.is_file(), 'skills/conduct/SKILL.md is missing')
@@ -1475,7 +1639,7 @@ class ConductSkillTest(unittest.TestCase):
         self.assertIn('explicit', description)
         self.assertIn('model-invocable', description)
 
-    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3_KB(self):
+    def test_the_conduct_skill_fits_in_9_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3200_bytes(self):
         """AC-59, conduct half (the ship caps live in ShipSkillTest)."""
         self.text()
         self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
@@ -1505,6 +1669,104 @@ class ConductSkillTest(unittest.TestCase):
         about = named_once_about(self, self.text(), self.PARALLEL)
         self.assertRegex(about, r'(?i)\bparallel\b')
         self.assertRegex(about, r'(?i)\bpicks?\b')
+
+
+class ModelPickSkillTest(unittest.TestCase):
+    """Model-roles ticket 07 (AC-17, AC-18, with their Amended lines): the skill text that adds the `model_pick`
+    tally at each `implement` ticket's close and moves the session sum behind the session's last close. By key
+    tokens, so the wording stays free. The build SKILL.md byte cap is the all-skills size test, not checked here."""
+    BUILD = PLUGIN / 'skills' / 'build' / 'SKILL.md'
+    REVIEW = PLUGIN / 'skills' / 'review' / 'SKILL.md'
+    OBSERVE = PLUGIN / 'skills' / 'observe' / 'SKILL.md'
+
+    def build_text(self):
+        self.assertTrue(self.BUILD.is_file(), self.BUILD.relative_to(PLUGIN).as_posix())
+        return self.BUILD.read_text(encoding='utf-8')
+
+    def close_items(self):
+        """The numbered items of build's Close, each as one line of text (a wrapped line joins its item)."""
+        section = self.build_text().split('**Close**', 1)[1].split('\n## ', 1)[0]
+        return [' '.join(item.split('\n\n')[0].split()) for item in re.split(r'\n(?=\d+\. )', section)[1:]]
+
+    def pick_item(self):
+        """The one Close item that holds the `model_pick` rule."""
+        found = [item for item in self.close_items() if 'model_pick' in item]
+        self.assertEqual(len(found), 1, found)
+        return found[0]
+
+    def test_build_lists_the_tally_add_the_sum_and_the_apply_as_cli_calls_in_the_exact_form(self):
+        """AC-17, AC-18: the calls sit in the CLI block, where the exact-form checks of test_pipeline_files read them."""
+        text = self.build_text()
+        cli_command = re.escape(constants.CLI_COMMAND)
+        for call in (r'lens tally add\b[^\n]*--lens model_pick\b', r'lens tally sum\b', r'observe apply\b'):
+            with self.subTest(call=call):
+                self.assertRegex(text, rf'(?m)^{cli_command} {call}')
+
+    def test_the_close_item_adds_the_model_pick_tally_after_ticket_result_rejected_at_two_fix_rounds_or_more(self):
+        """AC-17: `fix rounds` 2 or more -> rejected 1, else accepted 1; the count is the one passed to
+        `ticket result --fix-rounds` (`ticket show` prints no Metrics line)."""
+        items = self.close_items()
+        item = self.pick_item()
+        self.assertLess(next(i for i, text in enumerate(items) if 'ticket result' in text), items.index(item))
+        self.assertIn('lens tally add', item)
+        self.assertRegex(item, r'(?i)(?:2 or more|≥ ?2|>= ?2)[^.]{0,80}rejected[^.]{0,20}1[^.]{0,40}(?:else|otherwise)'
+                               r'[^.]{0,40}accepted[^.]{0,20}1')
+        self.assertIn('fix rounds', item)
+        self.assertIn('--fix-rounds', item)
+
+    def test_an_implement_wide_ticket_adds_no_model_pick_line(self):
+        """AC-17."""
+        self.assertRegex(self.pick_item(), r'(?i)`implement_wide`[^.]{0,60}\b(?:no|not|never|without)\b'
+                                           r'|\b(?:no|not|never|skip|without)\b[^.]{0,60}`implement_wide`')
+
+    def test_a_ticket_without_a_model_line_is_implement_and_gets_a_model_pick_line(self):
+        """AC-17, Amended 2026-10-10: adhoc and light-path tickets have no `Model:` line."""
+        self.assertRegex(self.pick_item(), r'(?i)\b(?:no|without|missing|lacks?)\b[^.]{0,40}`Model:`[^.]{0,80}`implement`(?![\w])'
+                                           r'|`Model:`[^.]{0,30}\b(?:missing|absent)\b[^.]{0,60}`implement`(?![\w])')
+
+    def test_a_resumed_build_with_an_unknown_fix_rounds_count_adds_no_model_pick_line(self):
+        """AC-17, Amended 2026-10-10: `ticket show` cannot give the count back."""
+        self.assertRegex(self.pick_item(), r'(?i)\bunknown\b[^.]{0,60}\b(?:adds? no|no|never|skip\w*)\b[^.]{0,30}(?:line|`model_pick`)')
+
+    def test_build_sums_and_applies_after_the_close_only_when_its_caller_said_last_review_yes(self):
+        """AC-18, Amended 2026-10-10 (D-33): the tally is added at each close; only the sum waits. Build always tells
+        review "last review: no"; its own caller says "last review: yes" on the user's last ticket, or `conduct` with
+        one ticket (a unit of more tickets sums in conduct's cumulative review)."""
+        items = self.close_items()
+        close = ' '.join(items)
+        for token in ('model_pick', 'lens tally sum', 'observe apply'):
+            self.assertIn(token, close)
+        self.assertLess(close.index('model_pick'), close.index('lens tally sum'))
+        summing = [item for item in items if 'lens tally sum' in item]
+        self.assertEqual(len(summing), 1, summing)
+        self.assertIn('observe apply', summing[0])
+        self.assertLess(summing[0].index('lens tally sum'), summing[0].index('observe apply'))
+        self.assertRegex(summing[0], r'(?i)\buser\b')
+        self.assertIn('last review: yes', summing[0])
+        self.assertIn('`conduct`', summing[0])
+        # Amended 2026-10-10 (D-33, cumulative review): a user who said neither yes nor no is asked at the close
+        self.assertRegex(summing[0], r'(?i)\bask')
+        self.assertIn('last ticket', summing[0])
+
+    def test_build_tells_review_its_rounds_are_not_the_last(self):
+        """AC-18, D-33: the Review paragraph passes "last review: no" in place of "last review of the session"."""
+        review = self.build_text().split('**Review**', 1)[1].split('\n\n', 1)[0]
+        self.assertIn('last review: no', ' '.join(review.split()))
+
+    def test_review_step_10_keeps_the_sum_for_the_user_specify_slice_and_conduct(self):
+        """AC-18, Amended 2026-10-10: step 9 keeps its number (the plan-gate test pins it), so the callers go in
+        step 10."""
+        step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
+        for token in ('lens tally sum', 'observe apply', 'user', '`specify`', '`slice`', '`conduct`', 'last review: yes'):
+            with self.subTest(token=token):
+                self.assertIn(token, step)
+
+    def test_observe_lists_model_pick_among_the_fixed_lens_names(self):
+        """AC-18."""
+        text = ' '.join(self.OBSERVE.read_text(encoding='utf-8').split())
+        names = re.search(r'fixed names[^)]*\([^)]*\)', text)
+        self.assertIsNotNone(names, 'observe no longer lists the fixed lens names')
+        self.assertIn('`model_pick`', names.group(0))
 
 
 if __name__ == '__main__':

@@ -52,9 +52,9 @@ Use the first form for a link and the second for anything else.
 
 ## 2. Read it
 
-- A link: do not fetch it into this window. Send the link straight to one subagent with the
-  model `sonnet` and ask for a digest of at most 300 words in its own words: what the thing
-  claims, what it changes, what it costs, what evidence it gives. Work from the digest.
+- A link: do not fetch it into this window. Send the link straight to one
+  `anomaly:digest` agent on the `digest` model role (model, then effort if set) and ask for a
+  digest of at most 300 words in its own words: what the thing claims, what it changes, what it costs, what evidence it gives. Work from the digest.
 - A text or an opinion: use it as given.
 
 Never keep long passages of the source. You will write about it in your own words.
@@ -112,7 +112,8 @@ For `adopt`, add the drafted experiment to the same command:
 - An open anomaly that has no experiment yet: only `--signature <its signature>`.
 - Always: `--expect '<the effect>' --metric '<one metric name>' --guard '<one guard name>'`.
   The metric is exactly one name from the list `calibrate` uses: `weighted tokens`,
-  `active minutes`, `interrupts`, `denials`, `sightings since the fix`, or `<category>
+  `active minutes`, `interrupts`, `denials`, `weighted tokens without security`,
+  `model-weighted tokens per dispatch <agent>` (with one agent name), `sightings since the fix`, or `<category>
   sightings` for one of the loop's categories (when the fix moves no number, use `sightings
   since the fix`). The guard is exactly one of `rework sightings`, `late-catch sightings` or
   `interrupts`: a quality signal that must not get worse, and not the metric. The script

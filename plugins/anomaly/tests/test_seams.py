@@ -306,3 +306,83 @@ class PruneTest(SeamsTestCase):
 
     def test_a_merge_that_is_not_a_commit_is_an_error(self):
         assert_cli_error(self, self.prune('--merge', 'no-such-commit'), 'no-such-commit')
+
+    def two_path_line(self):
+        """A ledger line whose owner field lists two files, each with its own name."""
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n')
+        self.repo.write('plugins/x/b.py', 'def two():\n    pass\n')
+        self.change('add the two owner files')
+        line = '- pair · `plugins/x/a.py` (`one`), `plugins/x/b.py` (`two`) · replaces a copy (ticket 01)\n'
+        write_text(self.ledger, line)
+        return line
+
+    def test_a_change_to_the_first_of_two_owner_files_that_holds_its_own_name_keeps_the_line(self):
+        line = self.two_path_line()
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n\n\ndef more():\n    pass\n')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line)
+        self.assertNotIn('pair', out)
+
+    def test_a_change_to_the_second_of_two_owner_files_that_lost_its_own_name_removes_the_line(self):
+        self.two_path_line()
+        self.repo.write('plugins/x/b.py', 'def other():\n    pass\n')   # `two` is gone
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), '')
+        self.assertIn('reshaped', [line for line in out.splitlines() if 'pair' in line][0])
+
+    def test_a_span_outside_parentheses_that_is_not_a_file_is_a_name_of_the_path_before_it(self):
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n\n\nLIMIT = 1\n')
+        self.change('add the owner file')
+        write_text(self.ledger, '- plus · `plugins/x/a.py` (`one`) + `constants.LIMIT` · replaces a copy (ticket 01)\n')
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n')   # `LIMIT` is gone
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), '')
+        self.assertIn('reshaped', [line for line in out.splitlines() if 'plus' in line][0])
+
+    def test_an_ambiguous_owner_path_wins_over_a_rename_of_another_path_of_the_line(self):
+        self.repo.write('plugins/x/b.py', 'def two():\n    pass\n')
+        self.add_files('lib/paths.py', 'tests/paths.py')
+        line = '- pair · paths.py (`one`), `plugins/x/b.py` (`two`) · replaces copies (ticket 01)\n'
+        write_text(self.ledger, line)
+        self.repo.write('lib/paths.py', 'x = 2\n')
+        self.repo.write('tests/paths.py', 'x = 2\n')
+        self.repo.git('mv', 'plugins/x/b.py', 'plugins/x/c.py')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line)
+        listed = [text for text in out.splitlines() if 'pair' in text]
+        self.assertEqual(len(listed), 1, out)
+        self.assertTrue(listed[0].startswith('ambiguous'), listed[0])
+
+    def test_a_rename_of_the_second_of_two_owner_files_rewrites_only_that_path(self):
+        line = self.two_path_line()
+        self.repo.git('mv', 'plugins/x/b.py', 'plugins/x/c.py')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line.replace('`plugins/x/b.py`', '`plugins/x/c.py`'))
+        listed = [text for text in out.splitlines() if 'pair' in text]
+        self.assertEqual(len(listed), 1, out)
+        self.assertTrue(listed[0].startswith('renamed'), listed[0])
+
+    def test_a_bare_file_name_with_an_extension_is_an_owner_path_and_keeps_its_bare_form_when_renamed(self):
+        self.repo.write('plugins/x/a.md', '# a\n')
+        self.repo.write('plugins/x/b.md', '# b\n')
+        self.change('add the two docs')
+        line = '- docs pair · `plugins/x/a.md`, `b.md` · replaces copies (ticket 01)\n'
+        write_text(self.ledger, line)
+        self.repo.git('mv', 'plugins/x/b.md', 'plugins/x/c.md')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line.replace('`b.md`', '`c.md`'))
+        listed = [text for text in out.splitlines() if 'docs pair' in text]
+        self.assertEqual(len(listed), 1, out)
+        self.assertTrue(listed[0].startswith('renamed'), listed[0])

@@ -58,11 +58,17 @@ ci: <ci tool>
 key_line: <line name>
 # The repo folder ADR drafts are moved to. Core default: docs/adr/.
 adr_folder: <repo-relative folder>
-# The model per dispatch role. One role per indented line.
+# The model per dispatch role. One role per indented line; a value is `<model>` or `<model> <effort>`
+# (effort: low, medium, high, xhigh or max). A review_* role you leave out takes the value of review.
 models:
   explore: <model>
   implement: <model>
+  implement_wide: <model>
+  digest: <model>
   review: <model>
+  review_code: <model>
+  review_feature: <model>
+  review_security: <model>
   deep_analysis: <model>
   browse: <model>
 ---

@@ -19,19 +19,23 @@ colon, so an id such as `pack:agent` is not read as a stack; a repeated stack ke
 value); a line without a stack is the adapter of the base line, which stands for every stack the
 profile does not name. A replace port takes one such line: with more, resolve() keeps the first
 and records a problem, and `ports` refuses to print (one `anomaly:` line). The `models` key holds one `role: model`
-line per role; a role may be written with spaces or hyphens (`deep analysis` is `deep_analysis`).
+line per role; a role may be written with spaces or hyphens (`deep analysis` is `deep_analysis`). A role value is
+`<model>` or `<model> <effort>`; any other shape is a problem too. A `review_*` role the profile leaves out takes
+the value of `review`. `ports` also warns (stderr) for each of the env vars in constants.OVERRIDING_ENV that is set.
 
 Output: one line per entry, `<section> <name> = <value> [<source>]` (value empty when unresolved).
 Sections, in order: `port` (name, or name.stack), `repo` (name, override, base), `command`, `app` and
 `risk` (only what the override file sets), `model`.
 """
 import re
+import sys
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
 from . import frontmatter, gitrepo, paths, profile, repolayer
-from .constants import ADD, MODEL_ROLES, MODELS_KEY, PER_STACK_PORTS, PORTS, REPLACE
+from .constants import (ADD, MODEL_EFFORTS, MODEL_FALLBACKS, MODEL_ROLES, MODELS_KEY, OVERRIDING_ENV, PER_STACK_PORTS,
+                        PORTS, REPLACE)
 from .files import RecordError
 from .profile import is_set, list_names, one_line
 from .repolayer import Setting
@@ -77,8 +81,9 @@ def resolve(home, folder=None):
     that holds `folder` (default: the current folder), read on first use."""
     values = profile.load_profile(home).values
     lines, problems = resolve_ports(values)
-    return Resolution(ports=lines, models=resolve_models(values), home=Path(home),
-                      folder=Path(folder) if folder else Path.cwd(), problems=problems)
+    models, model_problems = resolve_models(values)
+    return Resolution(ports=lines, models=models, home=Path(home),
+                      folder=Path(folder) if folder else Path.cwd(), problems=problems + model_problems)
 
 
 def port(resolution, name, stack=''):
@@ -148,10 +153,28 @@ def stack_lines(value):
 
 
 def resolve_models(values):
+    """(models, problems) from the profile values: role -> Setting in MODEL_ROLES order. A value that is not
+    `<model>` or `<model> <effort>` is a problem and leaves its role on the default; a role that is not in
+    MODEL_ROLES is dropped."""
     roles = {re.sub(r'[ _-]+', '_', role.lower()): one_line(model)
              for role, model in frontmatter.nested(values.get(MODELS_KEY, ''))[0].items() if is_set(model)}
-    return {role: Setting(roles[role], PROFILE) if role in roles else Setting(default, CORE)
-            for role, default in MODEL_ROLES}
+    own, problems = {}, []
+    for role, default in MODEL_ROLES:
+        if role in roles and not valid_model(roles[role]):
+            problems.append(f'profile key {MODELS_KEY}: {role}: {roles[role]!r} must be a model, or a model and '
+                            f'an effort ({", ".join(MODEL_EFFORTS)})')
+            del roles[role]
+        if role in roles:
+            own[role] = Setting(roles[role], PROFILE)
+        elif role not in MODEL_FALLBACKS:
+            own[role] = Setting(default, CORE)
+    models = {role: own[role] if role in own else own[MODEL_FALLBACKS[role]] for role, _ in MODEL_ROLES}
+    return models, tuple(problems)
+
+
+def valid_model(value):
+    words = value.split()
+    return len(words) == 1 or (len(words) == 2 and words[1] in MODEL_EFFORTS)
 
 
 def entry(section, name, value, source):
@@ -187,6 +210,9 @@ def run_ports(args, environ):
     resolution = resolve(home, gitrepo.repo_for(args.repo, outside_git=True))
     if resolution.problems:
         raise RecordError('; '.join(resolution.problems))
+    for name, consequence in OVERRIDING_ENV:
+        if environ.get(name):
+            print(f'warning: {name} is set; {consequence}', file=sys.stderr)
     for line in render(resolution):
         print(line)
     return 0

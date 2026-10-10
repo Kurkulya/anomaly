@@ -24,7 +24,7 @@ def run_cli(*argv, environ=None, now=NOW):
 
 
 PLUGIN = Path(__file__).resolve().parent.parent
-BENCH = PLUGIN / 'tests' / 'bench'   # the seeded-defect fixtures, one folder per reviewer agent
+BENCH = PLUGIN / 'tests' / 'bench'   # the seeded-defect fixtures, one folder per reviewer agent, and the facts fixture
 
 
 def plugin_files(root):

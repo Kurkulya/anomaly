@@ -42,7 +42,7 @@ A docs-only diff (no source, config, script or test file) uses combined mode. [I
 ## Steps
 
 1. `worklog start`. Run `risk` on the range (error: unresolved range) and `git diff --name-only <range>` in the checkout (no files: empty diff). Rules, spec and tickets modes skip both. Rules mode or a rule trace: check the brief and the SKILL.md exist; spec and tickets: the work-unit folder. On any failure, stop before dispatch and tell the caller.
-2. `ports`: `reviewers` lists the agents (the core three and each org reviewer); spec and tickets dispatch only `anomaly:plan`, which is not from the port. From `conventions`, load only the org sections for the touched areas, for `anomaly:code` only. [R5, I23] `model review` is every dispatch's model. [R1, N2]
+2. `ports`: `reviewers` lists the agents (the core three and each org reviewer); spec and tickets dispatch only `anomaly:plan`, which is not from the port. From `conventions`, load only the org sections for the touched areas, for `anomaly:code` only. [R5, I23] Model roles (model, then effort if set): `review_code` for `anomaly:code`, `review_feature` for `anomaly:feature` (also in rules mode), `review_security` for `anomaly:security`; `review` for `anomaly:plan` and org reviewers. [R1, N2]
 3. Security joins when the first line of `risk` starts with `risk areas:`; its brief gets the `<area>: <path>` lines as printed. [N4]
 4. Fill [BRIEFS.md](BRIEFS.md) per agent; send the first round in one message, in the background. [R1] Each agent file owns read-only git and the finding shape. [R2, I25, R3]
 5. Present findings per axis, one heading per agent, as reported; never merge or re-rank across axes. [N6] An unverified finding is Medium at most; an unrun test outcome is never High. [R4, N8] Spec and tickets: a Blocker stops the calling skill; every other finding (warnings and nits) is listed in its handoff.
@@ -50,7 +50,7 @@ A docs-only diff (no source, config, script or test file) uses combined mode. [I
 7. Only when no Blocker or High is open (in the rules pass too), `ticket reviewed` writes `Reviewed: <head sha>` (on the light path, in the adhoc ticket); spec and tickets skip it. [N12]
 8. `worklog add` with the mode, once per round.
 9. Once per agent, when done (after its last delta round, or its first if it had no Blocker or High; spec and tickets: no Blocker): `lens tally add` under its lens (`code`, `feature`, `security`, `plan`, or an org reviewer's adapter name), counts over all its rounds, 0/0 included. Accepted = fixed or kept as an `Open:` item; rejected = judged wrong, with one reason; revised = accepted, but fixed differently than proposed. [N5, N14]
-10. Once, at the end of the session's last review (the caller says so): `lens tally sum`, then `observe apply --file <printed path>`; a lens already applied in the session is skipped, so a later run is lost.
+10. Once, at the end of the session's last review (the caller says "last review: yes": the user, `specify`, `slice`, or `conduct` in its cumulative review; `build` says "no" and sums itself when its caller said "yes", or when it asks the user at its close and the user says yes): `lens tally sum`, then `observe apply --file <printed path>`; a lens already applied in the session is skipped, so a later run is lost.
 
 ## Delta rounds [R8, R9]
 
@@ -68,4 +68,4 @@ Keep no copy here; SendMessage the one copy to the same agent:
 - `anomaly:feature` in rules mode, `${CLAUDE_PLUGIN_ROOT}/skills/review/rules-mode.md`: send that file.
 - `anomaly:plan`, `${CLAUDE_PLUGIN_ROOT}/skills/review/plan-spec.md` or `plan-tickets.md`: send the file of its mode.
 
-`build` dispatches the UI walkthrough (`ui_check` port, `browse` model role). [R10, R11, N13]
+`build` dispatches the UI walkthrough (`ui_check` port, `browse` model role and effort). [R10, R11, N13]

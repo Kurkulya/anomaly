@@ -7,7 +7,7 @@
   stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
   slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
-              a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN
+              a missing line, a bad Status:, a bad Model:, a blocker with no file or in a cycle, a path:NN
               anchor); a ticket over 5 KB only warns. Prints as `stories` does
               (`slice check passed`).
 
@@ -400,6 +400,7 @@ STATUS_SHAPE = 'Status: ready-for-agent | ready-for-human (<why>)'
 BLOCKED_SHAPE = 'Blocked by: none | 01, 03'
 COVERS_SHAPE = 'Covers: AC-2, AC-5 | none'
 TESTS_SHAPE = 'Tests: <levels>'
+MODEL_SHAPE = 'Model: ' + ' | '.join(ticket.IMPLEMENTER_ROLES)   # the line is optional
 KEY_VALUE_SHAPE = '<key> | no-ticket'   # the value of the key line, whatever the line is called
 TOUCHES_SHAPE = 'Touches: <paths and symbols, new ones marked, no line numbers>'
 REPRO_SHAPE = 'Repro: <command>'
@@ -468,6 +469,17 @@ def key_errors(lines, keys):
     return errors
 
 
+def model_errors(lines, parsed):
+    """(line number, message) pairs for a `Model:` line that is empty or names no implementer role. The line
+    is optional: a ticket without it runs on `implement`."""
+    if not ticket.find_lines(lines, 'Model'):
+        return []
+    errors = key_errors(lines, (('Model', MODEL_SHAPE),))
+    if parsed.model.strip() and parsed.model not in ticket.IMPLEMENTER_ROLES:
+        errors.append((where(lines, 'Model'), f'Model: "{parsed.model}" is not an implementer role ({MODEL_SHAPE})'))
+    return errors
+
+
 def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
     """Errors for one ticket file: the missing or wrong lines, an unresolved blocker, a line anchor.
     The key line is the `key_line` line.
@@ -487,6 +499,7 @@ def ticket_errors(name, text, parsed, folder, graph, key_line=KEY_LINE_CORE):
     errors += [f'{name}:{number}: {message}'
                for number, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
                                                          (key_line, f'{key_line}: {KEY_VALUE_SHAPE}')))]
+    errors += [f'{name}:{number}: {message}' for number, message in model_errors(lines, parsed)]
     skip = ticket.fenced(lines)
     for number, (body, _) in enumerate(lines, 1):
         match = None if number - 1 in skip or D_LINE.match(body) else line_anchor(body)
@@ -524,7 +537,7 @@ def hypotheses_errors(lines):
 
 def draft_errors(text):
     """The problems of a light-path ticket draft for `ticket adhoc --from` (formats.md § Ticket): a
-    heading, the required lines (the same line checks as ticket_errors), `Status: ready-for-agent`, at
+    heading, the required lines (the same line checks as ticket_errors, a bad `Model:` included), `Status: ready-for-agent`, at
     least one AC checkbox, a Hypotheses section (hypotheses_errors) and none of the lines the CLI writes
     later. Empty when the draft is valid."""
     lines, parsed = ticket.split_lines(text), ticket.parse(text)
@@ -540,6 +553,7 @@ def draft_errors(text):
         problems.append(f'Blocked by: "{parsed.blocked_by}" names a ticket; a light-path draft has Blocked by: none')
     problems += [message for _, message in key_errors(lines, (('Covers', COVERS_SHAPE), ('Tests', TESTS_SHAPE),
                                                              ('Repro', REPRO_SHAPE)))]
+    problems += [message for _, message in model_errors(lines, parsed)]
     skip = ticket.fenced(lines)
     if not any(index not in skip and ticket.CHECKBOX.match(body) for index, (body, _) in enumerate(lines)):
         problems.append('no acceptance criterion: add a line like "- [ ] AC-1: <criterion>"')

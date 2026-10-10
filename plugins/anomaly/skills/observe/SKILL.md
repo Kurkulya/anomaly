@@ -95,7 +95,7 @@ script refuses a text, reword it and run again; do not try to get around the che
 
 1. Run `list`.
 2. Decide which session to look at. By default it is the current one: use this conversation.
-   When the user names another session, start one subagent (model sonnet) and ask it to read
+   When the user names another session, start one `anomaly:digest` agent (`digest` model role: model, then effort if set) and ask it to read
    that session's transcript, found as `<id>.jsonl` under the transcripts folder (default
    `~/.claude/projects`, one folder per project), and to return a digest of at most 40 lines:
    the friction points, the things that went well, and every place the user interrupted, rejected
@@ -182,9 +182,9 @@ every reviewer used in the session whose findings the user accepted or rejected,
 `lenses`: the reviewer's name as it was used, written as one word (join words with hyphens), and
 the two counts. Count only what happened in this session; never guess a count. A reviewer with
 no decisions gets no entry. The entries are recorded together with the chosen anomalies, after
-the user's answer, unless the user declines them. The `review` skill records its own lenses
-through the CLI (`lens tally`), under the fixed names that command holds (`code`, `feature`,
-`security`, `plan`, `interview` and the org reviewers' adapter names).
+the user's answer, unless the user declines them. The `review` and `build` skills record their own
+lenses through the CLI (`lens tally`), under the fixed names that command holds (`code`, `feature`,
+`security`, `plan`, `interview`, `model_pick` and the org reviewers' adapter names).
 
 ## Session kind
 

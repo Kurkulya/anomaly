@@ -55,6 +55,7 @@ Blocked by: none | 01, 03
 Covers: AC-2, AC-5 | none
 Tests: <levels>
 Key: <key> | no-ticket
+Model: implement | implement_wide
 Gate: <date or outside step>
 
 What to build: <behaviour, 1-3 sentences>
@@ -69,6 +70,7 @@ Decisions:
 
 - The key line is the line the `key_line` port names (core `Key:`, shown above). It holds a tracker key or `no-ticket`.
 - `Gate:` only when the ticket was gated. `Restates:` only on a ticket that changes a rule.
+- `Model:` is the implementer's model role; a ticket without it runs on `implement`.
 - `Result:`, `Metrics:`, `Reviewed:`, `Verified:`, `Red:` and `Red-changed:` are written later by the
   CLI; a later stage writes `Amended` through `ticket amend` (`--after AC-n | D-n` for stories.md and decisions.md). `slice` writes none of them.
 - A light-path ticket from `diagnose` has `Blocked by: none` (`ticket show` warns without a `Blocked by:` line), `Covers: AC-1`, `Status: ready-for-agent`,

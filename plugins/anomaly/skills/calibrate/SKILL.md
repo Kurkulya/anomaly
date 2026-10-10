@@ -68,9 +68,10 @@ review works without a profile, it only cannot name every fix home.
 Work through the `## Housekeeping` part, one kind at a time, and ask before each write:
 
 - **Experiments due**: run `verify` for each one and report the numbers in a few words: the
-  metric and the guard before and since, how many sessions, the sightings since the fix, and the
-  result. `revert` means the change did not help: the anomaly is reopened, and you offer to undo
-  the change in its home. `inconclusive` moves the check date once. When it comes back as still
+  metric and the guard before and since, how many sessions, the sightings since the fix, any
+  sessions skipped for a model with no factor and any skipped for a spawn without `.meta.json`, and
+  the result. `revert` means the change did not help: the anomaly is reopened, and you offer to
+  undo the change in its home. `inconclusive` moves the check date once. When it comes back as still
   inconclusive, ask the user for `keep` or `revert` and run `decide`. `unproven` means the
   anomaly did not come back, which chance alone would also explain: it is kept, not proven, the
   anomaly is not reopened and the experiment is not due again; say so in those words, never as

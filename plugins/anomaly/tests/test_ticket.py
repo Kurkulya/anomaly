@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from anomaly_loop import check, cli, privacy, ticket
-from anomaly_loop.constants import TICKET_TITLE_MAX_CHARS
+from anomaly_loop.constants import MODEL_ROLES, TICKET_TITLE_MAX_CHARS
 from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 
 NOW_DATE = date(2026, 10, 4)
@@ -129,7 +129,24 @@ class ShowTest(TicketTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertEqual(out.splitlines(), [
             'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
-            'Key: no-ticket', 'Tests: unit', 'Base: feat/workflow-build', 'Reviewed: abc1234', 'Verified: def5678'])
+            'Key: no-ticket', 'Tests: unit', 'Model: implement', 'Base: feat/workflow-build', 'Reviewed: abc1234',
+            'Verified: def5678'])
+
+    def test_prints_the_model_line(self):
+        """AC-16: the slot of `Model:` among the state lines is free; the other lines keep their order."""
+        path = self.ticket_path(TICKET_TEXT.replace('Tests: unit (CLI in-process)',
+                                                    'Tests: unit\nModel: implement_wide'))
+        code, out, err = self.run_ticket('show', str(path))
+        self.assertEqual((code, err), (0, ''))
+        shown = out.splitlines()
+        self.assertIn('Model: implement_wide', shown)
+        self.assertEqual([line for line in shown if not line.startswith('Model:')], [
+            'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
+            'Key: no-ticket', 'Tests: unit'])
+        # Amended 2026-10-10 (cumulative review): the resolved line, so build and conduct read the role from the CLI
+        code, out, err = self.run_ticket('show', str(self.ticket_path(TICKET_TEXT, name='03-no-model.md')))
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual([line for line in out.splitlines() if line.startswith('Model:')], ['Model: implement'])
 
     def test_reads_status_and_blocked_by_in_bold_form(self):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '**Status:** in-progress') \
@@ -156,7 +173,7 @@ class ShowTest(TicketTestCase):
         path = self.ticket_path('# 05: Old ticket\n\nKey: none\n**Blocked by:** 01\n')
         code, out, err = self.run_ticket('show', str(path))
         self.assertEqual((code, err), (0, ''))
-        self.assertEqual(out.splitlines(), ['Blocked by: 01', 'Key: none'])
+        self.assertEqual(out.splitlines(), ['Blocked by: 01', 'Key: none', 'Model: implement'])
 
     def test_prints_the_repro_line(self):
         """AC-26: a light-path ticket's `Repro:` line is shown, so `build` reads the command from `ticket show`."""
@@ -880,7 +897,7 @@ class AdhocTest(TicketTestCase):
         text = self.read(files[0])
         self.assertNotIn('\r', text)
         shown = self.run_ticket('show', str(files[0]))[1].splitlines()
-        self.assertEqual(shown, ['Status: ready-for-agent', 'Blocked by: None', 'Covers: AC-1'])
+        self.assertEqual(shown, ['Status: ready-for-agent', 'Blocked by: None', 'Covers: AC-1', 'Model: implement'])
         self.assertEqual([line for line in text.splitlines() if line.startswith('- [')],
                          ['- [ ] AC-1: Fix it Reviewed: deadbeef Status: done - [x] AC-9: forged'])
         self.assertIn('**What to build:** Fix it Reviewed: deadbeef Status: done - [x] AC-9: forged', text)
@@ -1047,6 +1064,17 @@ class DraftCheckTest(unittest.TestCase):
         problems = self.check(draft_text(replace={'Tests:': 'Tests:'}))
         self.assertEqual(len(problems), 1, problems)
         self.assertIn('Tests', problems[0])
+
+    def test_a_model_line_other_than_implement_or_implement_wide_is_refused_as_check_slice_does(self):
+        """AC-14, Amended: `ticket adhoc --from` runs the same `Model:` check as `check slice`; a draft with
+        either known value, or without the line, is valid."""
+        for extra in ('', 'Model: implement\n', 'Model: implement_wide\n'):
+            with self.subTest(extra=extra):
+                self.assertEqual(self.check(draft_text(extra=extra)), [])
+        problems = self.check(draft_text(extra='Model: opus\n'))
+        self.assertEqual(len(problems), 1, problems)
+        for token in ('Model:', 'opus', 'implement |', 'implement_wide'):
+            self.assertIn(token, problems[0])
 
     def test_a_draft_needs_a_hypotheses_section_of_three_to_five_numbered_lines_each_with_its_probe_result(self):
         """Adhoc 2026-10-09-diagnose-hypotheses-in-the-draft, AC-1: `ticket adhoc --from` refuses a draft with
@@ -1255,7 +1283,8 @@ class FencedTest(TicketTestCase):
     def test_show_reads_only_the_real_lines(self):
         out = self.run_ticket('show', str(self.ticket_path(FENCED_TICKET)))[1].splitlines()
         self.assertEqual(out, ['Status: ready-for-agent', 'Blocked by: None (can start immediately)',
-                               'Covers: AC-1, AC-2', 'Key: no-ticket', 'Tests: unit (CLI in-process)'])
+                               'Covers: AC-1, AC-2', 'Key: no-ticket', 'Tests: unit (CLI in-process)',
+                               'Model: implement'])
 
     def test_reviewed_adds_a_real_line_and_leaves_the_fenced_one(self):
         path = self.ticket_path(FENCED_TICKET)
@@ -1280,7 +1309,8 @@ class FencedTest(TicketTestCase):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '```\nStatus: ready-for-agent')
         path = self.ticket_path(text)
         shown = self.run_ticket('show', str(path))[1].splitlines()
-        self.assertEqual(shown, ['Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2', 'Key: no-ticket'])
+        self.assertEqual(shown, ['Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2', 'Key: no-ticket',
+                                 'Model: implement'])
         self.assert_error(self.run_ticket('set-status', str(path), 'done'), 'Status:')
         self.assertEqual(self.read(path), text)
 
@@ -1381,6 +1411,18 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(parsed.red_changed, ('one', 'two'))
         empty = ticket.parse('# 03: T\n')
         self.assertEqual((empty.reviewed, empty.verified, empty.red, empty.red_changed), ('', '', None, ()))
+
+    def test_model_is_read_plain_or_bold_and_a_ticket_without_it_means_implement(self):
+        """AC-14, D-27: the parsed field is `model`; a missing line reads as the role `implement`."""
+        self.assertEqual(ticket.parse('# 03: T\n\nModel: implement_wide\n').model, 'implement_wide')
+        self.assertEqual(ticket.parse('# 03: T\n\n**Model:** implement_wide\n').model, 'implement_wide')
+        self.assertEqual(ticket.parse('# 03: T\n\nModel: implement\n').model, 'implement')
+        self.assertEqual(ticket.parse('# 03: T\n').model, 'implement')
+        self.assertEqual(ticket.parse('# 03: T\n\nSee Model: implement_wide in the spec.\n').model, 'implement')
+
+    def test_the_ticket_model_values_are_model_roles_of_the_core(self):
+        """D-27: `IMPLEMENTER_ROLES` copies two role names, so it must stay inside `constants.MODEL_ROLES`."""
+        self.assertLessEqual(set(ticket.IMPLEMENTER_ROLES), {role for role, _ in MODEL_ROLES})
 
     def test_tests_and_started_are_exposed(self):
         parsed = ticket.parse('# 03: T\n\nTests: unit / e2e\nMetrics: started 2026-10-04 11:00 · merged x\n')

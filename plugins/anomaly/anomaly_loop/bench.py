@@ -27,6 +27,16 @@ Scoring (AC-14), per run:
   name (`Injection`) there, whichever stands first.
 - false High: a Blocker or High that matches no planted defect; one that matches a decoy is named.
 With several runs each number is the median over the runs (the mean of the two for two runs).
+
+`bench facts` scores the answers of 1 to 3 runs of a reader agent against a facts list
+(`tests/bench/facts/facts.json`): `{"fixture": <name>, "questions": [...], "facts": [...],
+"decoys": [...]}`. A question has an `id`, a `kind` (`call-chain`, `moved-claim` or `none-callers`)
+and its `ask` text; an expected fact or a decoy (a plausible wrong answer) has an `id`, the `question`
+it answers and `places`, written as above. An answer line is `- <path>:<line> — <fact>`; a bullet
+that holds a `<path>:<digits>` place and an em dash but has another shape (a backticked path, a line
+range, bold) is refused; every other line is prose. An answer names a place of an item by the rule above, so the finding-line parser is
+not used. Per run: the expected facts found, the ones missed, and each decoy hit; with several runs
+the median of the counts.
 """
 import json
 import re
@@ -52,6 +62,11 @@ CATEGORY_NAME = re.compile(r'(?<!\w)(?:' + '|'.join(re.escape(name) for _, name 
 LABEL_OF_NAME = {name.casefold(): label for label, name in OWASP_2021}
 SHAPE = ('- [<severity>] <path>:<line> <dash> <problem> <dash> fix: <fix> <dash> <observed|unverified>, '
          'where <dash> is an em dash (U+2014)')
+FACT_KINDS = ('call-chain', 'moved-claim', 'none-callers')
+ANSWER = re.compile(r'^\s*-\s+(?P<path>[^\s`*]+):(?P<line>\d+)\s+—\s+(?P<fact>\S.*?)\s*$')
+LOOKS_LIKE_ANSWER = re.compile(r'^\s*-\s+[`*]*[^\s`*]+[`*]*:\d+\S*\s+—')
+ANSWER_SHAPE = ('- <path>:<line> <dash> <fact>, with a bare path and one line number (no backticks, no range, '
+                'no bold), where <dash> is an em dash (U+2014)')
 
 
 @dataclass(frozen=True)
@@ -77,6 +92,34 @@ class Fixture:
     name: str
     defects: tuple
     decoys: tuple
+
+
+@dataclass(frozen=True)
+class Question:
+    id: str
+    kind: str
+    ask: str
+
+
+@dataclass(frozen=True)
+class Facts:
+    name: str
+    questions: tuple
+    facts: tuple   # Items: the expected facts
+    decoys: tuple
+
+
+@dataclass(frozen=True)
+class Answer:
+    path: str
+    line: int
+    fact: str
+
+
+@dataclass(frozen=True)
+class FactsRun:
+    found: tuple
+    decoy_hits: tuple
 
 
 @dataclass(frozen=True)
@@ -273,8 +316,109 @@ def render(fixture, runs):
     return lines
 
 
+def parse_questions(source, raw):
+    if not isinstance(raw, list) or not raw:
+        raise RecordError(f'{source}: "questions" is a list with at least one entry')
+    questions = []
+    for number, entry in enumerate(raw):
+        where = f'questions[{number}]'
+        if not isinstance(entry, dict) or not isinstance(entry.get('id'), str) or not entry['id']:
+            raise RecordError(f'{source}: {where}: needs an id')
+        where = f'question {entry["id"]}'
+        if entry.get('kind') not in FACT_KINDS:
+            raise RecordError(f'{source}: {where}: kind is one of {", ".join(FACT_KINDS)}')
+        if not isinstance(entry.get('ask'), str) or not entry['ask'].strip():
+            raise RecordError(f'{source}: {where}: ask is the text of the question')
+        questions.append(Question(entry['id'], entry['kind'], entry['ask']))
+    return tuple(questions)
+
+
+def parse_fact_items(source, kind, raw, questions):
+    """The expected facts or the decoys of a facts list: each has an id, the id of its question and places."""
+    if not isinstance(raw, list) or (kind == 'facts' and not raw):
+        raise RecordError(f'{source}: "{kind}" is a list{" with at least one entry" if kind == "facts" else ""}')
+    items = []
+    for number, entry in enumerate(raw):
+        where = f'{kind}[{number}]'
+        if not isinstance(entry, dict) or not isinstance(entry.get('id'), str) or not entry['id']:
+            raise RecordError(f'{source}: {where}: needs an id')
+        where = f'{kind} {entry["id"]}'
+        if entry.get('question') not in [question.id for question in questions]:
+            raise RecordError(f'{source}: {where}: question is the id of one of the questions')
+        places = entry.get('places')
+        if not isinstance(places, list) or not places:
+            raise RecordError(f'{source}: {where}: places is a list with at least one place')
+        items.append(Item(entry['id'], tuple(parse_place(source, where, place) for place in places)))
+    return tuple(items)
+
+
+def load_facts(source):
+    """The Facts in the facts list `source`; a list that does not fit raises RecordError."""
+    text = files.read_input(source)
+    try:
+        data = json.loads(text)
+    except ValueError as error:
+        raise RecordError(f'{source}: not JSON ({error})') from None
+    if not isinstance(data, dict):
+        raise RecordError(f'{source}: the facts list is a JSON object with "questions", "facts" and "decoys"')
+    questions = parse_questions(source, data.get('questions'))
+    facts = parse_fact_items(source, 'facts', data.get('facts'), questions)
+    decoys = parse_fact_items(source, 'decoys', data.get('decoys', []), questions)
+    ids = [item.id for item in questions + facts + decoys]
+    for ident in sorted(set(ids)):
+        if ids.count(ident) > 1:
+            raise RecordError(f'{source}: the id {ident} is used twice')
+    return Facts(str(data.get('fixture') or source), questions, facts, decoys)
+
+
+def parse_answers(text, source):
+    """The answer lines of one run's text. Prose is skipped; a line that starts like an answer (a bullet
+    with a `<path>:<digits>` place and an em dash) but does not have the shape raises RecordError naming
+    `source` and its line number."""
+    if not text.strip():
+        raise RecordError(f'{source}: no text')
+    answers = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = ANSWER.match(line)
+        if match:
+            answers.append(Answer(match['path'], int(match['line']), match['fact']))
+        elif LOOKS_LIKE_ANSWER.match(line):
+            raise RecordError(f'{source}:{number}: not an answer line; the shape is {ANSWER_SHAPE}')
+    return answers
+
+
+def score_facts(facts, answers):
+    """The FactsRun of these answers against the facts list: the expected facts an answer names a place
+    of, and the decoys an answer names a place of."""
+    return FactsRun(tuple(item.id for item in facts.facts if any(matches(item, answer) for answer in answers)),
+                    tuple(item.id for item in facts.decoys if any(matches(item, answer) for answer in answers)))
+
+
+def render_facts(facts, runs):
+    """The output lines: the fixture, one line for each run, then the median of each count."""
+    total = len(facts.facts)
+
+    def counted(word, ids):
+        return f'{word} {len(ids)}' + (f' ({", ".join(ids)})' if ids else '')
+
+    lines = [f'fixture {facts.name}: {flags.plural(len(facts.questions), "question")}, '
+             f'{flags.plural(total, "expected fact")}, {flags.plural(len(facts.decoys), "decoy")}']
+    for position, run in enumerate(runs, start=1):
+        missed = tuple(item.id for item in facts.facts if item.id not in run.found)
+        lines.append(f'run {position}: {counted("found", run.found)}, {counted("missed", missed)}, '
+                     f'{counted("decoy hits", run.decoy_hits)}')
+
+    def middle(field):
+        return trends.plain(median(len(getattr(run, field)) for run in runs))
+
+    lines.append(f'median of {flags.plural(len(runs), "run")}')
+    lines.append(f'found: {middle("found")} of {total}')
+    lines.append(f'decoy hits: {middle("decoy_hits")}')
+    return lines
+
+
 def register(commands, common):
-    command = commands.add_parser('bench', help='score a reviewer agent against a seeded-defect fixture')
+    command = commands.add_parser('bench', help='score a reviewer or reader agent against a bench fixture')
     actions = command.add_subparsers(dest='action', required=True, metavar='action')
     score = actions.add_parser('score', parents=[common],
                                help='found, found at min severity, missed and false High of 1 to 3 runs (the median)')
@@ -282,6 +426,12 @@ def register(commands, common):
     score.add_argument('findings', nargs='+',
                        help='one file of finding lines for each run, one to three (- reads standard input)')
     score.set_defaults(handler=run_score)
+    facts = actions.add_parser('facts', parents=[common],
+                               help='expected facts found and decoys hit by 1 to 3 answer runs (the median)')
+    facts.add_argument('facts', help="the fixture's facts list (facts.json)")
+    facts.add_argument('answers', nargs='+',
+                       help='one file of answer lines for each run, one to three (- reads standard input)')
+    facts.set_defaults(handler=run_facts)
 
 
 def run_score(args, environ):
@@ -290,5 +440,15 @@ def run_score(args, environ):
     fixture = load_fixture(args.defects)
     runs = [score_run(fixture, parse_findings(files.read_input(source), source)) for source in args.findings]
     for line in render(fixture, runs):
+        print(line)
+    return 0
+
+
+def run_facts(args, environ):
+    if len(args.answers) > BENCH_MAX_RUNS:
+        raise RecordError(f'bench facts takes 1 to {BENCH_MAX_RUNS} runs, got {len(args.answers)}')
+    facts = load_facts(args.facts)
+    results = [score_facts(facts, parse_answers(files.read_input(source), source)) for source in args.answers]
+    for line in render_facts(facts, results):
         print(line)
     return 0

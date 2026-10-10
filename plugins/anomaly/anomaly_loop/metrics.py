@@ -21,8 +21,8 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from . import paths, profile
-from .constants import (ACTIVE_GAP_SECONDS, METRICS_FILE, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE,
-                        STATE_FILE)
+from .constants import (ACTIVE_GAP_SECONDS, LONG_PROMPT_FACTORS, LONG_PROMPT_TOKENS, METRICS_FILE,
+                        MODEL_FACTORS, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE, STATE_FILE)
 from .files import dump, load_lines, write_lines
 from .records import number
 
@@ -76,6 +76,11 @@ def list_sessions(root):
         for main in sorted(project.glob('*.jsonl')):
             subs = sorted((project / main.stem / 'subagents').glob('agent-*.jsonl'))
             yield project.name, main, subs
+
+
+def meta_path(spawn):
+    """The `.meta.json` file beside the transcript `spawn` of a subagent."""
+    return spawn.with_suffix('.meta.json')
 
 
 def load_json(path, default):
@@ -176,6 +181,18 @@ def bucket_for(table, key):
     return table.setdefault(key, new_bucket())
 
 
+def model_factor(model, tokens):
+    """The price factor of one API call (MODEL_FACTORS, with the long-prompt tier of LONG_PROMPT_FACTORS),
+    from the family word in `model` and the call's `tokens` bucket; None for a model with no factor."""
+    family = next((name for name in MODEL_FACTORS if name in model.lower()), None)
+    if family is None:
+        return None
+    prompt = tokens['input'] + tokens['cache_write'] + tokens['cache_read']
+    if prompt > LONG_PROMPT_TOKENS:
+        return LONG_PROMPT_FACTORS.get(family, MODEL_FACTORS[family])
+    return MODEL_FACTORS[family]
+
+
 class Accumulator:
     def __init__(self):
         self.epochs = []
@@ -191,6 +208,8 @@ class Accumulator:
         self.interrupts = self.hook_blocks = self.policy_blocks = self.compactions = 0
         self.denial_kinds, self.denial_tools, self.denial_pairs = Counter(), Counter(), Counter()
         self.subagent_meta = []
+        self.model_weighted, self.unknown_models = Counter(), Counter()
+        self.skipped_entries = self.skipped_spawns = 0
 
     def add_ts(self, value):
         epoch = parse_ts(value)
@@ -218,6 +237,11 @@ class Accumulator:
         for table, key in ((self.by_skill, call['skill']), (self.by_agent, call['agent'])):
             if key:
                 add_bucket(bucket_for(table, key), call['tokens'])
+        if call['agent']:
+            factor = model_factor(call['model'], call['tokens'])
+            self.model_weighted[call['agent']] += 0 if factor is None else weighted(call['tokens']) * factor
+            if factor is None:
+                self.unknown_models[call['agent']] += 1
 
     def add_trigrams(self, names):
         """Count the runs of three consecutive tool names of one transcript (in first-use order)."""
@@ -245,10 +269,15 @@ def result_text(block):
 
 
 def read_call(entry, message, calls):
+    """Add the usage of an assistant entry to `calls` (one call per message id). Returns True when the
+    entry is skipped for a missing `model` (or one that is not a string) or `usage`; a `<synthetic>` entry is
+    skipped without being counted."""
     usage = message.get('usage')
     model = message.get('model')
-    if not isinstance(usage, dict) or not model or model == '<synthetic>':
-        return
+    if model == '<synthetic>':
+        return False
+    if not isinstance(usage, dict) or not model or not isinstance(model, str):
+        return True
     key = message.get('id') or entry.get('uuid') or id(entry)
     call = calls.setdefault(key, {'model': model, 'tokens': new_bucket(), 'skill': None, 'agent': None})
     for field, source in USAGE_FIELDS.items():
@@ -257,6 +286,7 @@ def read_call(entry, message, calls):
             call['tokens'][field] = max(call['tokens'][field], value)
     call['skill'] = call['skill'] or entry.get('attributionSkill')
     call['agent'] = call['agent'] or entry.get('attributionAgent')
+    return False
 
 
 def read_tool_uses(acc, message, is_main, tool_names):
@@ -334,7 +364,7 @@ def scan_file(acc, path, is_main, session_id, prompts):
             kind = entry.get('type')
             if kind == 'assistant':
                 message = entry.get('message') if isinstance(entry.get('message'), dict) else {}
-                read_call(entry, message, calls)
+                acc.skipped_entries += read_call(entry, message, calls)
                 read_tool_uses(acc, message, is_main, tool_names)
             elif kind == 'user':
                 read_user(acc, entry, is_main, tool_names, prompts, session_id)
@@ -358,7 +388,7 @@ def subagent_summary(subs, spans):
     by_type, by_model, stopped = Counter(), Counter(), 0
     seconds_by_type, seconds_by_model = Counter(), Counter()
     for path, seconds in zip(subs, spans, strict=True):
-        meta = load_json(path.with_suffix('.meta.json'), {})
+        meta = load_json(meta_path(path), {})
         meta = meta if isinstance(meta, dict) else {}
         agent_type = meta.get('agentType') or 'unknown'
         model = meta.get('model') or 'unknown'
@@ -411,7 +441,11 @@ def build_row(acc, session_id, project_dir, ticket_key):
         'weighted': weighted(total),
         'tokens_by_skill': dict(by_skill),
         'tokens_by_agent': dict(by_agent),
+        'model_weighted_by_agent': {k: round(acc.model_weighted[k], 4) for k, _ in by_agent},
+        'unknown_model_by_agent': ranked(acc.unknown_models),
         'subagents': acc.subagent_meta,
+        'skipped_entries': acc.skipped_entries,
+        'skipped_spawns': acc.skipped_spawns,
         'tools': ranked(acc.tools),
         'skills_invoked': ranked(acc.skills),
         'slash_commands': ranked(acc.slash),
@@ -441,6 +475,7 @@ def summarize_session(session_id, project_dir, main, subs, ticket_key):
         scan_file(acc, path, False, session_id, prompts)
         spans.append(span_seconds(acc.epochs[start:]))
     acc.subagent_meta = subagent_summary(subs, spans)
+    acc.skipped_spawns = sum(not meta_path(path).exists() for path in subs)
     if acc.first is None:
         return None, prompts
     return build_row(acc, session_id, project_dir, ticket_key), prompts
@@ -457,7 +492,7 @@ def session_stamp(main, subs):
     stamp = {str(main): file_stamp(main)}
     for sub in subs:
         stamp[str(sub)] = file_stamp(sub)
-        meta = sub.with_suffix('.meta.json')
+        meta = meta_path(sub)
         if meta.exists():
             stamp[str(meta)] = file_stamp(meta)
     return stamp
@@ -520,14 +555,17 @@ def sum_subagent_seconds(rows, key):
 def summarize_rows(rows):
     """Row count, first and last timestamp, total weighted tokens and subagent seconds by agent
     type and by model (each summed over the rows that carry `subagents.seconds_by_type` or
-    `subagents.seconds_by_model`) of the metrics rows."""
+    `subagents.seconds_by_model`), and the entries and spawns measure could not read
+    (`skipped_entries`, `skipped_spawns`; a row without the field adds 0) of the metrics rows."""
     starts = [r['first_ts'] for r in rows if r.get('first_ts')]
     ends = [r['last_ts'] for r in rows if r.get('last_ts')]
     return {'rows': len(rows), 'first_ts': min(starts) if starts else None,
             'last_ts': max(ends) if ends else None,
             'weighted': round(sum(number(r.get('weighted')) or 0 for r in rows), 2),
             'seconds_by_type': sum_subagent_seconds(rows, 'seconds_by_type'),
-            'seconds_by_model': sum_subagent_seconds(rows, 'seconds_by_model')}
+            'seconds_by_model': sum_subagent_seconds(rows, 'seconds_by_model'),
+            'skipped_entries': sum(number(r.get('skipped_entries')) or 0 for r in rows),
+            'skipped_spawns': sum(number(r.get('skipped_spawns')) or 0 for r in rows)}
 
 
 def skills_used_each(row):
@@ -596,6 +634,9 @@ def run_measure(args, environ):
     if totals['seconds_by_model']:
         by_seconds = sorted(totals['seconds_by_model'].items(), key=lambda item: (-item[1], item[0]))
         print('subagent seconds by model: ' + ', '.join(f'{name} {seconds}' for name, seconds in by_seconds))
+    if totals['skipped_entries'] or totals['skipped_spawns']:
+        print(f"not measured: {totals['skipped_entries']} assistant entries without model or usage, "
+              f"{totals['skipped_spawns']} spawns without .meta.json")
     print(f'file: {out_path}')
     message = profile.missing_message(loaded)
     if message:
