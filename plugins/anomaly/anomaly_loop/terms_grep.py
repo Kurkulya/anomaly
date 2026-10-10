@@ -6,7 +6,7 @@ Prints, per URL: the content type, the "last modified" or "effective" line if fo
 every hit of every term with --context characters on each side (default 300). Tags become
 spaces and all whitespace (also &nbsp;) becomes one space before matching, so a term split by a
 tag or a line break still matches. --word matches whole words only. A control character in the
-page prints as `?` (pkg_facts.printable).
+page or in a FETCH FAILED note prints as `?` (pkg_facts.printable).
 
 A failed fetch, an empty page, a page at or over pkg_facts.MAX_RESPONSE_BYTES or a non-HTML page
 (a PDF) prints FETCH FAILED and the command exits with code 1, a negative result: that output
@@ -103,7 +103,7 @@ def run_terms_grep(args, environ):
         try:
             content_type, raw = fetch(url)
         except FetchError as e:
-            print(f'FETCH FAILED: {e} (cannot prove absence)')
+            print(pkg_facts.printable(f'FETCH FAILED: {e} (cannot prove absence)'))
             failed = True
             continue
         text = pkg_facts.printable(clean(raw))

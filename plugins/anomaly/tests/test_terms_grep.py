@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import pkg_facts
+from anomaly_loop import pkg_facts, terms_grep
 from tests.fixtures import run_cli
 
 DEFAULT_CONTEXT = 300
@@ -98,6 +98,14 @@ class TermsGrepTest(unittest.TestCase):
         self.assertEqual(code, 0)
         (line,) = self.hit_lines(out)
         self.assertIn('needle?end', line)
+        self.assertNotIn('\x1b', out)
+
+    def test_a_control_character_in_a_fetch_failed_note_prints_as_a_question_mark(self):
+        # a server's reason phrase or content type reaches the note; a file:// page cannot carry one
+        with mock.patch.object(terms_grep, 'fetch', side_effect=terms_grep.FetchError('bad\x1bgateway')):
+            code, out, _ = run_cli('terms-grep', '--terms', 'needle', 'https://example.com/terms')
+        self.assertEqual(code, 1)
+        self.assertIn('bad?gateway', out)
         self.assertNotIn('\x1b', out)
 
 

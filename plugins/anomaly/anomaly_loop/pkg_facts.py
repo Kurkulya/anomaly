@@ -13,7 +13,8 @@ Two adapters: deps.dev (package, version and project endpoints, no token; downlo
 and pub.dev (package and score endpoints; licence from the score `license:<id>` tags, repository from
 the pubspec `repository` only; deprecated from the package `isDiscontinued` key, Unknown when the
 key is absent; no stars, issues or Scorecard). A column an adapter cannot fill prints Unknown. A
-control character in a table cell prints as `?`, and so does a lone surrogate in any cell.
+control character in a table cell or a FETCH FAILED note prints as `?`, and so does a lone
+surrogate in any cell.
 
 A failed fetch or a malformed response (missing key, null or wrong type) prints FETCH FAILED for that
 package with every column Unknown; an ecosystem with no adapter prints `no adapter: <system>`; both
@@ -44,7 +45,7 @@ MANIFESTS = {'package.json': 'npm', 'pubspec.yaml': 'pub', 'go.mod': 'go', 'pypr
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024   # a response this big or bigger is a FETCH FAILED
 PUB_LICENCE_CLASSES = {'license:fsf-libre', 'license:osi-approved'}   # pub.dev tags that classify a licence, not name one
 FETCH_ERRORS = (OSError, ValueError, http.client.HTTPException, KeyError, TypeError, AttributeError)
-CONTROL_CHARACTER = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')   # C0 and DEL, but not tab, line feed or carriage return
+CONTROL_CHARACTER = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')   # C0, DEL and C1, but not tab, line feed or carriage return
 
 
 def fetch(url):
@@ -189,7 +190,7 @@ def run_pkg_facts(args, environ):
         try:
             cells = facts(ecosystem, name)
         except FETCH_ERRORS as e:
-            notes.append(f'FETCH FAILED: {given} ({type(e).__name__}: {e})')
+            notes.append(printable(f'FETCH FAILED: {given} ({type(e).__name__}: {e})'))
             cells = {}
         else:
             if cells is None:

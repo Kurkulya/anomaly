@@ -211,11 +211,13 @@ class TableTests(CommandTestCase):
         self.assertEqual(set(calls), {PYPI_PACKAGE_URL, PYPI_VERSION_URL, PYPI_PROJECT_URL})
 
     def test_a_control_character_in_a_cell_prints_as_a_question_mark(self):
-        package = {"latest": {"version": "1.0.0", "pubspec": {"repository": "https://example.com/a\x1bb"}}}
+        # ESC from C0 and U+009B (CSI) from C1
+        package = {"latest": {"version": "1.0.0", "pubspec": {"repository": "https://example.com/a\x1bb\x9bc"}}}
         code, out, _ = self.run_main(["pub:crafted"], crafted_fetch(package))
         self.assertEqual(code, 0)
-        self.assertEqual(table_rows(out)[0][5], "https://example.com/a?b")
+        self.assertEqual(table_rows(out)[0][5], "https://example.com/a?b?c")
         self.assertNotIn("\x1b", out)
+        self.assertNotIn("\x9b", out)
 
     def test_a_lone_surrogate_prints_as_a_question_mark_in_the_table_and_in_json(self):
         fetch = crafted_fetch({"latest": {"version": "1.0\ud800"}})
@@ -371,6 +373,14 @@ class FailureTests(CommandTestCase):
                     code, out, _ = self.run_main(["pub:riverpod"], pkg_facts.fetch)
                 self.assertEqual(code, expected_code)
                 self.assertEqual("FETCH FAILED" in out, expected_code == 1)
+
+    def test_a_control_character_in_a_fetch_failed_note_prints_as_a_question_mark(self):
+        def failing(url):
+            raise OSError("bad\x1bgateway")
+        code, out, _ = self.run_main(["npm:zod"], failing)
+        self.assertEqual(code, 1)
+        self.assertIn("bad?gateway", out)
+        self.assertNotIn("\x1b", out)
 
     def test_default_version_without_version_key_is_a_failed_fetch(self):
         code, out, _ = self.run_main(["npm:nokey"])
