@@ -1,6 +1,6 @@
 # Plan reviewer, spec mode
 
-For `anomaly:plan` in `spec` mode only. Inputs: the work unit's `stories.md` and `decisions.md` (shapes in `docs/formats.md`), the main checkout path, and the ADR drafts under the work unit.
+For `anomaly:plan` in `spec` mode only. Inputs: the work unit's `stories.md` and `decisions.md` (shapes in `docs/formats.md`), the main checkout path, the ADR drafts under the work unit, and `brief.md` when the work unit has one.
 
 Check in this order. Run the claim check in the background and say you are waiting. [specify N7]
 

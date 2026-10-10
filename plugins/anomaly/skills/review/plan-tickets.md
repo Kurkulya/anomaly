@@ -1,6 +1,6 @@
 # Plan reviewer, tickets mode
 
-For `anomaly:plan` in `tickets` mode only. Inputs: the work unit's `tickets/` folder, `stories.md` and `decisions.md` (shapes in `docs/formats.md`), and the main checkout path. Print the AC coverage table first: `AC | ticket | Tests: level`.
+For `anomaly:plan` in `tickets` mode only. Inputs: the work unit's `tickets/` folder, `stories.md` and `decisions.md` (shapes in `docs/formats.md`), the main checkout path, and `brief.md` when the work unit has one. Print the AC coverage table first: `AC | ticket | Tests: level`.
 
 1. Ordering. Draw the producer and consumer graph from `Blocked by:`. A ticket that uses what a later or unrelated ticket creates, or any cycle, is a Blocker. [slice P1]
 2. Invented paths. Every path and symbol in `Touches:` either exists (prove it with Read, Glob or `git ls-files`) or is marked new and created by this ticket or a blocker. A path that exists nowhere is a Blocker. [slice P2]
@@ -10,5 +10,5 @@ For `anomaly:plan` in `tickets` mode only. Inputs: the work unit's `tickets/` fo
 6. AC coverage. Every story AC appears in some `Covers:`, `Covers:` is complete, and the AC text is copied exactly. An AC covered by no ticket is a Blocker. [slice P5]
 7. `Tests:` level per AC. Every AC has a `Tests:` level: unit, integration, e2e, UI walkthrough, real-data probe or mutation probe. A missing level is Medium. [slice P5]
 8. `Model:` follows the slice rule. `implement_wide` when the ticket has `Restates:` or its `Touches:` names a seam another ticket owns (in `seams.md` or the slice seam row → ticket table), else `implement` (a missing line is `implement`). A line that breaks the rule is Medium. [slice AC-13]
-9. Report with specifics, propose no other plan, and say so when a check is clean. This gate runs last; only a Blocker stops it and the rest go in the handoff. [slice P8, N8]
-10. Unsettled rule pairs. Two rules from two tickets, or from a ticket and its brief, whose interaction is unsettled are a Blocker only when the finding names one concrete case where the two rules give different actions. A doubt that names no concrete case is not a Blocker. [calibrate-fixes-1 D-14]
+9. Unsettled rule pairs. Two rules from two tickets, or from a ticket and its brief, whose interaction is unsettled are a Blocker only when the finding names one concrete case where the two rules give different actions. A doubt that names no concrete case is not a Blocker. [calibrate-fixes-1 D-14]
+10. Report with specifics, propose no other plan, and say so when a check is clean. This gate runs last; only a Blocker stops it and the rest go in the handoff. [slice P8, N8]
