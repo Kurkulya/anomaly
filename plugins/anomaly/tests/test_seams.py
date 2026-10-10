@@ -333,3 +333,41 @@ class PruneTest(SeamsTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertEqual(self.read(), '')
         self.assertIn('reshaped', [line for line in out.splitlines() if 'pair' in line][0])
+
+    def test_a_span_outside_parentheses_that_is_not_a_file_is_a_name_of_the_path_before_it(self):
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n\n\nLIMIT = 1\n')
+        self.change('add the owner file')
+        write_text(self.ledger, '- plus · `plugins/x/a.py` (`one`) + `constants.LIMIT` · replaces a copy (ticket 01)\n')
+        self.repo.write('plugins/x/a.py', 'def one():\n    pass\n')   # `LIMIT` is gone
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), '')
+        self.assertIn('reshaped', [line for line in out.splitlines() if 'plus' in line][0])
+
+    def test_an_ambiguous_owner_path_wins_over_a_rename_of_another_path_of_the_line(self):
+        self.repo.write('plugins/x/b.py', 'def two():\n    pass\n')
+        self.add_files('lib/paths.py', 'tests/paths.py')
+        line = '- pair · paths.py (`one`), `plugins/x/b.py` (`two`) · replaces copies (ticket 01)\n'
+        write_text(self.ledger, line)
+        self.repo.write('lib/paths.py', 'x = 2\n')
+        self.repo.write('tests/paths.py', 'x = 2\n')
+        self.repo.git('mv', 'plugins/x/b.py', 'plugins/x/c.py')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line)
+        listed = [text for text in out.splitlines() if 'pair' in text]
+        self.assertEqual(len(listed), 1, out)
+        self.assertTrue(listed[0].startswith('ambiguous'), listed[0])
+
+    def test_a_rename_of_the_second_of_two_owner_files_rewrites_only_that_path(self):
+        line = self.two_path_line()
+        self.repo.git('mv', 'plugins/x/b.py', 'plugins/x/c.py')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line.replace('`plugins/x/b.py`', '`plugins/x/c.py`'))
+        listed = [text for text in out.splitlines() if 'pair' in text]
+        self.assertEqual(len(listed), 1, out)
+        self.assertTrue(listed[0].startswith('renamed'), listed[0])
