@@ -346,6 +346,20 @@ class SkillFileTest(unittest.TestCase):
                 self.assertLessEqual(path.stat().st_size, max_bytes)
                 self.assertIn(name, text)
 
+    NEVER_CUT_LINE = ('A file at its byte cap: never cut existing rule text to fit; '
+                      'stop and report the file, its cap and the bytes needed.')
+
+    NEVER_CUT_ASK = 'The main window then asks the user to raise the cap or move detail into a doc loaded only when used.'
+
+    def test_both_build_briefs_never_cut_rule_text_to_fit_a_cap_and_have_the_main_window_ask_how_to_make_room(self):
+        """AC-7 (BRIEFS.md), AC-8 (TEST-WRITER.md), D-5, D-22 and its Amended line: each brief holds the never-cut line
+        and the sentence that has the main window ask the user how to make room."""
+        for name in ('BRIEFS.md', 'TEST-WRITER.md'):
+            with self.subTest(doc=name):
+                text = ' '.join((self.BUILD_SKILL.parent / name).read_text(encoding='utf-8').split())
+                self.assertIn(self.NEVER_CUT_LINE, text)
+                self.assertIn(self.NEVER_CUT_ASK, text)
+
     def test_the_build_skill_carries_the_light_path_call_and_the_resume_check(self):
         """AC-39 (the `ticket adhoc` call) and AC-31 (the first-parent log check)."""
         text = self.build_text()
