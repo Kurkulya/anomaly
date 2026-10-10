@@ -10,9 +10,10 @@ METRIC_NAMES (case and outer spaces do not matter; anything else is refused):
   - `model-weighted tokens per dispatch <agent>`, for any agent name (kept in its case): the agent's
     `model_weighted_by_agent` (each API call's weighted tokens times its model's factor,
     constants.MODEL_FACTORS) divided by its `subagents.by_type` count, by the statistic of weighted
-    tokens. A session without a dispatch of the agent, or with a call of the agent on a model with
-    no factor (`unknown_model_by_agent`), has no value: it is skipped, never read as 0; verify
-    counts the second kind. Resolved by name in resolve_metric, so it is not in REGISTRY;
+    tokens. A session without a dispatch of the agent, with a call of the agent on a model with
+    no factor (`unknown_model_by_agent`), or with a spawn without `.meta.json` (`skipped_spawns`,
+    whose dispatch count is short) has no value: it is skipped, never read as 0; verify counts
+    the second kind. Resolved by name in resolve_metric, so it is not in REGISTRY;
   - `sightings since the fix`: the anomaly's own sightings (the rare-event primary, judged by
     recurrence), and `<category> sightings` for each category (e.g. `rework sightings`,
     `late-catch sightings`): sightings of problems of that category. Sightings are rare, so they are
@@ -128,21 +129,32 @@ def lacks_factor(row, agent):
     return bool(per_agent_number(row, 'unknown_model_by_agent', agent))
 
 
+def has_spawn_without_meta(row):
+    """True when a row has a spawn without `.meta.json` (`skipped_spawns`): measure counts its dispatch as
+    `unknown`, but its calls still add to `model_weighted_by_agent`, so the agent's dispatch count is short."""
+    return (records.number(row.get('skipped_spawns')) or 0) > 0
+
+
 def model_weighted_per_dispatch(agent):
     """The measure of a row for the metric `model-weighted tokens per dispatch <agent>`: the agent's
     `model_weighted_by_agent` divided by its dispatches; None (no value, not 0) for a row without a
-    dispatch of the agent or without the field (an older row), and for a row whose agent had a call on
-    a model with no factor: its sum would be short."""
+    dispatch of the agent or without the field (an older row), for a row whose agent had a call on
+    a model with no factor (its sum would be short), and for a row with a spawn without `.meta.json`
+    (its dispatch count would be short)."""
     def measure(row):
         dispatches, total = dispatches_of(row, agent), per_agent_number(row, 'model_weighted_by_agent', agent)
-        return None if not dispatches or total is None or lacks_factor(row, agent) else total / dispatches
+        if not dispatches or total is None or lacks_factor(row, agent) or has_spawn_without_meta(row):
+            return None
+        return total / dispatches
     return measure
 
 
 def skipped_for_model(rows, agent):
     """How many of the sessions `rows` the metric of `agent` leaves out for a call on a model with
-    no factor (a session without a dispatch of the agent is left out for that, not counted here)."""
-    return sum(bool(dispatches_of(row, agent)) and lacks_factor(row, agent) for row in rows)
+    no factor (a session without a dispatch of the agent, or with a spawn without `.meta.json`, is left
+    out for that, not counted here)."""
+    return sum(bool(dispatches_of(row, agent)) and lacks_factor(row, agent) and not has_spawn_without_meta(row)
+               for row in rows)
 
 
 def sighting_metric(lines_of):
@@ -188,8 +200,9 @@ def is_token_metric(name):
 def resolve_metric(name):
     text = ' '.join(str(name or '').split())
     metric = REGISTRY.get(text.lower())
-    if metric is None and text.lower().startswith(f'{PER_DISPATCH} ') and ' ' not in text[len(PER_DISPATCH) + 1:]:
-        agent = text[len(PER_DISPATCH) + 1:]   # an agent name keeps its case; only one name is allowed
+    agent = text[len(PER_DISPATCH) + 1:]   # an agent name keeps its case; only one name is allowed
+    if (metric is None and text.lower().startswith(f'{PER_DISPATCH} ') and ' ' not in agent
+            and not agent.startswith('<')):   # `<agent>` is the placeholder of the metric list, not a name
         metric = Metric(f'{PER_DISPATCH} {agent}', REGISTRY[TOKENS].statistic,
                         row_metric(model_weighted_per_dispatch(agent)), per_session=True)
     if metric is None:

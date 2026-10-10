@@ -78,6 +78,11 @@ def list_sessions(root):
             yield project.name, main, subs
 
 
+def meta_path(spawn):
+    """The `.meta.json` file beside the transcript `spawn` of a subagent."""
+    return spawn.with_suffix('.meta.json')
+
+
 def load_json(path, default):
     try:
         return json.loads(path.read_text(encoding='utf-8'))
@@ -382,7 +387,7 @@ def subagent_summary(subs, spans):
     by_type, by_model, stopped = Counter(), Counter(), 0
     seconds_by_type, seconds_by_model = Counter(), Counter()
     for path, seconds in zip(subs, spans, strict=True):
-        meta = load_json(path.with_suffix('.meta.json'), {})
+        meta = load_json(meta_path(path), {})
         meta = meta if isinstance(meta, dict) else {}
         agent_type = meta.get('agentType') or 'unknown'
         model = meta.get('model') or 'unknown'
@@ -469,7 +474,7 @@ def summarize_session(session_id, project_dir, main, subs, ticket_key):
         scan_file(acc, path, False, session_id, prompts)
         spans.append(span_seconds(acc.epochs[start:]))
     acc.subagent_meta = subagent_summary(subs, spans)
-    acc.skipped_spawns = sum(not path.with_suffix('.meta.json').exists() for path in subs)
+    acc.skipped_spawns = sum(not meta_path(path).exists() for path in subs)
     if acc.first is None:
         return None, prompts
     return build_row(acc, session_id, project_dir, ticket_key), prompts
@@ -486,7 +491,7 @@ def session_stamp(main, subs):
     stamp = {str(main): file_stamp(main)}
     for sub in subs:
         stamp[str(sub)] = file_stamp(sub)
-        meta = sub.with_suffix('.meta.json')
+        meta = meta_path(sub)
         if meta.exists():
             stamp[str(meta)] = file_stamp(meta)
     return stamp

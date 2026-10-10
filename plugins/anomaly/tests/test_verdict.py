@@ -73,11 +73,20 @@ class RegistryTest(unittest.TestCase):
         found = verdict.resolve_metric(f'{PER_DISPATCH} anomaly:facts').read(None, None, rows, None)
         self.assertEqual(found.values, (200.0, 300.0))
 
+    def test_a_session_with_a_spawn_without_meta_has_no_value_since_its_calls_count_but_not_its_dispatch(self):
+        short = {**dispatch_row('s2', 2, 400.0), 'skipped_spawns': 1}   # its dispatch is counted as `unknown`
+        rows = [dispatch_row('s1', 2, 400.0), short, {**dispatch_row('s3', 2, 600.0), 'skipped_spawns': 0}]
+        found = verdict.resolve_metric(f'{PER_DISPATCH} anomaly:facts').read(None, None, rows, None)
+        self.assertEqual(found.values, (200.0, 300.0))
+
     def test_a_name_resolves_without_regard_to_case_or_outer_spaces(self):
         self.assertEqual(verdict.resolve_metric('  Active Minutes ').name, 'active minutes')
+        self.assertEqual(verdict.resolve_metric('  Model-Weighted Tokens Per Dispatch anomaly:facts ').name,
+                         f'{PER_DISPATCH} anomaly:facts')   # the prefix is read in any case, the agent keeps its own
 
     def test_an_unknown_or_double_name_is_a_clear_error_that_lists_the_known_ones(self):
-        for name in ('active minutes per build session', 'active minutes, weighted tokens', ''):
+        for name in ('active minutes per build session', 'active minutes, weighted tokens', '',
+                     f'{PER_DISPATCH} a b', f'{PER_DISPATCH} <agent>'):
             with self.assertRaises(records.RecordError) as caught:
                 verdict.resolve_metric(name)
             self.assertIn('unknown metric', str(caught.exception))
