@@ -175,7 +175,7 @@ PORTS = (
 PER_STACK_PORTS = ('implementer', 'test_writer', 'conventions')
 MODELS_KEY = 'models'                # profile key: one `role: model [effort]` line per role
 MODEL_ROLES = (                      # (role, core default), in the order `ports` prints them
-    ('explore', 'sonnet'),
+    ('explore', 'haiku'),
     ('implement', 'sonnet'),
     ('implement_wide', 'opus'),
     ('lookup', 'haiku'),

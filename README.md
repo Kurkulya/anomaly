@@ -175,7 +175,7 @@ first line). An extend port lists every such line after the repo's own docs. The
 **Model roles.** `models` maps each role to a model, and optionally an effort: a role value is
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
-one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
+one `anomaly:` line naming the role. Without the key: `explore` haiku, `implement` sonnet,
 `implement_wide` opus, `lookup` haiku, `digest` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
@@ -279,7 +279,7 @@ command e2e = [unresolved]
 command install = [unresolved]
 command codegen = [unresolved]
 command hook_path = [unresolved]
-model explore = sonnet [core default]
+model explore = haiku [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
 model lookup = haiku [core default]
