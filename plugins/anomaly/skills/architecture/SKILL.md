@@ -21,10 +21,11 @@ Per area: [lesson-outline](reference/lesson-outline.md). Before pass two:
 
 ## The CLI calls
 
-One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes; write a ' as ’. No `python`: try `python3`. `<date>` is the run's `YYYY-MM-DD`; `<unit folder>` is `.anomaly/architecture-<date>/` in the audited repo.
+One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes; write a ' as ’. No `python`: try `python3`. `<date>` is the run's `YYYY-MM-DD`; `<unit folder>` is `.anomaly/architecture-<date>/` in the audited repo. `docs scan` reads the whole repo; the empty range `HEAD..HEAD` marks no line `[touched]`.
 
 ```
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog start architecture-<date> architecture --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" docs scan HEAD..HEAD --home '${user_config.home}'
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature architecture-<date> --stage architecture --session ${CLAUDE_SESSION_ID} --docs <unit folder> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 ```
 
@@ -62,7 +63,7 @@ next free two-digit number. Write with Write, never with shell redirection.
 All 7 areas in order; each to `NN-area-<n>-<slug>.md`, same text in chat.
 1 layers and dependency direction (1) · 2 module depth (2) · 3 state ownership
 (3) · 4 side effects and platform adapters (4, 5) · 5 cohesion in the biggest feature (6) · 6 guards
-on the five-rung ladder · 7 decision records (five docs checks, inline).
+on the five-rung ladder · 7 decision records (`docs scan` and two docs checks, inline).
 
 Area shape:
 
