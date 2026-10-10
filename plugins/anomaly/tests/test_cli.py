@@ -84,13 +84,13 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(agent=path.stem):
                 self.assertLessEqual(path.stat().st_size, self.AGENT_MAX_BYTES)
 
-    def test_the_agents_are_the_reviewers_the_docs_agent_facts_and_digest_each_with_its_own_tools_and_no_pinned_model(self):
+    def test_the_agents_are_the_reviewers_the_docs_agent_facts_digest_and_survey_each_with_its_own_tools_and_no_pinned_model(self):
         """AC-52: the docs agent is the fifth file; the size, description and tools checks run over every agent,
-        so they cover it once the file exists. AC-8, D-29: facts and digest are the sixth and seventh; the reviewers
-        and the docs agent keep Bash, facts reads and searches only, digest reads and fetches."""
+        so they cover it once the file exists. AC-8, D-29: facts and digest are the sixth and seventh; AC-15, D-2, D-21: survey the eighth;
+        the reviewers and the docs agent keep Bash, facts reads and searches only, digest reads and fetches, survey also runs Bash, writes files and searches and fetches the web."""
         review_tools = ['Read', 'Grep', 'Glob', 'Bash']
         tools = {**dict.fromkeys([*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem], review_tools),   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
-                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch']}
+                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch'], 'survey': ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'WebSearch', 'WebFetch']}
         self.assertEqual({path.stem for path in self.agents()}, set(tools))
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
@@ -176,10 +176,10 @@ class SkillFileTest(unittest.TestCase):
         """AC-4, Amended 2026-10-10 (ports value `<model> <effort>`): the rule is per paragraph, where a paragraph is
         one list item, table row or text block with its wrapped lines. A paragraph that names a role (`model <role>`,
         `<role> model`, `<role> role`, for every model role, `implement` and `implement_wide` included) or the agent `anomaly:facts`,
-        `anomaly:digest` or `anomaly:docs`, the phrase "model role(s)" or a backticked lens role (the review
+        `anomaly:digest`, `anomaly:docs` or `anomaly:survey`, the phrase "model role(s)" or a backticked lens role (the review
         skill's model line) must also hold the word `effort`."""
         dispatches = [self.role_mention(role) for role in self.DISPATCH_ROLES]
-        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs)\b|(?i:\bmodel roles?\b)|`review_(?:code|feature|security)`'))
+        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs|survey)\b|(?i:\bmodel roles?\b)|`review_(?:code|feature|security)`'))
         for path in self.dispatch_files():
             for number, text in self.paragraphs(path):
                 if any(pattern.search(text) for pattern in dispatches):
@@ -1011,27 +1011,45 @@ class InterviewSkillTest(unittest.TestCase):
         fence = re.search(r'```\n(.*?)\n```', section, re.S)
         self.assertIsNotNone(fence, 'the "A round" section has no fenced round template')
         template = fence.group(1).splitlines()
-        with self.subTest('the rule says Markdown with bold labels, blank lines and list options'):
-            self.assertNotIn('Plain text, no emoji', section)
-            rule = [line for line in section.splitlines() if 'Markdown, no emoji' in line]
-            self.assertTrue(rule, 'no line says "Markdown, no emoji"')
-            self.assertRegex(rule[0].lower(), r'bold labels')
-            self.assertRegex(rule[0].lower(), r'blank line')
-            self.assertRegex(rule[0].lower(), r'options as a list')
-        with self.subTest('the template uses bold labels'):
-            for label in ('**Settled already:**', '**Facts pending:**',
-                          '**Taking these defaults unless you object:**', '**Q<n> — <title>**',
-                          '**Assumes:**', '**Recommend:**', '**Risk:**', '**Conflicts:**'):
-                self.assertIn(label, '\n'.join(template), f'the round template drops {label}')
-        with self.subTest('the template lists its options'):
-            self.assertTrue(any(re.match(r'- a\) ', line) for line in template),
-                            'the round template has no option list line starting "- a) "')
+        # Audit-skills ticket 06 (AC-24, AC-25, D-19): icons before each bold label, bold capital option letters.
+        settled, pending, defaults, question, assumes = (
+            '📌 **Settled already:**', '⏳ **Facts pending:**', '✅ **Taking these defaults unless you object:**',
+            '❓ **Q<n> — <title>**', '🔎 **Assumes:**')
+        recommend = re.compile(r'^👉 \*\*Recommend:\*\* \*\*[A-Z]\)\*\*')
+        with self.subTest('the rule says Markdown with bold labels, blank lines and list options, and no "no emoji"'):
+            self.assertNotIn('no emoji', section.lower())
+            rule = next((line for line in section.splitlines() if line.strip()), '')
+            self.assertRegex(rule.lower(), r'^markdown\b')
+            self.assertRegex(rule.lower(), r'bold labels')
+            self.assertRegex(rule.lower(), r'blank line')
+            self.assertRegex(rule.lower(), r'options as a list')
+        with self.subTest('the template puts an icon before each bold label'):
+            for label in (settled, pending, defaults, question, assumes):
+                self.assertTrue(any(line.startswith(label) for line in template),
+                                f'the round template has no line starting with {label}')
+        with self.subTest('the Recommend line names the letter as **A)** and carries the Risk and Conflicts icons'):
+            line = next((line for line in template if line.startswith('👉')), '')
+            self.assertRegex(line, recommend, 'the round template has no line "👉 **Recommend:** **A)**"')
+            self.assertRegex(line, r'⚠️ \*\*Risk:\*\*.*🔗 \*\*Conflicts:\*\*',
+                             'the Recommend line lacks "⚠️ **Risk:**" then "🔗 **Conflicts:**"')
+        with self.subTest('the template lists its options with bold capital letters'):
+            for letter in 'AB':
+                self.assertTrue(any(line.startswith(f'- **{letter})** ') for line in template),
+                                f'the round template has no option line starting "- **{letter})** "')
+            self.assertFalse([line for line in template if re.match(r'- (\*\*)?[a-z]\)', line)],
+                             'the round template still has a lowercase "- a) " option line')
         with self.subTest('the template has a blank line between its blocks'):
-            for label in ('**Facts pending:**', '**Taking these defaults unless you object:**', '**Q<n> — <title>**',
-                          '**Assumes:**', '**Recommend:**'):
+            for label in (pending, defaults, question, assumes):
                 at = next((i for i, line in enumerate(template) if line.startswith(label)), None)
                 self.assertIsNotNone(at, f'the round template has no line starting with {label}')
                 self.assertEqual(template[at - 1], '', f'no blank line before {label}')
+            at = next((i for i, line in enumerate(template) if recommend.match(line)), None)
+            self.assertIsNotNone(at, 'the round template has no Recommend line naming the letter as **A)**')
+            self.assertEqual(template[at - 1], '', 'no blank line before the Recommend line')
+        with self.subTest('the close table and the confirm question carry no icons'):
+            close = text.split('\n## The close', 1)[1]
+            self.assertIn('no icons', close.lower())
+            self.assertNotRegex(close, '[⌚-⏿☀-➿⭐️\U0001f000-\U0001faff]')
 
     def test_it_writes_d_and_t_lines_with_a_source_after_each_round_and_edits_nothing_else(self):
         """AC-17."""

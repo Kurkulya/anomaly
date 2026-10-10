@@ -19,7 +19,7 @@ from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli
 IDENTIFIER = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:[-:][A-Za-z0-9]+)+')
 HOST = re.compile(r'https?://([A-Za-z0-9.-]+)')
 RESERVED_HOST = re.compile(r'(?:.+\.)?(?:example(?:\.com|\.net|\.org)?|test|invalid|localhost)')
-ALLOWED_HOSTS = {'host', 'person', 'www.youtube.com'}   # placeholders and a link example in tests
+ALLOWED_HOSTS = {'host', 'person', 'www.youtube.com', 'api.deps.dev', 'pub.dev'}   # placeholders, a link example, the two pkg-facts API hosts
 
 
 def stack_values(value):

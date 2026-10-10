@@ -16,7 +16,7 @@ PORT_NAMES = {'implementer', 'test_writer', 'conventions', 'reviewers', 'gather'
               'ci', 'mr', 'commit', 'branch', 'ui_check', 'key_line', 'adr_folder'}
 COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')
 LENSES = 'anomaly:code, anomaly:feature, anomaly:security'
-MODEL_ROLES = ('explore', 'implement', 'implement_wide', 'digest', 'review', 'review_code',
+MODEL_ROLES = ('explore', 'implement', 'implement_wide', 'digest', 'survey', 'review', 'review_code',
                'review_feature', 'review_security', 'deep_analysis', 'browse')
 REVIEW_LENSES = ('review_code', 'review_feature', 'review_security')
 EFFORT_LEVELS = ('low', 'medium', 'high', 'xhigh', 'max')
@@ -202,6 +202,7 @@ class ModelRolesTest(PortsCase):
             'implement': ('sonnet', 'core default'),
             'implement_wide': ('opus', 'core default'),
             'digest': ('sonnet', 'core default'),
+            'survey': ('sonnet', 'core default'),
             'review': ('opus', 'core default'),
             'deep_analysis': ('opus', 'core default'),
             'browse': ('sonnet', 'core default')})
@@ -264,10 +265,10 @@ class ModelRolesTest(PortsCase):
                 self.assertEqual(len(lines), len(set_vars))
 
     def test_the_models_key_maps_a_role_with_an_effort_to_its_printed_model_line(self):
-        self.write_profile('models:', '  digest: haiku medium')
-        value, source = self.section(self.ports(), 'model')['digest']
-        self.assertEqual(value, 'haiku medium')
-        self.assertEqual(source, 'profile')
+        self.write_profile('models:', '  digest: haiku medium', '  survey: opus high')
+        found = self.section(self.ports(), 'model')
+        self.assertEqual(found['digest'], ('haiku medium', 'profile'))
+        self.assertEqual(found['survey'], ('opus high', 'profile'))
 
     def test_a_role_written_with_a_space_or_a_hyphen_maps_to_its_role(self):
         for spelling in ('deep analysis', 'Deep-Analysis'):

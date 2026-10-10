@@ -28,25 +28,25 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <work un
 
 ## A round
 
-Markdown, no emoji: bold labels, one blank line between blocks, options as a list. Ask the whole frontier at once: at most 8 numbered questions, hard-to-reverse first (blast radius high, medium, low). [GR2, GR3, A8, CD1, CD2]
+Markdown: bold labels, one blank line between blocks, options as a list. Ask the whole frontier at once: at most 8 numbered questions, hard-to-reverse first (blast radius high, medium, low). [GR2, GR3, A8, CD1, CD2]
 
 ```
-**Settled already:** <D-n / ADR-n, one line each>          (round 1; later, a new conflict)
+📌 **Settled already:** <D-n / ADR-n, one line each>          (round 1; later, a new conflict)
 
-**Facts pending:** <lookup> → blocks Q<n>
+⏳ **Facts pending:** <lookup> → blocks Q<n>
 
-**Taking these defaults unless you object:**
+✅ **Taking these defaults unless you object:**
 1. …
 2. …
 
-**Q<n> — <title>** (blast radius: high | medium | low)
+❓ **Q<n> — <title>** (blast radius: high | medium | low)
 <body>
-- a) …
-- b) …
+- **A)** …
+- **B)** …
 
-**Assumes:** <premise> (<source>)
+🔎 **Assumes:** <premise> (<source>)
 
-**Recommend:** <answer>. **Risk:** <one line>. **Conflicts:** <D-n / ADR-n / none>
+👉 **Recommend:** **A)**. <answer>. ⚠️ **Risk:** <one line>. 🔗 **Conflicts:** <D-n / ADR-n / none>
 ```
 
 - Every question has `Assumes:` with its source and `Recommend:` with a real flaw in `Risk:`. A tool or library limit says whether a documented way around exists. [A2, CM12]
@@ -70,8 +70,8 @@ Write the settled items to `.anomaly/<work unit>/decisions.md`; no other file ch
 
 Done when the frontier is empty and nothing is assumed silently. [GR8, CM1]
 
-1. Show a table, one line per `D-n` and `T-n`, with the counts of recommendations accepted, rejected and revised, shown here only. [A5, A6]
-2. Ask one confirm question with AskUserQuestion, the only use of it; text everywhere else. Act on nothing before the yes. [GR9, K3, CM11]
+1. Show a table, no icons, one line per `D-n` and `T-n`, with the counts of recommendations accepted, rejected and revised, shown here only. [A5, A6]
+2. Ask one confirm question, no icons, with AskUserQuestion, the only use of it; text everywhere else. Act on nothing before the yes. [GR9, K3, CM11]
 3. On "stop", keep an `Open:` list of the unanswered items only in `decisions.md`.
 4. `worklog add`, stage `interview`; leave out `--docs` when the work unit folder does not exist.
 5. Offer `/anomaly:specify <work unit>` as the next-step line; the stage end and the `/clear` rule are in [boundaries.md](../../docs/boundaries.md). [CM3, CM2]

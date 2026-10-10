@@ -23,7 +23,7 @@
 | **measure / observe / calibrate** | The loop: extract numbers / capture wins and problems / review, fix as experiments, verify. | retro (only as a trigger word) |
 | **assess** | Judge a link, text or opinion against the backlog and the metrics, and keep the verdict as an idea. | review (that is calibrate) |
 | **nudge** | The one line a new session prints at most once per ISO week when an open problem has score 4 or more or an experiment is due. | reminder |
-| **stage** | One step of the feature pipeline, named by its skill: `interview`, `specify`, `slice`, `build`, `conduct`, `review`, `ship` (plus `diagnose` for bugs). | phase (that is a delivery part of the rewrite) |
+| **stage** | One step of the feature pipeline, named by its skill: `interview`, `specify`, `slice`, `build`, `conduct`, `review`, `ship` (plus `diagnose` for bugs, and the audit stages `architecture`, `research`, `tests`). | phase (that is a delivery part of the rewrite) |
 | **loop skill** | One of the four skills of the feedback loop: `measure`, `observe`, `calibrate`, `assess` (`LOOP_SKILLS` in `anomaly_loop/constants.py`). The pipeline's size and permission checks leave them out. | |
 | **pipeline skill** | Any plugin skill that is not a loop skill: the skill of one stage (`build`, `review` and the later ones). Its `SKILL.md`, extra docs and agent files get the static checks: size budgets, the one CLI pattern in `allowed-tools`, no command shape a deny rule matches. | workflow skill |
 | **work unit** | One piece of work that goes through the pipeline: a feature, kept in the folder `.anomaly/<work-unit>/` (ADR-0011), or one light-path (ad-hoc) ticket in `.anomaly/adhoc/`. Its tickets are in `tickets/`. `worklog add` records each stage run on it in `<home>/work-units.jsonl`. | job, task, issues (for tickets) |
@@ -57,3 +57,7 @@
 | **wave** | One round of frontier tickets run together, one after another or in parallel. | batch, round (that is a review round) |
 | **wave report** | The 5-line chat summary `conduct` prints after a wave: done, failed, open, next, cost. | digest (that is the backlog digest command and an Avoid word for **log**) |
 | **MR** | The one merge request of a work unit (a pull request on GitHub), opened as a draft and made ready through `ship`. | PR (in plugin text) |
+| **stack profile** | One file per stack (language and test runner) in a skill's `reference/stacks/` that gives the commands and greps the skill runs on that stack; a stack with no file gets a drafted one. | profile (alone; that is the environment mapping) |
+| **lock** | A guard that stops an architecture finding from coming back: an import or lint rule at error level, or a failing test. | guard rail |
+| **cover** | The kept test that a test cut relies on: it must fail on each break of the cut test's behaviour. | replacement |
+| **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the README uses "mutation probe" and "probe edit") |

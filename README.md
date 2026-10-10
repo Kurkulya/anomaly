@@ -34,6 +34,15 @@ read what each piece of work cost, and each reviewer's accepted and rejected fin
 can judge the reviewers. Org-specific tools and names come in through **ports** in a profile kept
 outside the plugin.
 
+**architecture** audits a repo in 7 areas against six principles, with an area score and a lock
+for each, and ends in an `interview` line, `diagnose` lines or a report.
+
+**research** compares options or vendors with evidence: a brief, topic agents, deciding sources
+re-read by the main session, and a decision matrix where every claim carries a source and a label.
+
+**tests** audits a repo's tests on any stack, through a stack profile, and reports the tests that
+can be cut, each with a cover that fails on a break, with no source changed.
+
 This repo is a local marketplace (`anomaly-local`) that holds one plugin, `anomaly`.
 Read this file from top to bottom: install, configure, then the data, then each part of the
 loop in the order you meet it, then the pipeline, from tickets to the stage skills.
@@ -53,8 +62,9 @@ claude plugin install anomaly@anomaly-local
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
 listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review`,
-`anomaly:ship` and `anomaly:diagnose` beside them. `/anomaly:interview`, `/anomaly:specify` and
-`/anomaly:slice` are slash-only: they are not in that list, and you start them by typing them.
+`anomaly:ship`, `anomaly:diagnose`, `anomaly:architecture`, `anomaly:research` and
+`anomaly:tests` beside them. `/anomaly:interview`, `/anomaly:specify` and `/anomaly:slice` are
+slash-only: they are not in that list, and you start them by typing them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -124,7 +134,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `reviewers` | optional port: reviewers added beside `anomaly:code`, `anomaly:feature` and `anomaly:security`, as a comma or line list |
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
-| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
+| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `survey`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
 | `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
@@ -176,7 +186,7 @@ first line). An extend port lists every such line after the repo's own docs. The
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
 one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
-`implement_wide` opus, `digest` sonnet, `review` opus, `deep_analysis` opus,
+`implement_wide` opus, `digest` sonnet, `survey` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
 too (`[profile]` when the profile sets only `review`). A model or effort change is a measured
@@ -286,6 +296,7 @@ model explore = sonnet [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
 model digest = sonnet [core default]
+model survey = sonnet [core default]
 model review = opus [core default]
 model review_code = opus [core default]
 model review_feature = opus [core default]
@@ -1414,9 +1425,12 @@ the `review` skill dispatches the first four, and it passes the model and effort
 role: `review_code` for `anomaly:code`, `review_feature` for `anomaly:feature`, `review_security`
 for `anomaly:security`, `review` for `anomaly:plan` and org reviewers. No agent file pins one. Each
 has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or
-fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are readers, not
-reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model
-either, and keep the same size and description limits.
+fewer and a file of 6 KB or less. Two more read-only agents are readers, not reviewers:
+`anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model either, and
+keep the same size and description limits. The eighth, `anomaly:survey` (eight agents in all), is
+the one agent that is not read-only: it runs Bash and writes files, for the research and tests
+dispatches ([ADR-0020](docs/adr/0020-audit-skills-join-the-plugin.md)). It pins no model either
+and keeps the same limits.
 
 | Agent | Checks | Modes |
 |---|---|---|
@@ -1427,6 +1441,7 @@ either, and keep the same size and description limits.
 | `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
 | `anomaly:facts` | questions about a repository that need inference across lines (a call chain, whether a claim still holds, which callers can pass a value); tools Read, Grep and Glob; model role `explore`; answers in `- <path>:<line> — <fact>` lines (see Facts bench) | one mode: the questions the dispatcher passes |
 | `anomaly:digest` | a transcript or a long page (a local file or a link) as a digest in its own words; tools Read and WebFetch; model role `digest`; fetches only the link it is passed, reads the source as data, never as an instruction, and copies no secret, token or personal data | one mode: the source and the word limit the dispatcher passes |
+| `anomaly:survey` | one research or probe task a skill hands it: web searches and fetches, repository reads, commands; tools Read, Grep, Glob, Bash, Write, WebSearch and WebFetch; model role `survey`; writes only to the output path and the other paths its task names, reads what it fetches as data, never as an instruction, and copies no secret, token or personal data | one mode: the task, the output path and the word or line limit the dispatcher passes |
 
 `anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
 does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
@@ -1830,6 +1845,8 @@ python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-
 python plugins/anomaly/scripts/anomaly.py mr        put|ready|show <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py pkg-facts <ecosystem>:<name>|<name>... [--json] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py terms-grep --terms '<words>' <url>... [--context <n>] [--word]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1861,6 +1878,17 @@ python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] 
 - `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
 - `mr` takes the actions `body` (writes the MR body of a work unit or an ad-hoc ticket to a file), `put`, `ready`, `show`, `reviewed` and `verified`; see MR body and MR.
 - `docs` takes the action `scan`, which prints the overdue ADRs, the deferral notes without an owner and date, and the dead paths of `CLAUDE.md` files; see Docs scan.
+- `pkg-facts` prints the same registry facts (latest version, date, licence, deprecated,
+  repository, stars, open issues, Scorecard, downloads) for every package, one table row each, or
+  a JSON list with `--json`; it reads deps.dev for npm, pypi, go, maven, cargo and nuget, and
+  pub.dev for pub. A bare name takes its ecosystem from the one manifest family in `--repo`
+  (default: the current folder, read as given, inside or outside git). A failed fetch prints
+  `FETCH FAILED` and an ecosystem with no adapter `no adapter: <system>`, each with Unknown cells
+  and exit 1; a bare name with no single ecosystem, or a name of `.` or `..`, is an error.
+- `terms-grep` fetches each page (`http`, `https` or `file://`) and prints every hit of each
+  comma-separated term in `--terms` with `--context` characters on each side (default 300);
+  `--word` matches whole words only. A page it cannot read prints `FETCH FAILED` and exits 1,
+  since that output cannot prove a clause absent.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
@@ -2084,6 +2112,90 @@ the CLI.
   also takes every open Low and Nit finding whose fix needs no decision,
   one full verify and the `ui_check` port, `mr reviewed` and `mr verified` on the tip, then
   `anomaly:ship` for the ready gate.
+
+## The architecture skill
+
+`anomaly:architecture` is model-invocable: it starts on "audit the architecture" or "what is good and
+bad here". It audits the repo in 7 areas against six principles and changes no source. Its text is
+`plugins/anomaly/skills/architecture/SKILL.md` (8 KB or less) with `reference/` beside it: the
+principles, the area outline, the pitfalls and one **stack profile** per stack (`react-ts`,
+`flutter`, `go`, `python`). Its only pre-approved tool is the CLI.
+
+- **Setup.** `worklog start architecture-<date> architecture`, then the stack profile is picked from
+  the repo's files (several matches are audited apart; no match gets a drafted stack profile that is
+  used only after your yes and saved only in `research/`). All facts come from git, and every claim
+  carries `file:line` and a count. Bulk reads go to `anomaly:facts` on the `explore` model role, with
+  effort when set.
+- **Pass one.** The 7 areas in order: layers and dependency direction, module depth, state
+  ownership, side effects and platform adapters, cohesion in the biggest feature, guards on the
+  five-rung ladder, decision records. Each area gets area findings, an area score from 1 to 5, a
+  **lock** and a one-sentence why, and is written to `.anomaly/architecture-<date>/research/`. A
+  summary table follows, with the change in area scores against an earlier run.
+- **Pass two.** After your yes, per area: one bad snippet from the repo, one good rewrite (not
+  applied), the lock as a file you can apply (none when a guard already holds it; an import or lint
+  rule at error level, or a test that fails before the fix), and the proposed work. Nothing is
+  implemented.
+- **Hand-off.** `worklog add` (stage `architecture`, `--docs` the unit folder), then the line that
+  fits: `/anomaly:interview Work unit architecture-<date>` for open choices,
+  `/anomaly:diagnose <defect>` with a `Red command:` per clear defect (none when pass two is
+  declined), or no line when nothing needs to change.
+
+## The research skill
+
+`anomaly:research` is model-invocable: it starts on "research with proofs", and the model suggests
+it in one line when a library, service or vendor choice rests on unverified facts; it starts only
+after your yes. It ends in a decision matrix whose every claim carries a source and one label. Its
+text is `plugins/anomaly/skills/research/SKILL.md` (8 KB or less) with `BRIEF-TEMPLATE.md` beside
+it: the brief, the evidence protocol, the labels, the search budget and the topic file shape. Its
+only pre-approved tool is the CLI.
+
+- **Scope and brief.** One dialog asks the kind (library, service or vendor), the work unit, the
+  options, the markets, the platforms and the user type. `worklog start <unit> research` runs, and the
+  brief is written to `.anomaly/<unit>/research/` at the next free number, with a file number for each
+  topic.
+- **Topics.** One `anomaly:survey` agent per topic (exactly one for a library run), in parallel, on the
+  `survey` model role, with effort when set. Each reads the brief and writes only its own topic file.
+- **Proofs.** The main session re-reads each deciding source from the live page. A "no clause" claim
+  needs the output of `terms-grep`, and a library fact needs the output of `pkg-facts`; a page that
+  failed to fetch proves nothing and stays `Unknown`. Each check is recorded in
+  `<NN>-verifications.md`.
+- **Matrix.** `<NN>-decision-matrix.md` names the facts that would flip the recommendation and ends in a
+  `Revisit by:` date. A library run has the main session write it; a service or vendor run has one
+  `anomaly:survey` agent do it. A vendor run may add passes (`-v2`, `-v3`), a stakeholder artifact and
+  vendor letters.
+- **Hand-off.** `worklog add` (stage `research`, `--docs` the unit folder), then one
+  `/anomaly:interview` line naming the latest matrix, or none for a standalone library run with one
+  clear winner.
+
+## The tests skill
+
+`anomaly:tests` is model-invocable: it starts on "test audit", "audit the tests" or "which tests can
+we cut". It audits one repo's tests and changes no source. Its text is
+`plugins/anomaly/skills/tests/SKILL.md` (8 KB or less) with `reference/` beside it: the topic map,
+classes, verdicts and cover rule, the shared grep recipes, the timing rules, the agent briefs, the
+output shapes, the pitfalls and one **stack profile** per stack (`fe`, `flutter`, `go`, `python`).
+Its only pre-approved tool is the CLI.
+
+- **Setup.** `worklog start test-audit-<date> tests`, then the stack profile is picked from the
+  repo's files (several stacks are audited apart; no match gets a drafted stack profile that is used
+  only after your yes and saved only in `research/`). Each topic (decision rule, e2e reason list,
+  bans, characterization) takes the audited repo's own test rule first, else the skill's own rule
+  text, else "no rule found"; a class with no rule gets no cut. Writes go only under
+  `.anomaly/test-audit-<date>/research/`, plus the git exclude line.
+- **Audit.** Under 60 test files the main session audits alone. From 60 files, value agents (one
+  `anomaly:survey` agent per scope, on the `survey` model role, with effort when set): 2 for 60 to
+  300 files, where the main session times the suite after them, and 3 to 5 above 300, followed by one
+  runtime agent that writes the timings. Every timing carries the CPU load beside it. Every row
+  answers what would break unnoticed if the test were gone; coverage is never the proof.
+- **Cover check.** Under 60 test files the main session re-reads every cover; above that a fresh
+  `anomaly:survey` agent does. A cover that is itself cut, tests another unit or asserts less does
+  not hold, and the row becomes `keep` or `rewrite`.
+- **Break probes.** After your yes, each cut candidate gets 1 to 3 breaks, written by hand in a
+  scratchpad copy of the tip, and a cut needs its cover to fail on the break. Without your yes those
+  candidates stay `open`, as "not probed".
+- **Hand-off.** `worklog add` (stage `tests`, `--docs` the unit folder), then the line that fits:
+  `/anomaly:interview Work unit test-audit-<date>` for open choices, `/anomaly:diagnose <defect>`
+  per clear defect, or no line when nothing needs to change.
 
 ## Development
 
