@@ -96,6 +96,89 @@ class SkillFileTest(unittest.TestCase):
                 self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')], tools[path.stem])
                 self.assertNotIn('model', fields)
 
+    DISPATCH_ROLES = ('review_code', 'review_feature', 'review_security', 'review', 'digest', 'browse', 'explore')   # implement and implement_wide are the implementer dispatch (ticket 06)
+    BARE_MODEL = re.compile(r'\bmodel\s+`?(?:sonnet|haiku|opus)\b|`?\b(?:sonnet|haiku|opus)\b`?\s+sub-?agent', re.I)
+    BUILT_IN_EXPLORE = re.compile(r'\bExplore\b|`explore`\s+sub-?agents?|\bexplore\s+agent')   # the built-in agent, or the old "explore sub-agent" wording
+    OLD_FACTS_DISPATCH = re.compile(r'\bmodel\s+`?explore\b|`explore`\s+sub-?agents?', re.I)
+
+    def dispatch_files(self):
+        """Every skill file (SKILL.md and the docs beside it) and every agent file: where a dispatch can be written.
+        README output examples are not dispatches, so the README is out."""
+        return sorted((PLUGIN / 'skills').rglob('*.md')) + sorted((PLUGIN / 'agents').rglob('*.md'))
+
+    def role_mention(self, role):
+        """`model <role>` or `<role> model` / `<role> role`, with or without backticks; `review` is not `review_code`."""
+        return re.compile(rf'\bmodel\b\W+(?:role\W+)?`?{role}\b(?!_)|`?\b{role}\b(?!_)`?\W+(?:model|role)\b')
+
+    def paragraphs(self, path):
+        """(first line number, text) of each list item, table row, heading or paragraph; a wrapped line joins its item."""
+        found, start, buf = [], 0, []
+        for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+            starts = re.match(r'\s*(?:[-*]\s|\d+\.\s|\||#)', line)
+            if buf and (not line.strip() or starts):
+                found.append((start, ' '.join(buf)))
+                buf = []
+            if line.strip():
+                if not buf:
+                    start = number
+                buf.append(line.strip())
+        if buf:
+            found.append((start, ' '.join(buf)))
+        return found
+
+    def test_no_dispatch_in_a_skill_or_agent_file_names_a_bare_model(self):
+        """AC-4, D-7: a model outside a model role cannot be tuned or measured; observe and assess named `sonnet`."""
+        for path in self.dispatch_files():
+            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
+                    self.assertIsNone(self.BARE_MODEL.search(line), line)
+
+    def test_no_skill_names_the_built_in_explore_agent(self):
+        """AC-9: facts go to `anomaly:facts`; the old `explore` sub-agent wording is the built-in's too."""
+        for path in sorted((PLUGIN / 'skills').rglob('*.md')):
+            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
+                    self.assertIsNone(self.BUILT_IN_EXPLORE.search(line), line)
+
+    def test_assess_and_observe_send_their_digests_to_the_digest_agent_on_the_digest_role(self):
+        """AC-4, D-7."""
+        for skill in ('assess', 'observe'):
+            text = (PLUGIN / 'skills' / skill / 'SKILL.md').read_text(encoding='utf-8')
+            with self.subTest(skill=skill):
+                self.assertIn('anomaly:digest', text)
+                self.assertRegex(text, self.role_mention('digest'))
+
+    def test_interview_diagnose_and_conduct_send_facts_to_the_facts_agent_and_no_skill_names_the_lookup_agent(self):
+        """AC-9, Amended 2026-10-10: `anomaly:facts` is the only facts agent; `anomaly:lookup` is not built."""
+        for skill in ('interview', 'diagnose', 'conduct'):
+            text = (PLUGIN / 'skills' / skill / 'SKILL.md').read_text(encoding='utf-8')
+            with self.subTest(skill=skill):
+                self.assertIn('anomaly:facts', text)
+                self.assertIsNone(self.OLD_FACTS_DISPATCH.search(text))
+        for path in self.dispatch_files():
+            with self.subTest(file=path.relative_to(PLUGIN).as_posix()):
+                self.assertNotIn('anomaly:lookup', path.read_text(encoding='utf-8'))
+
+    def test_the_review_skill_names_the_lens_role_of_each_reviewer(self):
+        """AC-4, D-3."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        for role in ('review_code', 'review_feature', 'review_security'):
+            with self.subTest(role=role):
+                self.assertIn(role, text)
+
+    def test_every_dispatch_that_names_a_model_role_or_a_model_agent_also_says_to_pass_the_effort(self):
+        """AC-4, Amended 2026-10-10 (ports value `<model> <effort>`): the rule is per paragraph, where a paragraph is
+        one list item, table row or text block with its wrapped lines. A paragraph that names a role (`model <role>`,
+        `<role> model`, `<role> role`, for every role but the implementer's) or the agent `anomaly:facts`,
+        `anomaly:digest` or `anomaly:docs` must also hold the word `effort`."""
+        dispatches = [self.role_mention(role) for role in self.DISPATCH_ROLES]
+        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs)\b'))
+        for path in self.dispatch_files():
+            for number, text in self.paragraphs(path):
+                if any(pattern.search(text) for pattern in dispatches):
+                    with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
+                        self.assertRegex(text, r'(?i)\beffort\b')
+
     def docs_agent_lines(self):
         """The docs agent's text as lines; fails while the file is missing."""
         self.assertTrue(self.DOCS_AGENT.is_file(), self.DOCS_AGENT.relative_to(PLUGIN).as_posix())

@@ -16,7 +16,7 @@ PORT_NAMES = {'implementer', 'test_writer', 'conventions', 'reviewers', 'gather'
               'ci', 'mr', 'commit', 'branch', 'ui_check', 'key_line', 'adr_folder'}
 COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')
 LENSES = 'anomaly:code, anomaly:feature, anomaly:security'
-MODEL_ROLES = ('explore', 'implement', 'implement_wide', 'lookup', 'digest', 'review', 'review_code',
+MODEL_ROLES = ('explore', 'implement', 'implement_wide', 'digest', 'review', 'review_code',
                'review_feature', 'review_security', 'deep_analysis', 'browse')
 REVIEW_LENSES = ('review_code', 'review_feature', 'review_security')
 EFFORT_LEVELS = ('low', 'medium', 'high', 'xhigh', 'max')
@@ -186,6 +186,8 @@ class ProfileKeysTest(unittest.TestCase):
         self.assertLessEqual(new, set(profile.OPTIONAL_KEYS))
         template = profile.parse_profile(TEMPLATE.read_text(encoding='utf-8'))
         self.assertLessEqual(new, set(template))
+        self.assertEqual(re.findall(r'^  (\w+): <model>$', TEMPLATE.read_text(encoding='utf-8'), re.M),
+                         list(MODEL_ROLES))   # one template line per role; the removed `lookup` has none
 
 
 class ModelRolesTest(PortsCase):
@@ -199,7 +201,6 @@ class ModelRolesTest(PortsCase):
             'explore': ('haiku', 'core default'),
             'implement': ('sonnet', 'core default'),
             'implement_wide': ('opus', 'core default'),
-            'lookup': ('haiku', 'core default'),
             'digest': ('sonnet', 'core default'),
             'review': ('opus', 'core default'),
             'deep_analysis': ('opus', 'core default'),
@@ -262,9 +263,9 @@ class ModelRolesTest(PortsCase):
                     self.assertEqual(len([line for line in lines if name in line]), 1 if name in set_vars else 0, name)
                 self.assertEqual(len(lines), len(set_vars))
 
-    def test_the_models_key_maps_a_new_role_with_an_effort_to_its_printed_model_line(self):
-        self.write_profile('models:', '  lookup: haiku medium')
-        value, source = self.section(self.ports(), 'model')['lookup']
+    def test_the_models_key_maps_a_role_with_an_effort_to_its_printed_model_line(self):
+        self.write_profile('models:', '  digest: haiku medium')
+        value, source = self.section(self.ports(), 'model')['digest']
         self.assertEqual(value, 'haiku medium')
         self.assertEqual(source, 'profile')
 
