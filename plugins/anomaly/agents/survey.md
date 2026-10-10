@@ -1,6 +1,6 @@
 ---
 name: survey
-description: Does one research or probe task a skill hands it. Searches and fetches the web, reads a repository, runs Bash and writes files, so it is not read-only. Dispatched by a skill with the model, the output path and a word limit.
+description: Does one research or probe task a skill hands it. Searches and fetches the web, reads a repository, runs Bash and writes files, so it is not read-only. Dispatched by a skill with the task, the model, the output path and a word limit.
 tools: Read, Grep, Glob, Bash, Write, WebSearch, WebFetch
 ---
 

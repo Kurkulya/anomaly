@@ -1415,12 +1415,12 @@ the `review` skill dispatches the first four, and it passes the model and effort
 role: `review_code` for `anomaly:code`, `review_feature` for `anomaly:feature`, `review_security`
 for `anomaly:security`, `review` for `anomaly:plan` and org reviewers. No agent file pins one. Each
 has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or
-fewer and a file of 6 KB or less. Two more read-only agents are readers, not
-reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model
-either, and keep the same size and description limits. The eighth, `anomaly:survey`, is the one
-agent that is not read-only: it runs Bash and writes files, for the research and tests dispatches
-([ADR-0020](docs/adr/0020-audit-skills-join-the-plugin.md)). It pins no model either and keeps the
-same limits.
+fewer and a file of 6 KB or less. Two more read-only agents are readers, not reviewers:
+`anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model either, and
+keep the same size and description limits. The eighth, `anomaly:survey` (eight agents in all), is
+the one agent that is not read-only: it runs Bash and writes files, for the research and tests
+dispatches ([ADR-0020](docs/adr/0020-audit-skills-join-the-plugin.md)). It pins no model either
+and keeps the same limits.
 
 | Agent | Checks | Modes |
 |---|---|---|
