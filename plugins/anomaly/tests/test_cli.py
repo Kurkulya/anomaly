@@ -86,13 +86,11 @@ class SkillFileTest(unittest.TestCase):
 
     def test_the_agents_are_the_reviewers_the_docs_agent_facts_digest_and_survey_each_with_its_own_tools_and_no_pinned_model(self):
         """AC-52: the docs agent is the fifth file; the size, description and tools checks run over every agent,
-        so they cover it once the file exists. AC-8, D-29: facts and digest are the sixth and seventh; the reviewers
-        and the docs agent keep Bash, facts reads and searches only, digest reads and fetches. AC-15, D-2, D-21:
-        survey is the eighth; it also runs Bash, writes files and searches and fetches the web."""
+        so they cover it once the file exists. AC-8, D-29: facts and digest are the sixth and seventh; AC-15, D-2, D-21: survey the eighth;
+        the reviewers and the docs agent keep Bash, facts reads and searches only, digest reads and fetches, survey also runs Bash, writes files and searches and fetches the web."""
         review_tools = ['Read', 'Grep', 'Glob', 'Bash']
         tools = {**dict.fromkeys([*lens.core_lenses(), lens.PLAN_LENS, self.DOCS_AGENT.stem], review_tools),   # plan: the plan-gate reviewer, outside the core lenses; docs: the docs audit's checks 4 and 5
-                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch'],
-                 'survey': ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'WebSearch', 'WebFetch']}
+                 'facts': ['Read', 'Grep', 'Glob'], 'digest': ['Read', 'WebFetch'], 'survey': ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'WebSearch', 'WebFetch']}
         self.assertEqual({path.stem for path in self.agents()}, set(tools))
         for path in self.agents():
             fields = frontmatter.split(path.read_text(encoding='utf-8'))[0]
@@ -178,10 +176,10 @@ class SkillFileTest(unittest.TestCase):
         """AC-4, Amended 2026-10-10 (ports value `<model> <effort>`): the rule is per paragraph, where a paragraph is
         one list item, table row or text block with its wrapped lines. A paragraph that names a role (`model <role>`,
         `<role> model`, `<role> role`, for every model role, `implement` and `implement_wide` included) or the agent `anomaly:facts`,
-        `anomaly:digest` or `anomaly:docs`, the phrase "model role(s)" or a backticked lens role (the review
+        `anomaly:digest`, `anomaly:docs` or `anomaly:survey`, the phrase "model role(s)" or a backticked lens role (the review
         skill's model line) must also hold the word `effort`."""
         dispatches = [self.role_mention(role) for role in self.DISPATCH_ROLES]
-        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs)\b|(?i:\bmodel roles?\b)|`review_(?:code|feature|security)`'))
+        dispatches.append(re.compile(r'\banomaly:(?:facts|digest|docs|survey)\b|(?i:\bmodel roles?\b)|`review_(?:code|feature|security)`'))
         for path in self.dispatch_files():
             for number, text in self.paragraphs(path):
                 if any(pattern.search(text) for pattern in dispatches):
