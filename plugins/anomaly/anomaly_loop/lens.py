@@ -21,7 +21,8 @@ Session and lens names are single tokens (privacy.check_identifier, ADR-0003). T
 the batch file, so it holds no ":" either (privacy.check_file_token), in `add` as in `sum`. A lens is
 one of the review lenses (allowed_names): each core reviewer under its short name (`anomaly:code` is
 `code`) and each org reviewer under its adapter name, read from the `reviewers` port (ports.resolve),
-`plan`, the plan-gate reviewer, and `interview`, the interview's own recommendations.
+`plan`, the plan-gate reviewer, `interview`, the interview's own recommendations, and `model_pick`,
+build's verdict on a ticket's model pick.
 """
 from . import files, paths, ports, privacy, records
 from .constants import LENS_BATCH_FILE, LENS_TALLY_FILE
@@ -31,6 +32,7 @@ LABEL = 'lens tally'
 REVIEWERS_PORT = 'reviewers'
 PLAN_LENS = 'plan'   # the plan-gate reviewer (`anomaly:plan`) is no port reviewer, so its lens is always allowed
 INTERVIEW_LENS = 'interview'   # the interview's recommendations (accepted, rejected, revised) are no port reviewer's, so this lens is always allowed too
+MODEL_PICK_LENS = 'model_pick'   # build's verdict on an `implement` ticket's model pick (rejected, accepted) is no port reviewer's either
 
 
 def is_run(row):
@@ -68,9 +70,10 @@ def core_lenses():
 
 
 def allowed_names(home):
-    """The lens names the `reviewers` port gives for the profile in `home`, plus `plan` and `interview`."""
+    """The lens names the `reviewers` port gives for the profile in `home`, plus `plan`, `interview` and `model_pick`."""
     reviewers = ports.port(ports.resolve(home), REVIEWERS_PORT).values
-    return tuple(dict.fromkeys((*(lens_name(reviewer) for reviewer in reviewers), PLAN_LENS, INTERVIEW_LENS)))
+    return tuple(dict.fromkeys((*(lens_name(reviewer) for reviewer in reviewers), PLAN_LENS, INTERVIEW_LENS,
+                                MODEL_PICK_LENS)))
 
 
 def check_names(session, lens=None):
@@ -98,7 +101,7 @@ def register(commands, common):
     add = steps.add_parser('add', parents=[common], help="store one reviewer's accepted and rejected counts over its rounds")
     add.add_argument('--session', required=True, help='the session id (one word)')
     add.add_argument('--lens', required=True,
-                     help=f"the lens name: {', '.join(core_lenses())}, {PLAN_LENS}, {INTERVIEW_LENS} or an org reviewer's adapter name")
+                     help=f"the lens name: {', '.join(core_lenses())}, {PLAN_LENS}, {INTERVIEW_LENS}, {MODEL_PICK_LENS} or an org reviewer's adapter name")
     add.add_argument('--accepted', required=True, type=records.count_option,
                      help='findings accepted (fixed or kept as open)')
     add.add_argument('--rejected', required=True, type=records.count_option, help='findings rejected (judged wrong)')
