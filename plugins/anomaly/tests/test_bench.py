@@ -437,7 +437,11 @@ class ErrorTest(ScoreCase):
 
     def test_more_than_three_runs_are_refused(self):
         runs = [self.write_run('fine', name=f'run{n}.txt') for n in range(4)]
-        self.assert_error(self.score(self.write_list([defect('D1')]), *runs), '1 to 3 runs, got 4')
+        listing = str(self.write_list([defect('D1')]))
+        for action in ('score', 'facts'):   # the count is checked before the list is read
+            with self.subTest(action=action):
+                self.assert_error(run_cli('bench', action, listing, *(str(run) for run in runs)),
+                                  f'bench {action} takes 1 to 3 runs, got 4')
 
     def test_a_missing_argument_is_a_usage_error_on_one_line(self):
         self.assert_error(run_cli('bench', 'score'))
@@ -754,13 +758,9 @@ class FactsFixtureTest(FactsCase):
         return json.loads(self.PATH.read_text(encoding='utf-8'))
 
     def test_the_real_fixture_loads_with_its_questions_expected_facts_and_decoys(self):
-        spec = self.spec()
+        self.spec()
         loaded = bench.load_facts(self.PATH)
-        self.assertGreaterEqual(len(loaded.questions), 3)
-        self.assertGreaterEqual(len(loaded.facts), 1)
-        self.assertGreaterEqual(len(loaded.decoys), 1)
-        self.assertEqual((len(loaded.questions), len(loaded.facts), len(loaded.decoys)),
-                         (len(spec['questions']), len(spec['facts']), len(spec['decoys'])))
+        self.assertEqual((len(loaded.questions), len(loaded.facts), len(loaded.decoys)), (3, 6, 5))
 
     def test_the_questions_cover_a_3_file_call_chain_a_moved_claim_and_callers_that_can_pass_none(self):
         spec = self.spec()
@@ -780,7 +780,36 @@ class FactsFixtureTest(FactsCase):
             for item in spec[kind]:
                 for place in item['places']:
                     with self.subTest(item=item['id']):
-                        self.assertTrue((self.PATH.parent / 'base' / place['file']).is_file(), place['file'])
+                        path = self.PATH.parent / 'base' / place['file']
+                        self.assertTrue(path.is_file(), place['file'])
+                        self.assertLessEqual(place['lines'][1], len(path.read_text(encoding='utf-8').splitlines()),
+                                             place['file'])
+
+    def test_a_facts_list_that_does_not_fit_is_refused(self):
+        def edit(change):
+            def apply(data):
+                change(data)
+                return data
+            return apply
+
+        cases = {
+            'a bad kind': edit(lambda d: d['questions'][0].update(kind='guess')),
+            'a fact with an unknown question': edit(lambda d: d['facts'][0].update(question='Q9')),
+            'a decoy with an unknown question': edit(lambda d: d['decoys'][0].update(question='Q9')),
+            'an id used twice': edit(lambda d: d['facts'][1].update(id='F1')),
+            'a fact with no places': edit(lambda d: d['facts'][0].update(places=[])),
+            'an empty facts list': edit(lambda d: d.update(facts=[])),
+            'no questions': edit(lambda d: d.pop('questions')),
+        }
+        for name, change in cases.items():
+            data = {'fixture': 'demo', 'questions': [{'id': 'Q1', 'kind': 'call-chain', 'ask': 'where?'}],
+                    'facts': [json.loads(json.dumps(self.FACT_A)), json.loads(json.dumps(self.FACT_B))],
+                    'decoys': [json.loads(json.dumps(self.DECOY))]}
+            path = self.root / 'bad.json'
+            write_text(path, json.dumps(change(data)))
+            with self.subTest(case=name), self.assertRaises(bench.RecordError) as raised:
+                bench.load_facts(path)
+            self.assertIn('bad.json', str(raised.exception))
 
 
 class FactsScoreTest(FactsCase):
@@ -809,6 +838,12 @@ class FactsScoreTest(FactsCase):
         result = self.score_text(*prose)
         self.assertEqual((list(result.found), list(result.decoy_hits)), ([], []))
 
+    def test_a_near_miss_answer_line_is_refused_with_its_file_and_line_number(self):
+        for line in ('- `a.py`:7 — x', '- a.py:7-10 — x', '- **a.py:7** — x'):
+            with self.subTest(line=line), self.assertRaises(bench.RecordError) as raised:
+                bench.parse_answers(f'prose first\n{line}\n', 'answers.txt')
+            self.assertIn('answers.txt:2', str(raised.exception))
+
     def test_empty_answer_text_is_refused(self):
         for text in ('', '  \n\n'):
             with self.subTest(text=text), self.assertRaises(bench.RecordError) as raised:
@@ -821,8 +856,7 @@ class FactsCommandTest(FactsCase):
         answers = self.write_run(self.answer('a.py', 11), self.answer('old.py', 30), 'some prose', name='answers.txt')
         code, out, err = run_cli('bench', 'facts', str(self.write_facts()), str(answers))
         self.assertEqual((code, err), (0, ''))
-        self.assertRegex(out, r'(?i)found[^\n]*\b1\b')
-        self.assertIn('X1', out)
+        self.assertIn('run 1: found 1 (F1), missed 1 (F2), decoy hits 1 (X1)', out)
 
 
 if __name__ == '__main__':
