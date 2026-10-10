@@ -18,7 +18,8 @@ A batch is {"sightings": [...], "lenses": [...], "kind": {...}}; every key is op
 The whole batch is checked before anything is written. Then: occurrences + 1, `last_seen` and a
 new first line in `## Sightings` for a match (a `fixed` anomaly becomes `reopened`, a `wontfix`
 one keeps its status), a new file otherwise; new lens lines and the kind override are appended, a
-replaced lens line rewrites the whole file in one step; the index is regenerated (the reply then
+replaced lens line rewrites the whole file in one step with every other line kept byte-for-byte
+(re-read at write time, damaged lines included); the index is regenerated (the reply then
 lists the top anomalies by score); and when home is inside a git repository only the paths
 written, plus the index, are committed.
 
@@ -216,14 +217,13 @@ def lens_change(stored, record):
 
 
 def record_lenses(home, lens_records):
-    """(lens lines to append, every line of lenses.jsonl when a stored one was replaced or else None, lines
-    to print). One line per session and lens: a new one is appended, larger totals replace the stored line
+    """(new lens records to append, records that replace a stored line keyed by (session, lens), lines to
+    print). One line per session and lens: a new one is appended, larger totals replace the stored line
     in place, the same totals write nothing, and a smaller value refuses the whole batch."""
-    rows = records.load_lenses(home)
-    at = {}
-    for number, row in enumerate(rows):
-        at.setdefault((row.get('session_id'), row.get('lens')), number)
-    appended, replaced, lines = [], False, []
+    stored = {}
+    for row in records.load_lenses(home):
+        stored.setdefault((row.get('session_id'), row.get('lens')), row)
+    appended, replaced, lines = {}, {}, []
     for record in lens_records:
         name, key = record['lens'], (record['session_id'], record['lens'])
         revised = f', revised {record["revised"]}' if 'revised' in record else ''
@@ -231,23 +231,41 @@ def record_lenses(home, lens_records):
         if not record['accepted'] and not record['rejected']:
             lines.append(f'skipped: lens {name} has no accepted or rejected findings')
             continue
-        if key not in at:
-            at[key] = len(rows)
-            rows.append(record)
-            appended.append(record)
+        current = appended.get(key) or replaced.get(key) or stored.get(key)
+        if current is None:
+            appended[key] = record
             lines.append(f'lens: {name} logged {counts}')
             continue
-        change = lens_change(rows[at[key]], record)
+        change = lens_change(current, record)
         if change == 'smaller':
             raise RecordError(f'lens {name}: session {record["session_id"]} already has a line with a larger '
                               f'accepted, rejected or revised count than {counts}; a tally sum only grows')
         if change == 'same':
             lines.append(f'skipped: lens {name} already logged for this session')
             continue
-        rows[at[key]] = record
-        replaced = True
+        (appended if key in appended else replaced)[key] = record
         lines.append(f'lens: {name} replaced {counts}')
-    return appended, (rows if replaced else None), lines
+    return list(appended.values()), replaced, lines
+
+
+def rewrite_lenses(home, replaced, appended):
+    """Re-read lenses.jsonl and write it back in one step: the first line of each replaced (session, lens)
+    key becomes its new record, every other line stays byte-for-byte (a damaged one included), and the
+    `appended` records follow at the end. A replaced key no longer in the file is added at the end too."""
+    path = Path(home) / LENSES_FILE
+    lines = read_input(path, keep_bom=True).split('\n')
+    if lines[-1] == '':
+        lines.pop()
+    left = dict(replaced)
+    for number, line in enumerate(lines):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        key = (row.get('session_id'), row.get('lens')) if isinstance(row, dict) else None
+        if key in left:
+            lines[number] = dump(left.pop(key))
+    write_lines(path, lines + [dump(record) for record in [*left.values(), *appended]])
 
 
 def record_kind(home, kind_record):
@@ -309,16 +327,16 @@ def apply_batch(home, batch, today):
         return ['nothing to record']
     anomalies = {a.signature: a for a in records.load_anomalies(home, strict=True)}
     lines, changed, counted = record_sightings(anomalies, batch.sightings, today.isoformat())
-    lens_records, lens_rows, lens_lines = record_lenses(home, batch.lenses)
+    lens_records, lens_replaced, lens_lines = record_lenses(home, batch.lenses)
     kind_record, kind_line = record_kind(home, batch.kind) if batch.kind else (None, None)
 
     written = write_anomalies(home, today, anomalies, changed)
-    if lens_rows is not None:
-        write_lines(Path(home) / LENSES_FILE, [dump(row) for row in lens_rows])
+    if lens_replaced:
+        rewrite_lenses(home, lens_replaced, lens_records)
     else:
         for record in lens_records:
             records.append_lens(home, record)
-    lens_written = lens_records or lens_rows is not None
+    lens_written = bool(lens_records or lens_replaced)
     if kind_record:
         records.append_session_kind(home, kind_record)
     written += [Path(home) / name for name, wrote in ((LENSES_FILE, lens_written),
