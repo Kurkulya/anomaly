@@ -80,7 +80,8 @@ git log --format=%h -- CLAUDE.md | wc -l                                        
 
 **`docs scan`.** Run the `docs scan` call of `SKILL.md`. It owns the overdue revisit dates, the
 deferrals with no owner or date and the dead paths in `CLAUDE.md`: report its lines as it prints
-them, and never grep for these by hand.
+them. It reads TODO only; count the other deferral words with
+`git grep -nwE "FIXME|HACK|follow-up" -- <source files> | grep -v /tests/ | wc -l`.
 
 **The two docs checks.**
 
