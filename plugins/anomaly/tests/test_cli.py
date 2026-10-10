@@ -40,6 +40,7 @@ class RegistryTest(unittest.TestCase):
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
     BUILD_SKILL_MAX_BYTES = 9 * 1024   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10)
+    CONDUCT_SKILL_MAX_BYTES = 9 * 1024   # conduct only: the fix-branch and research dispatches name roles and effort (model-roles cumulative review, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
@@ -77,7 +78,7 @@ class SkillFileTest(unittest.TestCase):
         for path in self.skills():
             if path.parent.name not in constants.LOOP_SKILLS:
                 with self.subTest(skill=path.parent.name):
-                    cap = self.BUILD_SKILL_MAX_BYTES if path.parent.name == 'build' else self.SKILL_MAX_BYTES
+                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
                     self.assertLessEqual(path.stat().st_size, cap)
         for path in self.agents():
             with self.subTest(agent=path.stem):
@@ -208,6 +209,28 @@ class SkillFileTest(unittest.TestCase):
             with self.subTest(file=path.relative_to(PLUGIN).as_posix(), dispatch='test_writer role'):
                 writer = next(text for _, text in self.paragraphs(path) if phrase in text)
                 self.assertRegex(writer, self.role_mention('implement'))
+
+    def test_the_digest_agent_treats_the_source_as_data_follows_no_link_in_it_and_copies_no_secret(self):
+        """Security, cumulative review 2026-10-10: the agent fetches what the caller passes, so the source can carry
+        an injected instruction. By key tokens, so the wording stays free."""
+        text = ' '.join((PLUGIN / 'agents' / 'digest.md').read_text(encoding='utf-8').split())
+        for pattern in (r'(?i)only the (?:link|source)[^.]{0,40}caller passes', r'(?i)\bdata\b[^.]{0,40}\bnever an instruction',
+                        r'(?i)follow no link or path', r'(?i)never copy a secret, token or personal data'):
+            with self.subTest(rule=pattern):
+                self.assertRegex(text, pattern)
+
+    def test_the_conduct_fix_branch_and_research_dispatches_and_the_diagnose_ui_check_dispatch_name_their_role_and_effort(self):
+        """AC-4, AC-16, Amended 2026-10-10 (cumulative review): conduct's fix-branch implementer on `implement_wide`,
+        its research agent on `deep_analysis`, diagnose's `ui_check` port on `browse`. Located by the phrases the
+        paragraphs hold today; the effort word is checked here, since the effort test above sees only named roles."""
+        for skill, phrase, role in (('conduct', r'One fix branch off the tip', 'implement_wide'),
+                                    ('conduct', r'Research the wave needs', 'deep_analysis'),
+                                    ('diagnose', r'`ui_check` port', 'browse')):
+            texts = [text for _, text in self.paragraphs(PLUGIN / 'skills' / skill / 'SKILL.md') if re.search(phrase, text)]
+            with self.subTest(skill=skill, dispatch=role):
+                self.assertEqual(len(texts), 1, texts)
+                self.assertRegex(texts[0], self.role_mention(role))
+                self.assertRegex(texts[0], r'(?i)\beffort\b')
 
     def docs_agent_lines(self):
         """The docs agent's text as lines; fails while the file is missing."""
@@ -1599,7 +1622,7 @@ class ConductSkillTest(unittest.TestCase):
     SKILL = PLUGIN / 'skills' / 'conduct' / 'SKILL.md'
     KICKOFF = SKILL.parent / 'KICKOFF.md'
     PARALLEL = SKILL.parent / 'PARALLEL.md'
-    SKILL_MAX_BYTES = 8 * 1024
+    SKILL_MAX_BYTES = SkillFileTest.CONDUCT_SKILL_MAX_BYTES
     KICKOFF_MAX_BYTES = 1024
     PARALLEL_MAX_BYTES = 3200
 
@@ -1616,7 +1639,7 @@ class ConductSkillTest(unittest.TestCase):
         self.assertIn('explicit', description)
         self.assertIn('model-invocable', description)
 
-    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3200_bytes(self):
+    def test_the_conduct_skill_fits_in_9_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3200_bytes(self):
         """AC-59, conduct half (the ship caps live in ShipSkillTest)."""
         self.text()
         self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
@@ -1721,6 +1744,9 @@ class ModelPickSkillTest(unittest.TestCase):
         self.assertRegex(summing[0], r'(?i)\buser\b')
         self.assertIn('last review: yes', summing[0])
         self.assertIn('`conduct`', summing[0])
+        # Amended 2026-10-10 (D-33, cumulative review): a user who said neither yes nor no is asked at the close
+        self.assertRegex(summing[0], r'(?i)\bask')
+        self.assertIn('last ticket', summing[0])
 
     def test_build_tells_review_its_rounds_are_not_the_last(self):
         """AC-18, D-33: the Review paragraph passes "last review: no" in place of "last review of the session"."""

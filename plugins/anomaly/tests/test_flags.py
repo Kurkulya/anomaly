@@ -343,7 +343,7 @@ class LensRatesTest(FlagsCase):
         self.add('s4', 'feature', 2, 0)
         self.add('s5', 'quiet', 0, 0)
         self.assertEqual(flags.lens_rates(self.context), [
-            '## Review lenses', '- code: 7 of 9 accepted (78%) in 2 sessions',
+            '## Lenses', '- code: 7 of 9 accepted (78%) in 2 sessions',
             '- security: 2 of 3 accepted (67%) in 2 sessions', '- feature: 2 of 2 accepted (100%) in 1 session'])
 
     def test_no_lens_lines_means_no_section(self):
@@ -355,7 +355,7 @@ class LensRatesTest(FlagsCase):
             f.write('{"session_id":"s2","lens":"code-review","accepted":"many","rejected":1}\n')
             f.write('{"session_id":"s3","lens":"","accepted":1,"rejected":1}\n')
         self.assertEqual(flags.lens_rates(self.context),
-                         ['## Review lenses', '- code-review: 1 of 2 accepted (50%) in 1 session'])
+                         ['## Lenses', '- code-review: 1 of 2 accepted (50%) in 1 session'])
 
 
 class UnusedSkillsTest(FlagsCase):
@@ -592,7 +592,7 @@ class DigestWiringTest(FlagsCase):
         code, out, err = run_cli('digest', '--home', str(self.home), '--user-config', str(self.root / 'uc'),
                                  '--plugin-root', str(self.root / 'plug'))
         self.assertEqual((code, err), (0, ''))
-        for heading in ('## Stale anomalies', '## Review lenses'):
+        for heading in ('## Stale anomalies', '## Lenses'):
             self.assertIn(heading, out)
         self.assertNotIn('## Repeated actions', out)
 

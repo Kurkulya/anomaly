@@ -270,12 +270,13 @@ def result_text(block):
 
 def read_call(entry, message, calls):
     """Add the usage of an assistant entry to `calls` (one call per message id). Returns True when the
-    entry is skipped for a missing `model` or `usage`; a `<synthetic>` entry is skipped without being counted."""
+    entry is skipped for a missing `model` (or one that is not a string) or `usage`; a `<synthetic>` entry is
+    skipped without being counted."""
     usage = message.get('usage')
     model = message.get('model')
     if model == '<synthetic>':
         return False
-    if not isinstance(usage, dict) or not model:
+    if not isinstance(usage, dict) or not model or not isinstance(model, str):
         return True
     key = message.get('id') or entry.get('uuid') or id(entry)
     call = calls.setdefault(key, {'model': model, 'tokens': new_bucket(), 'skill': None, 'agent': None})

@@ -89,9 +89,9 @@ No `Tests:` line: 1-2, 3 if the area has e2e specs, 4 for a UI ticket. [N10] Fai
 1. `seams prune`. An `ambiguous:` line: ask the user.
 2. `seams add` per new single-owner seam, after a grep for a second owner; owner as `` `<path>` (`name`, …) ``.
 3. `ticket result` with `--branch` and every count, 0 included (resuming: only the counts you know); `--open` lists flakes and kept findings, if any.
-4. `lens tally add --lens model_pick` for an `implement` ticket (`implement_wide` adds no line; a ticket with no `Model:` line counts as `implement`): its `fix rounds` (the `--fix-rounds` count you passed) 2 or more: `--accepted 0 --rejected 1`, else `--accepted 1 --rejected 0`. Resuming (count unknown): add no line.
+4. `lens tally add --lens model_pick` for an `implement` ticket (`implement_wide` adds no line; no `Model:` line counts as `implement`): its `fix rounds` (`--fix-rounds` passed) 2 or more: `--accepted 0 --rejected 1`, else `--accepted 1 --rejected 0`. Resuming (count unknown): add no line.
 5. `worklog add`.
-6. After the close, when your caller said "last review: yes" (the user on the session's last ticket, or `conduct` with one ticket): `lens tally sum`, then `observe apply --file <printed path>`.
+6. After the close, if your caller said "last review: yes" (the user, or `conduct` with one ticket), or the user said nothing on it and, asked "last ticket of the session?", says yes: `lens tally sum`, then `observe apply --file <printed path>`.
 
 Only these ticket lines and `seams.md` change. [O47]
 
