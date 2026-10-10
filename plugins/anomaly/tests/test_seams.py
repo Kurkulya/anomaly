@@ -371,3 +371,18 @@ class PruneTest(SeamsTestCase):
         listed = [text for text in out.splitlines() if 'pair' in text]
         self.assertEqual(len(listed), 1, out)
         self.assertTrue(listed[0].startswith('renamed'), listed[0])
+
+    def test_a_bare_file_name_with_an_extension_is_an_owner_path_and_keeps_its_bare_form_when_renamed(self):
+        self.repo.write('plugins/x/a.md', '# a\n')
+        self.repo.write('plugins/x/b.md', '# b\n')
+        self.change('add the two docs')
+        line = '- docs pair · `plugins/x/a.md`, `b.md` · replaces copies (ticket 01)\n'
+        write_text(self.ledger, line)
+        self.repo.git('mv', 'plugins/x/b.md', 'plugins/x/c.md')
+        self.change()
+        code, out, err = self.prune()
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.read(), line.replace('`b.md`', '`c.md`'))
+        listed = [text for text in out.splitlines() if 'docs pair' in text]
+        self.assertEqual(len(listed), 1, out)
+        self.assertTrue(listed[0].startswith('renamed'), listed[0])
