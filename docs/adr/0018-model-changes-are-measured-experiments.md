@@ -16,7 +16,7 @@ The profile's `models` key maps five roles to models (`constants.MODEL_ROLES`), 
 
 ## Decision
 
-- **One agent per kind of dispatch.** `anomaly:digest` (Read, WebFetch) for long sources; for facts one agent, `anomaly:facts`; the facts bench passed haiku, so there is no `anomaly:lookup`, pending a headless re-run with the real agent before the MR is ready. No agent file has a `model` key.
+- **One agent per kind of dispatch.** `anomaly:digest` (Read, WebFetch) for long sources; for facts one agent, `anomaly:facts`; the first facts bench (Read-only general-purpose subagents) passed haiku, but the headless re-run with the real agent failed it, so `explore` stays on sonnet, there is one facts agent, and `anomaly:lookup` is left for a later unit. No agent file has a `model` key.
 - **One model role per agent**, and optional per-lens reviewer roles that fall back to `review`. A role value is `<model>` or `<model> <effort>`.
 - **New metric** `model-weighted tokens per dispatch <agent>`: per session, the agent's weighted tokens with each API call times its model factor, divided by its dispatch count. Factors are API list prices relative to sonnet, kept as one dated constant: haiku 0.05 (0.25 over 100k prompt tokens), sonnet 1, opus 2, fable 5. A model without a factor is skipped and counted, never guessed. Existing metrics keep their meaning (ADR-0013).
 - **Experiments change one setting of one role**, the model or the effort. A cheaper reviewer model passes the reviewer bench first; a cheaper facts model passes the facts bench (`bench facts`) first.

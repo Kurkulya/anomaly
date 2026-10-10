@@ -175,7 +175,7 @@ first line). An extend port lists every such line after the repo's own docs. The
 **Model roles.** `models` maps each role to a model, and optionally an effort: a role value is
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
-one `anomaly:` line naming the role. Without the key: `explore` haiku, `implement` sonnet,
+one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
 `implement_wide` opus, `digest` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
@@ -282,7 +282,7 @@ command e2e = [unresolved]
 command install = [unresolved]
 command codegen = [unresolved]
 command hook_path = [unresolved]
-model explore = haiku [core default]
+model explore = sonnet [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
 model digest = sonnet [core default]
@@ -1289,22 +1289,23 @@ three answers files.
 
 Pass bar for the `explore` role: three runs on haiku and three on sonnet. Haiku passes when its
 median found count is at least sonnet's and no haiku run hits a decoy. Then `explore` defaults to
-haiku; else `anomaly:lookup` (a find-and-quote agent) is added and `explore` stays sonnet. Before
+haiku; else `explore` stays sonnet (a find-and-quote `anomaly:lookup` agent is left for later). Before
 the medians are compared, check that each run produced answer lines: a run whose answers all
 failed to parse also shows found 0. The bar is not printed by the command.
 
-Scores, 2026-10-10 (3 runs each, every run produced 7 to 9 answer lines):
+Scores, 2026-10-10: three runs each, headless `claude -p --agent anomaly:facts` (the real agent,
+with Read, Grep and Glob), each run on its own copy of `base/`. The first bench, with Read-only
+general-purpose subagents, passed haiku and was replaced by this run.
 
 | Model | Found, per run | Median found | Decoys hit, per run | Median hit |
 |---|---|---|---|---|
-| haiku | 4, 5, 5 of 6 | 5 | 0, 0, 0 | 0 |
-| sonnet | 5, 6, 5 of 6 | 5 | 2, 0, 0 | 0 |
+| haiku | refused, 6, 4 of 6 | 5 (2 parsed runs) | –, 0, 0 | 0 |
+| sonnet | 6, 6, 6 of 6 | 6 | 2, 0, 2 | 2 |
 
-Haiku passes, so `explore` defaults to haiku and no `anomaly:lookup` agent exists. The two sonnet
-decoy hits were X4 and X5, from one run that put rejected call sites in answer lines. The runs were
-general-purpose subagents that carried the `agents/facts.md` brief text, with only the Read tool
-(no Grep or Glob in that session), each on its own copy of `base/`; F6 (the caller in a module no
-other file imports) was found only by the one run that guessed its file name.
+Haiku fails the bar: its median found count, 5, is below sonnet's, 6. Its first run was refused by
+`bench facts`: it wrote 4 rejected call sites as answer-shaped bullets with backticked paths. So
+`explore` stays sonnet, `anomaly:facts` is the only facts agent, and `anomaly:lookup` is left for a
+later unit. The sonnet decoy hits are X4 and X5, rejected call sites in answer lines.
 
 ## The build skill
 
