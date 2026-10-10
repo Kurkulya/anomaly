@@ -868,7 +868,7 @@ class PlanReviewerTest(unittest.TestCase):
             with self.subTest(doc=path.name):
                 self.assertEqual(len(items), 1, items)
             item = items[0] if items else ''
-            for phrase in ('Blocker', 'concrete case', 'different actions', 'not a Blocker') + subjects:
+            for phrase in ('are a Blocker only when', 'concrete case', 'different actions', 'not a Blocker') + subjects:
                 with self.subTest(doc=path.name, phrase=phrase):
                     self.assertIn(phrase, item)
 
