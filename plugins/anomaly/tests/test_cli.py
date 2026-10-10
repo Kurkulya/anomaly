@@ -1033,8 +1033,8 @@ class InterviewSkillTest(unittest.TestCase):
                              'the Recommend line lacks "⚠️ **Risk:**" then "🔗 **Conflicts:**"')
         with self.subTest('the template lists its options with bold capital letters'):
             for letter in 'AB':
-                self.assertTrue(any(line.startswith(f'- **{letter}) ') for line in template),
-                                f'the round template has no option line starting "- **{letter}) "')
+                self.assertTrue(any(line.startswith(f'- **{letter})** ') for line in template),
+                                f'the round template has no option line starting "- **{letter})** "')
             self.assertFalse([line for line in template if re.match(r'- [a-z]\) ', line)],
                              'the round template still has a lowercase "- a) " option line')
         with self.subTest('the template has a blank line between its blocks'):
