@@ -155,6 +155,7 @@ TICKET_STATUS_WONTFIX = 'wontfix'
 # ---------- pipeline skills ----------
 
 LOOP_SKILLS = ('measure', 'observe', 'calibrate', 'assess')   # every other skill is a pipeline skill
+PLUGIN_AGENTS_DIR = 'agents'         # the plugin's agent files: <plugin folder>/agents/<agent>.md
 CLI_COMMAND = 'python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py"'   # the one way a skill runs the CLI
 CLI_PATTERN = f'Bash({CLI_COMMAND} *)'   # the one entry of a pipeline skill's allowed-tools
 

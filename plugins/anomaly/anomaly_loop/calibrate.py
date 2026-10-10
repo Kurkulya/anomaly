@@ -40,8 +40,8 @@ from pathlib import Path
 
 from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
-                        GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS, SIGHTING_MAX_CHARS,
-                        WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
+                        GUARD_HELP, IMPACT_RANGE, PLUGIN_AGENTS_DIR, QUALITY_GUARDS, SESSION_KINDS,
+                        SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
 from .files import RecordError
 
 MERGED_HEADING = 'Merged'
@@ -194,12 +194,23 @@ def plugin_part(context, target, plugin):
     when it is a path inside the plugin folder or its checkout's plugin folder (flags.target_path), or
     `<plugin name>:...` (flags.names_this_plugin). The part is a skill (`<plugin>:<skill>` or a path inside
     `skills/<skill>/`), an agent (`<plugin>:<agent>` or `agents/<agent>.md`), or else (name and unit None)
-    plugin code or docs, or a `<plugin>:...` that names no skill or agent. After `<plugin>:` only the first
-    word counts, so `anomaly:review step 10` is the review skill. `plugin` is gitrepo.plugin_repo's answer."""
+    plugin code or docs, or a `<plugin>:...` that names no skill or agent. The qualifier ends at the first
+    `:` and is read before any path, and after it only the first word counts, so `anomaly:review step 10:
+    delta` and `anomaly:review asks and/or skips` are the review skill. `plugin` is gitrepo.plugin_repo's answer."""
     target = target.strip()
     if not target:
         return None
     root = Path(context.plugin_root)
+    qualifier, colon, rest = target.partition(':')   # flags.resolve_target reads a target differently (paths first)
+    if colon and flags.names_this_plugin(context, qualifier, plugin):
+        name = (rest.split() or [''])[0]
+        if not privacy.is_identifier(name) or ':' in name:
+            return PluginPart(None, False, None)
+        if (root / 'skills' / name / flags.SKILL_FILE).is_file():
+            return PluginPart(name, False, root / 'skills' / name)
+        if (root / PLUGIN_AGENTS_DIR / f'{name}.md').is_file():
+            return PluginPart(name, True, root / PLUGIN_AGENTS_DIR / f'{name}.md')
+        return PluginPart(None, False, None)
     if flags.is_path(target):
         found = flags.target_path(context, target, plugin)
         folders = [root] + ([Path(plugin[1])] if plugin else [])
@@ -209,18 +220,10 @@ def plugin_part(context, target, plugin):
         parts = found.resolve().relative_to(base.resolve()).parts
         if len(parts) >= 2 and parts[0] == 'skills' and (base / 'skills' / parts[1] / flags.SKILL_FILE).is_file():
             return PluginPart(parts[1], False, base / 'skills' / parts[1])
-        if len(parts) == 2 and parts[0] == addenda.AGENTS and found.suffix == '.md' and found.is_file():
+        if len(parts) == 2 and parts[0] == PLUGIN_AGENTS_DIR and found.suffix == '.md' and found.is_file():
             return PluginPart(found.stem, True, found)
         return PluginPart(None, False, None)
-    qualifier, colon, name = target.rpartition(':')
-    if not (colon and flags.names_this_plugin(context, qualifier, plugin)):
-        return None
-    name = (name.split() or [''])[0]
-    if (root / 'skills' / name / flags.SKILL_FILE).is_file():
-        return PluginPart(name, False, root / 'skills' / name)
-    if (root / addenda.AGENTS / f'{name}.md').is_file():
-        return PluginPart(name, True, root / addenda.AGENTS / f'{name}.md')
-    return PluginPart(None, False, None)
+    return None
 
 
 def changes_this_plugin(context, target):
@@ -244,8 +247,12 @@ def fix_home(context, target, plugin):
         return UPSTREAM_DEFECT
     if takes_no_addenda(part):
         return f'fix home: none, {part.name} takes no addenda'
-    home = Path(context.home)
-    return f'fix home: {addenda.addendum_path(home, part.name, part.agent).relative_to(home).as_posix()}'
+    return f'fix home: {home_relative(context.home, addenda.addendum_path(context.home, part.name, part.agent))}'
+
+
+def home_relative(home, path):
+    """A path inside home as the plan's fix-home mark and a `fixed_by` ref name it: relative, with `/`."""
+    return Path(path).relative_to(Path(home)).as_posix()
 
 
 def switch_over_text(kind, skill):
@@ -277,10 +284,10 @@ def checked_addendum(context, anomaly, label, line, environ):
                           'skill folder or agent file')
     if takes_no_addenda(part):
         raise RecordError(f'{label}: {part.name} takes no addenda')
-    line = line.strip()
-    if not line:
+    if not line.strip():
         raise RecordError(f'{label}: --addendum is empty; give the rule in one line')
-    privacy.check_text(label, 'addendum', line)
+    privacy.check_text(label, 'addendum', line, SIGHTING_MAX_CHARS)
+    line = line.strip()
     for rule in scans.deny_rules(scans.settings_files(environ, sys.platform, Path.home())):
         regex = scans.deny_regex(rule)
         if regex is not None and regex.fullmatch(line):
@@ -289,11 +296,16 @@ def checked_addendum(context, anomaly, label, line, environ):
     return Addendum(addenda.addendum_path(context.home, part.name, part.agent), part.unit, line)
 
 
-def write_addendum(home, signature, addendum):
-    """Append the tagged line to its addenda file and commit that file alone; returns the lines to print."""
-    tagged = addenda.append_line(addendum.path, addendum.line, signature, addenda.stamp(addendum.unit))
+def write_addendum(home, anomaly, addendum):
+    """Append the tagged line to its addenda file and commit that file alone; returns the lines to print.
+    The fixed anomaly record is validated first, as observe.write_anomalies does, so a record that cannot be
+    saved leaves no line behind."""
+    problems = records.validate_anomaly(anomaly)
+    if problems:
+        raise RecordError(f'anomaly {anomaly.signature}: ' + '; '.join(problems))
+    tagged = addenda.append_line(addendum.path, addendum.line, anomaly.signature, addenda.stamp(addendum.unit))
     return [f'addendum: {tagged}',
-            observe.commit_home(home, [addendum.path], COMMIT_PREFIX + f'addendum for {signature}')]
+            observe.commit_home(home, [addendum.path], COMMIT_PREFIX + f'addendum for {anomaly.signature}')]
 
 
 # ---------- the subcommands ----------
@@ -430,13 +442,13 @@ def run_fix(args, environ):
         raise RecordError(f'{label}: --date {day} is before the experiment was declared '
                           f'({experiment.declared_on}); a fix is declared before the change')
     addendum = None if args.addendum is None else checked_addendum(context, anomaly, label, args.addendum, environ)
-    ref = args.ref if addendum is None else str(addendum.path)
+    ref = args.ref if addendum is None else home_relative(home, addendum.path)
     privacy.check_text(label, 'ref', ref.strip(), SIGHTING_MAX_CHARS)
-    written = [] if addendum is None else write_addendum(home, anomaly.signature, addendum)
     anomaly.fixed_by = records.fixed_by_text(day, ref)
     anomaly.status = 'fixed'
     if not records.is_date(experiment.check_by):
         experiment.check_by = (day + timedelta(days=EXPERIMENT_CHECK_DAYS)).isoformat()
+    written = [] if addendum is None else write_addendum(home, anomaly, addendum)
     if experiment.skill:
         lines = [f'fixed: {anomaly.signature} · fixed_by {anomaly.fixed_by} · due after '
                  f'{EXPERIMENT_CHECK_SESSIONS} {experiment.skill} sessions (the check date alone does not make a '
