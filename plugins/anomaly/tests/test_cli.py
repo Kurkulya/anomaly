@@ -1011,27 +1011,43 @@ class InterviewSkillTest(unittest.TestCase):
         fence = re.search(r'```\n(.*?)\n```', section, re.S)
         self.assertIsNotNone(fence, 'the "A round" section has no fenced round template')
         template = fence.group(1).splitlines()
-        with self.subTest('the rule says Markdown with bold labels, blank lines and list options'):
-            self.assertNotIn('Plain text, no emoji', section)
-            rule = [line for line in section.splitlines() if 'Markdown, no emoji' in line]
-            self.assertTrue(rule, 'no line says "Markdown, no emoji"')
-            self.assertRegex(rule[0].lower(), r'bold labels')
-            self.assertRegex(rule[0].lower(), r'blank line')
-            self.assertRegex(rule[0].lower(), r'options as a list')
-        with self.subTest('the template uses bold labels'):
-            for label in ('**Settled already:**', '**Facts pending:**',
-                          '**Taking these defaults unless you object:**', '**Q<n> — <title>**',
-                          '**Assumes:**', '**Recommend:**', '**Risk:**', '**Conflicts:**'):
-                self.assertIn(label, '\n'.join(template), f'the round template drops {label}')
-        with self.subTest('the template lists its options'):
-            self.assertTrue(any(re.match(r'- a\) ', line) for line in template),
-                            'the round template has no option list line starting "- a) "')
+        # Audit-skills ticket 06 (AC-24, AC-25, D-19): icons before each bold label, bold capital option letters.
+        settled, pending, defaults, question, assumes = (
+            '📌 **Settled already:**', '⏳ **Facts pending:**', '✅ **Taking these defaults unless you object:**',
+            '❓ **Q<n> — <title>**', '🔎 **Assumes:**')
+        recommend = re.compile(r'^👉 \*\*Recommend:\*\* \*\*[A-Z]\)\*\*')
+        with self.subTest('the rule says Markdown with bold labels, blank lines and list options, and no "no emoji"'):
+            self.assertNotIn('no emoji', section.lower())
+            rule = next((line for line in section.splitlines() if line.strip()), '')
+            self.assertRegex(rule.lower(), r'bold labels')
+            self.assertRegex(rule.lower(), r'blank line')
+            self.assertRegex(rule.lower(), r'options as a list')
+        with self.subTest('the template puts an icon before each bold label'):
+            for label in (settled, pending, defaults, question, assumes):
+                self.assertTrue(any(line.startswith(label) for line in template),
+                                f'the round template has no line starting with {label}')
+        with self.subTest('the Recommend line names the letter as **A)** and carries the Risk and Conflicts icons'):
+            line = next((line for line in template if line.startswith('👉')), '')
+            self.assertRegex(line, recommend, 'the round template has no line "👉 **Recommend:** **A)**"')
+            self.assertRegex(line, r'⚠️ \*\*Risk:\*\*.*🔗 \*\*Conflicts:\*\*',
+                             'the Recommend line lacks "⚠️ **Risk:**" then "🔗 **Conflicts:**"')
+        with self.subTest('the template lists its options with bold capital letters'):
+            for letter in 'AB':
+                self.assertTrue(any(line.startswith(f'- **{letter}) ') for line in template),
+                                f'the round template has no option line starting "- **{letter}) "')
+            self.assertFalse([line for line in template if re.match(r'- [a-z]\) ', line)],
+                             'the round template still has a lowercase "- a) " option line')
         with self.subTest('the template has a blank line between its blocks'):
-            for label in ('**Facts pending:**', '**Taking these defaults unless you object:**', '**Q<n> — <title>**',
-                          '**Assumes:**', '**Recommend:**'):
+            for label in (pending, defaults, question, assumes):
                 at = next((i for i, line in enumerate(template) if line.startswith(label)), None)
                 self.assertIsNotNone(at, f'the round template has no line starting with {label}')
                 self.assertEqual(template[at - 1], '', f'no blank line before {label}')
+            at = next((i for i, line in enumerate(template) if recommend.match(line)), None)
+            self.assertIsNotNone(at, 'the round template has no Recommend line naming the letter as **A)**')
+            self.assertEqual(template[at - 1], '', 'no blank line before the Recommend line')
+        with self.subTest('the close table and the confirm question carry no icons'):
+            close = text.split('\n## The close', 1)[1]
+            self.assertNotRegex(close, '[⌚-⏿☀-➿⭐️\U0001f000-\U0001faff]')
 
     def test_it_writes_d_and_t_lines_with_a_source_after_each_round_and_edits_nothing_else(self):
         """AC-17."""
