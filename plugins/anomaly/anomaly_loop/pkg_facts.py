@@ -12,7 +12,8 @@ manifests.
 Two adapters: deps.dev (package, version and project endpoints, no token; downloads are not offered)
 and pub.dev (package and score endpoints; licence from the score `license:<id>` tags, repository from
 the pubspec `repository` only; deprecated from the package `isDiscontinued` key, Unknown when the
-key is absent; no stars, issues or Scorecard). A column an adapter cannot fill prints Unknown.
+key is absent; no stars, issues or Scorecard). A column an adapter cannot fill prints Unknown. A
+control character in a table cell prints as `?`, and so does a lone surrogate in any cell.
 
 A failed fetch or a malformed response (missing key, null or wrong type) prints FETCH FAILED for that
 package with every column Unknown; an ecosystem with no adapter prints `no adapter: <system>`; both
@@ -24,6 +25,7 @@ Standard library only.
 """
 import http.client
 import json
+import re
 import sys
 import urllib.parse
 import urllib.request
@@ -42,6 +44,7 @@ MANIFESTS = {'package.json': 'npm', 'pubspec.yaml': 'pub', 'go.mod': 'go', 'pypr
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024   # a response this big or bigger is a FETCH FAILED
 PUB_LICENCE_CLASSES = {'license:fsf-libre', 'license:osi-approved'}   # pub.dev tags that classify a licence, not name one
 FETCH_ERRORS = (OSError, ValueError, http.client.HTTPException, KeyError, TypeError, AttributeError)
+CONTROL_CHARACTER = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')   # C0 and DEL, but not tab, line feed or carriage return
 
 
 def fetch(url):
@@ -63,8 +66,15 @@ def quote(part):
 
 
 def text(value):
-    """A cell: the value as plain text, Unknown when the source has none."""
-    return UNKNOWN if value is None or value == '' else str(value)
+    """A cell: the value as plain text, Unknown when the source has none; a lone surrogate from the
+    JSON becomes `?`, so printing never fails on it."""
+    return UNKNOWN if value is None or value == '' else str(value).encode('utf-8', 'replace').decode('utf-8')
+
+
+def printable(value):
+    """Remote text with each control character other than tab, line feed and carriage return as `?`,
+    so a registry or a page cannot send terminal escapes (terms_grep shares it)."""
+    return CONTROL_CHARACTER.sub('?', value)
 
 
 def first_ten(stamp):
@@ -132,7 +142,7 @@ def detect_ecosystem(folder):
 
 def cell(value):
     """A Markdown table cell: `|` escaped, line breaks as spaces, so a value cannot split its row."""
-    return value.replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
+    return printable(value).replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
 
 
 def render(rows):

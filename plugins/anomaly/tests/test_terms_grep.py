@@ -5,8 +5,12 @@ so no test reaches the network.
 """
 import tempfile
 import unittest
+import urllib.parse
+import urllib.request
 from pathlib import Path
+from unittest import mock
 
+from anomaly_loop import pkg_facts
 from tests.fixtures import run_cli
 
 DEFAULT_CONTEXT = 300
@@ -58,6 +62,43 @@ class TermsGrepTest(unittest.TestCase):
         code, out, _ = run_cli('terms-grep', '--terms', 'needle', missing)
         self.assertEqual(code, 1)
         self.assertIn('FETCH FAILED', out)
+
+    def assert_one_anomaly_line(self, result):
+        """Exit 2, nothing on stdout, one `anomaly:` line on stderr."""
+        code, out, err = result
+        self.assertEqual((code, out), (2, ''))
+        self.assertTrue(err.startswith('anomaly: '), err)
+        self.assertEqual(len(err.splitlines()), 1, err)
+
+    def test_terms_without_a_word_is_one_anomaly_line(self):
+        self.assert_one_anomaly_line(run_cli('terms-grep', '--terms', ' , ', self.page('needle')))
+
+    def test_a_url_of_another_scheme_is_refused_before_any_fetch(self):
+        # data: is one urllib reads with no network, so the red run needs none either
+        result = run_cli('terms-grep', '--terms', 'needle', self.page('needle'), 'data:text/html,needle')
+        self.assert_one_anomaly_line(result)
+        self.assertIn('data:text/html,needle', result[2])
+
+    def test_a_pdf_page_prints_fetch_failed_and_exits_1(self):
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle', self.page('needle', name='terms.pdf'))
+        self.assertEqual(code, 1)
+        self.assertIn('FETCH FAILED', out)
+
+    def test_a_page_at_or_over_the_cap_prints_fetch_failed(self):
+        url = self.page('needle')
+        size = Path(urllib.request.url2pathname(urllib.parse.urlsplit(url).path)).stat().st_size
+        for cap, expected_code in ((size - 1, 1), (size, 1), (size + 1, 0)):
+            with self.subTest(cap=cap), mock.patch.object(pkg_facts, 'MAX_RESPONSE_BYTES', cap):
+                code, out, _ = run_cli('terms-grep', '--terms', 'needle', url)
+                self.assertEqual(code, expected_code)
+                self.assertEqual('FETCH FAILED' in out, expected_code == 1)
+
+    def test_a_control_character_in_a_hit_prints_as_a_question_mark(self):
+        code, out, _ = run_cli('terms-grep', '--terms', 'needle', self.page('needle\x1bend'))
+        self.assertEqual(code, 0)
+        (line,) = self.hit_lines(out)
+        self.assertIn('needle?end', line)
+        self.assertNotIn('\x1b', out)
 
 
 if __name__ == '__main__':

@@ -5,20 +5,24 @@
 Prints, per URL: the content type, the "last modified" or "effective" line if found, then
 every hit of every term with --context characters on each side (default 300). Tags become
 spaces and all whitespace (also &nbsp;) becomes one space before matching, so a term split by a
-tag or a line break still matches. --word matches whole words only. A URL is http, https or file.
+tag or a line break still matches. --word matches whole words only. A control character in the
+page prints as `?` (pkg_facts.printable).
 
-A failed fetch, an empty page or a non-HTML page (a PDF) prints FETCH FAILED and the command
-exits with code 1, a negative result: that output cannot prove absence. A very short page is
-likely built by JavaScript; the command warns, and the page then needs a browser. --terms with
-no word is bad input: one `anomaly:` line and exit 2.
+A failed fetch, an empty page, a page at or over pkg_facts.MAX_RESPONSE_BYTES or a non-HTML page
+(a PDF) prints FETCH FAILED and the command exits with code 1, a negative result: that output
+cannot prove absence. A very short page is likely built by JavaScript; the command warns, and the
+page then needs a browser. --terms with no word, or a URL that is not http, https or file, is bad
+input: one `anomaly:` line and exit 2 before anything is fetched.
 
 Standard library only.
 """
 import html
 import http.client
 import re
+import urllib.parse
 import urllib.request
 
+from . import pkg_facts
 from .files import RecordError
 
 YEAR = r'\b(?:19|20)\d\d(?:[-/.]\d{1,2}){0,2}\b'   # ends a date excerpt: whitespace is collapsed, so no line end stops it
@@ -28,6 +32,7 @@ TEXT_TYPES = ('text/html', 'application/xhtml+xml', 'text/plain')
 META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""", re.I)
 SHORT_PAGE = 2000
 HIT_LIMIT = 6
+SCHEMES = ('http', 'https', 'file')
 
 
 class FetchError(Exception):
@@ -39,11 +44,13 @@ def fetch(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (research; terms-grep)'})
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
-            body = r.read()
+            body = r.read(pkg_facts.MAX_RESPONSE_BYTES)
             content_type = r.headers.get_content_type()
             charset = r.headers.get_content_charset()
     except (OSError, ValueError, http.client.HTTPException) as e:
         raise FetchError(str(e)) from e
+    if len(body) >= pkg_facts.MAX_RESPONSE_BYTES:
+        raise FetchError(f'page at or over {pkg_facts.MAX_RESPONSE_BYTES} bytes')
     if content_type not in TEXT_TYPES:
         raise FetchError(f'content type {content_type}, not HTML')
     if not body.strip():
@@ -86,6 +93,9 @@ def run_terms_grep(args, environ):
     terms = [t.strip() for t in args.terms.split(',') if t.strip()]
     if not terms:
         raise RecordError('--terms needs at least one word')
+    refused = [url for url in args.urls if urllib.parse.urlsplit(url).scheme.lower() not in SCHEMES]
+    if refused:
+        raise RecordError(f'{", ".join(refused)}: not an http, https or file URL')
     failed = False
     for url in args.urls:
         print('=' * 100)
@@ -96,7 +106,7 @@ def run_terms_grep(args, environ):
             print(f'FETCH FAILED: {e} (cannot prove absence)')
             failed = True
             continue
-        text = clean(raw)
+        text = pkg_facts.printable(clean(raw))
         if not text:
             print('FETCH FAILED: no visible text (cannot prove absence)')
             failed = True

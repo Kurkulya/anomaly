@@ -123,6 +123,14 @@ def fixture_fetch(calls=None, fail=()):
     return fetch
 
 
+def crafted_fetch(package):
+    """A `fetch` that answers the pub.dev package endpoint of "crafted" with `package` (built in the
+    test, as JSON) and its score endpoint with no tags."""
+    responses = {"https://pub.dev/api/packages/crafted": json.dumps(package).encode("utf-8"),
+                 "https://pub.dev/api/packages/crafted/score": b'{"tags": []}'}
+    return responses.__getitem__
+
+
 def table_rows(stdout):
     """The data rows of the markdown table: a list of cell lists (package first). Checks header and separator."""
     lines = [ln.strip() for ln in stdout.splitlines() if ln.strip().startswith("|")]
@@ -201,6 +209,20 @@ class TableTests(CommandTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(table_rows(out), [["pypi:examplepkg"] + PYPI_VALUES])
         self.assertEqual(set(calls), {PYPI_PACKAGE_URL, PYPI_VERSION_URL, PYPI_PROJECT_URL})
+
+    def test_a_control_character_in_a_cell_prints_as_a_question_mark(self):
+        package = {"latest": {"version": "1.0.0", "pubspec": {"repository": "https://example.com/a\x1bb"}}}
+        code, out, _ = self.run_main(["pub:crafted"], crafted_fetch(package))
+        self.assertEqual(code, 0)
+        self.assertEqual(table_rows(out)[0][5], "https://example.com/a?b")
+        self.assertNotIn("\x1b", out)
+
+    def test_a_lone_surrogate_prints_as_a_question_mark_in_the_table_and_in_json(self):
+        fetch = crafted_fetch({"latest": {"version": "1.0\ud800"}})
+        code, out, _ = self.run_main(["pub:crafted"], fetch)
+        self.assertEqual((code, table_rows(out)[0][1]), (0, "1.0?"))
+        code, out, _ = self.run_main(["--json", "pub:crafted"], fetch)
+        self.assertEqual((code, json.loads(out)[0]["latest version"]), (0, "1.0?"))
 
     def test_json_prints_the_same_rows_as_a_list_of_objects(self):
         # AC-17: --json
@@ -283,6 +305,12 @@ class BadInputTests(CommandTestCase):
                 self.assert_one_anomaly_line(result)
                 self.assertIn(given, result[2])
                 self.assertEqual(calls, [])
+
+    def test_every_bad_name_is_named_on_the_one_line(self):
+        result = self.run_main(["npm:..", "pub:."])
+        self.assert_one_anomaly_line(result)
+        self.assertIn("npm:..", result[2])
+        self.assertIn("pub:.", result[2])
 
 
 class FakeResponse:
