@@ -449,7 +449,7 @@ sorted into anomaly, memory or both (memory is how the agent behaves next time; 
 what the environment must change; a "both" memory names the anomaly's signature). You get one
 table (signature, kind, category, target, scope, impact, `new` or `matches (n seen)`) and one
 question; nothing is written before your answer. For a session other than the current one, one
-sonnet subagent reads the transcript and returns a digest, so the transcript never enters the
+`anomaly:digest` agent on the `digest` model role reads the transcript and returns a digest, so the transcript never enters the
 main window. "log this: ..." records one sighting with no questions and a one-line reply.
 The skill also records lens stats (one line per reviewer, accepted and rejected) and lets you
 correct a session's kind. The `review` skill records its own lenses itself, under the fixed names
@@ -808,7 +808,7 @@ What the skill does:
    fragment `#/...` or `#!...`, are kept only as a short digest, so two videos or two items on
    one site stay two keys); a text is compared by its lower-case words. A repeat shows the
    earlier idea and stops.
-2. Reads it. A long page is read by one `sonnet` subagent that returns a short digest.
+2. Reads it. A long page is read by one `anomaly:digest` agent on the `digest` model role that returns a short digest.
 3. Weighs it: the open anomalies it would address, the metrics it would move, what it
    conflicts with (recorded decisions, plugin rules, wins), and the strongest case against.
 4. Proposes a verdict and, after the user's answer, records it:
@@ -1350,7 +1350,7 @@ The modes, in one line each (the full dispatch table is in
   diff (no source, config, script or test file) uses combined mode.
 - The agents come from the `reviewers` port: an org reviewer gets the same range, its own heading
   and its own lens. Org conventions sections for the touched areas go to `anomaly:code` only. The
-  model is the `review` model role. The first round goes out in one message, in the background.
+  model and effort are those of the agent's lens model role (see Reviewer agents). The first round goes out in one message, in the background.
 - Cumulative mode reads `stories.md` + `decisions.md` as the spec, passes every
   `.anomaly/*/seams.md` ledger, and asks for a keep, rewrite or delete verdict per
   characterization test file.
@@ -1370,7 +1370,7 @@ The modes, in one line each (the full dispatch table is in
 ## Reviewer agents
 
 The plugin ships five read-only reviewer agents in `plugins/anomaly/agents/`: the three code-review ones, `anomaly:plan`, the planning
-gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model: no agent file pins
+gate's, and `anomaly:docs`, the docs check (below the table). Only the `review` skill dispatches the first four, and it passes the model and effort of its lens model role (`review_code` for `anomaly:code`, `review_feature` for `anomaly:feature`, `review_security` for `anomaly:security`, `review` for `anomaly:plan` and org reviewers): no agent file pins
 one. Each has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250
 characters or fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are
 readers, not reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin
@@ -1997,7 +1997,7 @@ the CLI.
   The integration worktree is made once with `git worktree add`; the main checkout stays on the base
   branch. With no `origin` there is no push, MR or CI step and no question about it: the `ports`
   lines decide.
-- **Plan.** Before each wave, one agent on the `explore` model role checks the wave's code claims and
+- **Plan.** Before each wave, one `anomaly:facts` agent on the `explore` model role checks the wave's code claims and
   returns only the false or moved ones; each becomes a `ticket amend` line, and a claim that changes
   the scope goes to you first. The wave plan is one line per ticket with its `Touches:` paths. A
   ticket whose gate is closed waits. Research notes go to `research/NN-slug.md` in the unit folder,
