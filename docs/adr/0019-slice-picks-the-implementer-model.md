@@ -1,6 +1,6 @@
 # ADR-0019: Slice picks the implementer's model by a fixed rule and writes it in the ticket
 
-Status: Proposed · Date: 2026-10-10 · Owner: VK · Revisit-by: 2027-01-10
+Status: Proposed; partly superseded by ADR-0021 (the Decision sentence that a lens counts once per session: a later apply replaces the session's line) · Date: 2026-10-10 · Owner: VK · Revisit-by: 2027-01-10
 
 Decision: `slice` writes `Model: implement | implement_wide` on each ticket: `implement_wide` when the ticket has a `Restates:` line or its `Touches:` names a seam that another ticket owns (in `seams.md` or in slice's seam row → ticket table), else `implement`. Core defaults: `implement` sonnet, `implement_wide` opus. Build dispatches the implementer on that role; each `implement` ticket adds a `model_pick` lens line at its close, rejected when it took 2 or more fix rounds.
 Why: the old core default, "sonnet for contained tickets, opus for cross-cutting ones", left the choice to the orchestrator's judgment at dispatch time, with no record, so it could not be checked or measured.
