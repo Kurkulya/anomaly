@@ -14,9 +14,10 @@ MANAGED_DIRS = {   # as the Claude Code documentation on managed settings gives 
 IDENTIFIER = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:[-:][A-Za-z0-9]+)+')
 
 
-def settings_files(environ, platform, home):
-    """The user settings files and the managed settings files (with the `managed-settings.d` drop-ins)."""
-    config = Path(environ.get('CLAUDE_CONFIG_DIR') or home / '.claude')
+def settings_files(environ, platform, user_home):
+    """The user settings files and the managed settings files (with the `managed-settings.d` drop-ins).
+    `user_home` is the OS user folder, not the anomaly home."""
+    config = Path(environ.get('CLAUDE_CONFIG_DIR') or user_home / '.claude')
     managed = MANAGED_DIRS.get('linux' if platform.startswith('linux') else platform)
     files = [config / 'settings.json', config / 'settings.local.json']
     if managed is not None:
