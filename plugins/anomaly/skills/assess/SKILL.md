@@ -112,7 +112,8 @@ For `adopt`, add the drafted experiment to the same command:
 - An open anomaly that has no experiment yet: only `--signature <its signature>`.
 - Always: `--expect '<the effect>' --metric '<one metric name>' --guard '<one guard name>'`.
   The metric is exactly one name from the list `calibrate` uses: `weighted tokens`,
-  `active minutes`, `interrupts`, `denials`, `sightings since the fix`, or `<category>
+  `active minutes`, `interrupts`, `denials`, `weighted tokens without security`,
+  `model-weighted tokens per dispatch <agent>` (with one agent name), `sightings since the fix`, or `<category>
   sightings` for one of the loop's categories (when the fix moves no number, use `sightings
   since the fix`). The guard is exactly one of `rework sightings`, `late-catch sightings` or
   `interrupts`: a quality signal that must not get worse, and not the metric. The script
