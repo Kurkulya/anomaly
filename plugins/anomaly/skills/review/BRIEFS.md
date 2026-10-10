@@ -45,3 +45,5 @@ Loaded at dispatch; the last section is for the main window after each round. Fi
 ## Commands a reviewer proposes (main window, after a round) [X2, N15]
 
 A reviewer proposes a mutation probe, or byte-diff commands when it has no base copy, as plain commands and never runs them. Show each to the user and run it only after a yes, on a scratchpad copy (of the tip; for a byte diff, of the base and of the tip), never in the worktree; send the result back to that reviewer's finding.
+
+Proposed Amended lines for other tickets [X1]: keep them from all rounds. At the end of the review show one list, ask one yes, run `ticket amend <file> --after <AC-n|D-n> '<text>'` for each; a line with no AC-n or D-n gets `ticket amend <file> '<text>'`, without `--after`. Review's main window writes them, also when build is the caller; a no writes none; list them in the handoff.
