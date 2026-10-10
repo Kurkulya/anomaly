@@ -700,11 +700,14 @@ class BatchTest(CalibrateCase):
         cases = (('skill-by-name', 'anomaly:observe', 'addenda/observe.md'),
                  ('agent-by-name', 'anomaly:facts', 'addenda/agents/facts.md'),
                  ('inside-a-skill', 'skills/research/references/notes.md', 'addenda/research.md'),
-                 ('agent-file', 'agents/digest.md', 'addenda/agents/digest.md'))
+                 ('agent-file', 'agents/digest.md', 'addenda/agents/digest.md'),
+                 ('prose-two-skills', 'anomaly:observe step 3 and review apply', 'addenda/observe.md'),
+                 ('prose-agent', 'anomaly:facts reads too much', 'addenda/agents/facts.md'))
         for signature, target, _ in cases:
             write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
         for signature, target, file_name in cases:
-            self.assertRegex(self.plan_line(signature), rf'fix home: \S*{re.escape(file_name)}(\s|$)', target)
+            with self.subTest(target):
+                self.assertRegex(self.plan_line(signature), rf'fix home: \S*{re.escape(file_name)}(\s|$)')
 
     def test_measure_takes_no_addenda_so_the_plan_names_no_fix_home_for_it(self):
         self.lay_out_plugin()
@@ -713,7 +716,8 @@ class BatchTest(CalibrateCase):
 
     def test_without_a_checkout_plugin_code_and_docs_are_an_upstream_defect_not_an_addenda_fix(self):
         self.lay_out_plugin()
-        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md')):
+        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md'),
+                                  ('prose-no-such-skill', 'anomaly:nosuchskill frontier')):
             write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
             line = self.plan_line(signature)
             self.assertIn('upstream defect', line, target)
