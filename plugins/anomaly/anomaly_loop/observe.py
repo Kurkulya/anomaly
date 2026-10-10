@@ -4,7 +4,7 @@ The skill decides what happened and which existing anomaly (by root cause) a sig
 to; this module makes the write safe. Two subcommands:
 
   observe list    one line per anomaly, so the skill can match by root cause (also prints the
-                  missing-profile line, once)
+                  missing-profile line, once, and the observe addenda last)
   observe apply   one batch from a JSON file (or `-` for standard input), recorded in one step
 
 A batch is {"sightings": [...], "lenses": [...], "kind": {...}}; every key is optional.

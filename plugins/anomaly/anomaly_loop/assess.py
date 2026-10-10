@@ -3,7 +3,7 @@
 The skill reads and judges; this module does what must not vary:
 
   check   what an input's key is, whether it was assessed before (its earlier idea is shown
-          instead of a new read), and else the open anomalies it could relate to
+          instead of a new read), and else the open anomalies it could relate to; then the assess addenda
   record  writes `ideas/<slug>.md`; for the verdict `adopt` it also drafts an experiment on a
           new anomaly, or on an open anomaly that has none, and changes nothing else (the
           exception is `--already-applied`: lessons already built into the plugin need no draft)

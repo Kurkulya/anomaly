@@ -1,6 +1,6 @@
 """worklog: one line per pipeline stage run, so the cost of one work unit can be read per stage.
 
-  worklog start K S [--ticket NN]                    stamp the start of stage S on work unit K
+  worklog start K S [--ticket NN]                    stamp the start of stage S on work unit K; print the stage's addenda
   worklog add --feature K --stage S --session ID     write the line when the stage ends
               [--docs FOLDER] [--ticket NN] [--mode M]
   worklog report K                                   print what work unit K cost, from home (read-only)
