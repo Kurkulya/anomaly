@@ -78,6 +78,15 @@ class TermsGrepTest(unittest.TestCase):
             terms_grep.drop_hidden('<script>' * 1000)
         self.assertEqual(counted.search.call_count, 1)
 
+    def test_unclosed_comments_are_not_handed_to_the_comment_regex(self):
+        page = '<!--' * 1000 + 'x'
+        comment = terms_grep.COMMENT
+        recorded = mock.Mock(sub=mock.Mock(side_effect=comment.sub))
+        with mock.patch.object(terms_grep, 'COMMENT', recorded):
+            text = terms_grep.clean(page)
+        self.assertEqual(len(recorded.sub.call_args.args[1]), 0)
+        self.assertEqual(text, page)
+
     def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
