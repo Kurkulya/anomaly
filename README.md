@@ -1341,9 +1341,14 @@ never the spec or stories file.
   verified`), the CI check (`ci log` on the integration tip), the merge (`check pre-merge`, then
   `git merge --no-ff` with the subject `chore(<scope>): merge <NN-slug>`; when the lockfile
   changed, it names each new dependency to you before it runs the install), and the close
-  (`seams prune`, `seams add`, `ticket result`, a `model_pick` tally for an `implement` ticket (a ticket with no `Model:` line counts as `implement`; `implement_wide` adds no line): rejected 1 when its `fix rounds` is 2 or more, else accepted 1; none when a resumed build does not know the count, then `worklog add`). `conduct`'s parallel path enters
-  here with a branch. Every commit and merge message goes through a scratchpad file and `-F`.
-  `build` never pushes. It tells `review` "last review: no"; after the session's last close, when you called it, it runs `lens tally sum` and `observe apply` itself (`conduct` sums in its cumulative review).
+  (`seams prune`, `seams add`, `ticket result`, a `model_pick` tally, `worklog add`). `conduct`'s
+  parallel path enters here with a branch. Every commit and merge message goes through a
+  scratchpad file and `-F`. `build` never pushes. The `model_pick` tally is for an `implement`
+  ticket (a ticket with no `Model:` line counts as `implement`; `implement_wide` adds no line):
+  rejected 1 when its `fix rounds` is 2 or more, else accepted 1; a resumed build adds no line.
+  `build` tells `review` "last review: no"; after the close, when its caller said "last review:
+  yes" (you on the session's last ticket, or `conduct` with one ticket), it runs `lens tally sum`
+  and `observe apply` itself. A `conduct` unit of more tickets sums in its cumulative review.
 - Rules whose experiments are still running say "pending verdict", with no date: the
   review-before-verify order, the isolated re-run of failures in untouched files, the seam
   ledger steps and codegen after a tip merge.
@@ -1386,10 +1391,12 @@ The modes, in one line each (the full dispatch table is in
   the skill only after you say yes, on a scratchpad copy, never in the worktree; the agents stay
   read-only.
 - Only when no Blocker or High is open does `ticket reviewed` write `Reviewed: <head sha>`. Each
-  round leaves its work-unit line with `worklog add --mode`. Each reviewer, when it is done (after its
-  last delta round, or after its first round when it had no Blocker or High), stores its counts over all its rounds with `lens tally add`, `--revised`
-  always passed; when the caller says "last review: yes" (you, `specify`, `slice`, or `conduct` in its cumulative review; `build` says "no"), `lens tally sum` and one `observe apply` put
-  each lens into home once.
+  round leaves its work-unit line with `worklog add --mode`. Each reviewer, when it is done (after
+  its last delta round, or after its first round when it had no Blocker or High), stores its
+  counts over all its rounds with `lens tally add`, `--revised` always passed; when the caller
+  says "last review: yes" (you, `specify`, `slice`, or `conduct` in its cumulative review; `build`
+  says "no" and sums itself when its caller said "yes"), `lens tally sum` and one `observe apply`
+  put each lens into home once.
 - A rule trace: in ticket or combined mode, when the ticket's `Tests:` line names
   `rule trace <brief path> <SKILL.md path>`, the skill also runs a rules-mode pass on that pair. Its
   High findings go back to the caller, and every delta round on that ticket runs the rules pass
@@ -1671,8 +1678,9 @@ python plugins/anomaly/scripts/anomaly.py lens tally sum --session <id> --data <
 `observe apply` keeps one line per lens per session in `lenses.jsonl`, but a review can run
 several times in a session (a delta round after a fix, a second ticket). The review skill stores
 each reviewer's counts over its rounds with `lens tally add`, once when that reviewer is done,
-and, after the session's last review (`build` adds its `model_pick` line at each close, so it sums after the last close), sums them with
-`lens tally sum` and runs one `observe apply --file <path>`, so home gets each lens once.
+and, after the session's last review, sums them with `lens tally sum` and runs one
+`observe apply --file <path>`, so home gets each lens once. `build` adds its `model_pick` line at
+each close and sums after the close when its caller said "last review: yes".
 
 - `lens tally add` appends `{session, lens, accepted, rejected}` to `lens-tally.jsonl` in the data
   folder and prints `tally: <lens> accepted <n>, rejected <n>`. The tally is throwaway state and
@@ -1683,9 +1691,10 @@ and, after the session's last review (`build` adds its `model_pick` line at each
   numbers of 0 or more, and `accepted` and `rejected` are both required.
 - The lens names are fixed: `code`, `feature`, `security` (the core reviewers `anomaly:code`,
   `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`),
-  `interview` (the interview's recommendations), `model_pick` (`build`'s verdict on a ticket's model pick) and each org reviewer's adapter name from the
-  `reviewers` port (see Ports and the repo layer). Any other name is one `anomaly:` line that lists
-  the allowed names, exit 2, and nothing is written.
+  `interview` (the interview's recommendations), `model_pick` (`build`'s verdict on a ticket's
+  model pick) and each org reviewer's adapter name from the `reviewers` port (see Ports and the
+  repo layer). Any other name is one `anomaly:` line that lists the allowed names, exit 2, and
+  nothing is written.
 - `--revised <n>` counts the accepted findings whose fix differed from the one the reviewer
   proposed, so it is at most `--accepted` (more is one `anomaly:` line naming both counts, exit
   2). The tally line, the batch line and the home line gain `revised` only when it is passed;
@@ -2090,7 +2099,7 @@ pipeline (every skill except the four loop skills, its extra docs, the agent fil
 under `docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
-  `SKILL.md` is 8 KB or less and an agent file is 6 KB or less.
+  `SKILL.md` is 8 KB or less (build: 9 KB) and an agent file is 6 KB or less.
 - The `allowed-tools` of `build` and `review` is the one CLI pattern, defined once as
   `CLI_PATTERN` in `anomaly_loop/constants.py`, and every call of the CLI in their text uses that
   exact command and is never chained.
