@@ -15,6 +15,7 @@ from .files import RecordError
 AGENTS = 'agents'          # the agent files of the plugin, and their addenda files in home
 NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
+TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
 
 
 def addendum_path(home, name, agent=False):
@@ -52,12 +53,12 @@ def append_line(path, line, signature, stamp):
     A file that already holds ADDENDA_MAX_LINES lines, or a line of this experiment, raises RecordError and
     is not changed: one line is one experiment."""
     lines = read_lines(path)
-    if any(f'[exp: {signature} · ' in old for old in lines):
+    if any(f'{TAG_OPEN}{signature}{TAG_SEPARATOR}' in old for old in lines):
         raise RecordError(f'{path}: already holds a line of the experiment {signature}, and one line is one '
                           'experiment; remove the old line from this file first, then run the fix again')
     if len(lines) >= ADDENDA_MAX_LINES:
         raise RecordError(f'{path}: holds {len(lines)} lines, the cap of an addenda file is {ADDENDA_MAX_LINES}; '
                           'drop or upstream a line first')
-    tagged = f'{line} [exp: {signature} · {stamp}]'
+    tagged = f'{line} {TAG_OPEN}{signature}{TAG_SEPARATOR}{stamp}{TAG_CLOSE}'
     files.write_lines(path, lines + [tagged])
     return tagged
