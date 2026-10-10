@@ -714,7 +714,7 @@ matter). Fewer is better for all of them.
 | `weighted tokens without security` | a session's weighted tokens less those of the core security reviewer (`anomaly:security` in the row's `tokens_by_agent`; a row without that entry keeps its whole weighted tokens), compared as medians. For a switch-over, which adds the security reviewer as new coverage ([ADR-0013](docs/adr/0013-switch-over-compares-skills.md)). Not a digest trend; read like weighted tokens, with active minutes beside it |
 | `sightings since the fix` | the anomaly's own sightings. As the primary metric (a rare-event metric, for a fix that moves no number) it is judged by whether the anomaly came back, not as a rate (see Verdict) |
 | `<category> sightings`, for example `rework sightings` or `late-catch sightings` | sightings of problems in that category, per session |
-| `model-weighted tokens per dispatch <agent>`, for example `model-weighted tokens per dispatch anomaly:facts` | a session's `model_weighted_by_agent` entry for that agent divided by its dispatch count (`subagents.by_type`), compared as medians. Each API call's weighted tokens are multiplied by its model's factor, so a cheaper model shows as a saving (see measure). The agent name is the one `tokens_by_agent` uses and keeps its case. A session with no dispatch of the agent, with a call of it on a model with no factor, or with a spawn without `.meta.json` (`skipped_spawns` above 0: its dispatch count would be short) has no value: it is skipped, never read as 0, and `verify` counts only the second kind. Read like weighted tokens, with active minutes beside it |
+| `model-weighted tokens per dispatch <agent>`, for example `model-weighted tokens per dispatch anomaly:facts` | a session's `model_weighted_by_agent` entry for that agent divided by its dispatch count (`subagents.by_type`), compared as medians. Each API call's weighted tokens are multiplied by its model's factor, so a cheaper model shows as a saving (see measure). The agent name is the one `tokens_by_agent` uses and keeps its case. A session with no dispatch of the agent, with a call of it on a model with no factor, or with a spawn without `.meta.json` (`skipped_spawns` above 0: its dispatch count would be short) has no value: it is skipped, never read as 0, and `verify` counts the second and third kind on a line each (a session of both is counted as the third). Read like weighted tokens, with active minutes beside it |
 
 User corrections and review misses reach the backlog through `observe` as rework and late-catch
 sightings, so those two are the usual guards. Sightings are rare, so a sighting metric is read as
@@ -806,9 +806,12 @@ because a sighting guard is `thin`. `revert` reopens the anomaly. `decide` is ac
 moved check date of an inconclusive result has come, or when an experiment is due but its metric
 or fix date cannot be measured (older records).
 
-When the metric is `model-weighted tokens per dispatch <agent>`, `verify` prints one more line after
-the readings, `- sessions skipped for a model with no factor: N`: how many sessions of both windows
-have no value because the agent had a call on a model with no factor. The line is left out when N is 0.
+When the metric is `model-weighted tokens per dispatch <agent>`, `verify` prints up to two more lines
+after the readings. `- sessions skipped for a model with no factor: N` counts the sessions of both
+windows that have no value because the agent had a call on a model with no factor.
+`- sessions skipped for a spawn without .meta.json: N` follows it and counts those left out for a spawn
+without `.meta.json`. A session with both is counted on the second line only. Each line is left out when
+its N is 0.
 
 **Housekeeping writes.** `effort` sets the effort of several anomalies in one step. `close` marks
 anomalies `wontfix`. `merge` adds the sightings of one anomaly to another (occurrences added up,

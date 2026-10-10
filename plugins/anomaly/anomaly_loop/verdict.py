@@ -157,6 +157,13 @@ def skipped_for_model(rows, agent):
                for row in rows)
 
 
+def skipped_for_spawn(rows, agent):
+    """How many of the sessions `rows` that dispatched `agent` the metric leaves out for a spawn without
+    `.meta.json` (one that also has a call on a model with no factor is counted here, not by
+    skipped_for_model)."""
+    return sum(bool(dispatches_of(row, agent)) and has_spawn_without_meta(row) for row in rows)
+
+
 def sighting_metric(lines_of):
     def samples(context, anomaly, rows, days):
         return sighting_counts(context, lines_of(context, anomaly), rows, days, experiment_kind(anomaly),
@@ -286,12 +293,12 @@ Reading.__doc__ = ('One metric around a fix: before and after are trends.Sample 
                    'the number counted since the fix for a sighting metric, else None. For a reading judged '
                    'by the permutation test, change is the trends.Change of the windows (trends.real_change); '
                    'else None.')
-Verdict = namedtuple('Verdict', 'result reason readings sightings_since fix_day_sightings fall_backs no_factor',
-                     defaults=(None, None))
+Verdict = namedtuple('Verdict', 'result reason readings sightings_since fix_day_sightings fall_backs no_factor '
+                     'no_meta', defaults=(None, None, None))
 Verdict.__doc__ = ('The result and reason, the Readings, the sightings counts, for a switch-over the number '
                    'of fall-back sessions (in neither side), else None, and for a model-weighted tokens per '
                    'dispatch primary the number of sessions in the two windows left out for a call on a model '
-                   'with no factor, else None.')
+                   'with no factor (no_factor) and for a spawn without .meta.json (no_meta), else None.')
 
 
 def is_rare_event(name):
@@ -404,7 +411,8 @@ def verdict(context, anomaly):
                if experiment.skill else None)
     agent = per_dispatch_agent(primary.name)
     no_factor = None if agent is None else skipped_for_model(before + after, agent)
-    return Verdict(result, f'{reason}; {rule}', readings, own, on_fix_day, skipped, no_factor)
+    no_meta = None if agent is None else skipped_for_spawn(before + after, agent)
+    return Verdict(result, f'{reason}; {rule}', readings, own, on_fix_day, skipped, no_factor, no_meta)
 
 
 def fix_day_line(anomaly, found):

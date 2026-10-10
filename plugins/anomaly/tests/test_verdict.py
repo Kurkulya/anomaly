@@ -427,11 +427,27 @@ class VerdictTest(VerdictCase):
         self.assertIn('(n=6) before', out)
         self.assertIn('(n=5) since', out)
         self.assertIn('- sessions skipped for a model with no factor: 2\n', out)
+        self.assertNotIn('.meta.json', out)   # no row has a spawn without it
         self.dispatch_fields(before, 400.0)
         self.dispatch_fields(after, 200.0)
         write_metrics_rows(self.home, before + after)
         self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
         self.assertNotIn('no factor', self.cli('verify', '--signature', 'slow-check')[1])
+
+    def test_verify_counts_sessions_with_a_spawn_without_meta_on_a_line_of_their_own(self):
+        before, after = self.baseline_and_after(before_n=7, after_n=6)
+        self.dispatch_fields(before, 400.0, unknown=(0, 1))
+        self.dispatch_fields(after, 200.0)
+        before[1]['skipped_spawns'] = 1   # also has a call on a model with no factor: counted on the spawn line only
+        after[0]['skipped_spawns'] = 1
+        write_metrics_rows(self.home, before + after)
+        self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
+        code, out, err = self.cli('verify', '--signature', 'slow-check')
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('(n=5) before', out)
+        self.assertIn('(n=5) since', out)
+        self.assertIn('- sessions skipped for a model with no factor: 1\n'
+                      '- sessions skipped for a spawn without .meta.json: 2\n', out)
 
     def test_tokens_cannot_be_kept_while_active_minutes_cannot_be_judged(self):
         self.baseline_and_after(before_weighted=2000, after_weighted=1000, before_active=10,

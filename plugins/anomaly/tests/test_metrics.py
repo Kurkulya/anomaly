@@ -217,10 +217,10 @@ class MeasureLineTest(Base):
         self.subagent('agent-a1', [assistant(ts(2), 's1')], {'agentType': 'Explore', 'model': 'sonnet'})
         self.assertEqual(self.measure(), [])
 
+
+class SummarizeRowsTest(unittest.TestCase):
     def test_a_row_without_the_skipped_fields_adds_0_to_the_sums(self):
-        self.session([assistant(ts(0), 'm1')])
-        older, _ = self.summarize()   # a row written before the fields existed lacks them
-        del older['skipped_entries'], older['skipped_spawns']
+        older = {}   # a row written before the fields existed lacks them
         found = metrics.summarize_rows([older, {'skipped_entries': 2, 'skipped_spawns': 1}])
         self.assertEqual((found['skipped_entries'], found['skipped_spawns']), (2, 1))
 
