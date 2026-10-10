@@ -440,14 +440,16 @@ class VerdictTest(VerdictCase):
         self.dispatch_fields(after, 200.0)
         before[1]['skipped_spawns'] = 1   # also has a call on a model with no factor: counted on the spawn line only
         after[0]['skipped_spawns'] = 1
+        # every spawn of the agent lacked .meta.json: its dispatch sits under `unknown`, its calls do not
+        before[2].update(subagents={'by_type': {'unknown': 1}}, skipped_spawns=1)
         write_metrics_rows(self.home, before + after)
         self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
         code, out, err = self.cli('verify', '--signature', 'slow-check')
         self.assertEqual((code, err), (0, ''))
-        self.assertIn('(n=5) before', out)
+        self.assertIn('(n=4) before', out)
         self.assertIn('(n=5) since', out)
         self.assertIn('- sessions skipped for a model with no factor: 1\n'
-                      '- sessions skipped for a spawn without .meta.json: 2\n', out)
+                      '- sessions skipped for a spawn without .meta.json: 3\n', out)
 
     def test_tokens_cannot_be_kept_while_active_minutes_cannot_be_judged(self):
         self.baseline_and_after(before_weighted=2000, after_weighted=1000, before_active=10,

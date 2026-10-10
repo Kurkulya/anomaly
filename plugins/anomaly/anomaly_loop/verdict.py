@@ -158,10 +158,12 @@ def skipped_for_model(rows, agent):
 
 
 def skipped_for_spawn(rows, agent):
-    """How many of the sessions `rows` that dispatched `agent` the metric leaves out for a spawn without
-    `.meta.json` (one that also has a call on a model with no factor is counted here, not by
-    skipped_for_model)."""
-    return sum(bool(dispatches_of(row, agent)) and has_spawn_without_meta(row) for row in rows)
+    """How many of the sessions `rows` that dispatched `agent` (or have calls of it, since a dispatch of a
+    spawn without `.meta.json` sits under `unknown`) the metric leaves out for a spawn without `.meta.json`
+    (one that also has a call on a model with no factor is counted here, not by skipped_for_model)."""
+    return sum(has_spawn_without_meta(row) and (bool(dispatches_of(row, agent))
+                                                or per_agent_number(row, 'model_weighted_by_agent', agent) is not None)
+               for row in rows)
 
 
 def sighting_metric(lines_of):
