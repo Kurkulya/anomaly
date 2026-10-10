@@ -13,7 +13,7 @@ Revisit: when a second reader of `lenses.jsonl` needs the history of a session's
 ## Decision
 
 - A record with accepted and rejected both 0 is skipped first.
-- Same session and lens, no value smaller and at least one of accepted, rejected or `revised` larger: the line is replaced with one atomic whole-file write, and it takes the apply date.
+- Same session and lens, no value smaller and at least one of accepted, rejected or `revised` larger: the line is replaced with one atomic whole-file write, and it takes the apply date. The file is re-read at write time and only the matched line is swapped; every other line stays byte-for-byte, damaged lines included.
 - ADR-0019 says a lens counts once per session, so an earlier sum would drop the later tickets' tallies, and builds its sum timing on that; this ADR supersedes that sentence. The sum timing of ADR-0019 stays.
 - Same totals: nothing is written, so a repeated apply leaves the file byte-identical.
 - A smaller value (a missing `revised` counts as 0): the batch is refused with an error naming the session and the lens. A tally is never rewritten, so a session's sums only grow; a smaller one is an input error.
