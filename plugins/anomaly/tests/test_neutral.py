@@ -11,49 +11,14 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 
-from anomaly_loop import flags, frontmatter, paths, profile
+from anomaly_loop import flags, paths, profile
+from anomaly_loop.scans import profile_markers
 from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli
 
-IDENTIFIER = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:[-:][A-Za-z0-9]+)+')
 HOST = re.compile(r'https?://([A-Za-z0-9.-]+)')
 RESERVED_HOST = re.compile(r'(?:.+\.)?(?:example(?:\.com|\.net|\.org)?|test|invalid|localhost)')
 ALLOWED_HOSTS = {'host', 'person', 'www.youtube.com', 'api.deps.dev', 'pub.dev'}   # placeholders, a link example, the two pkg-facts API hosts
-
-
-def stack_values(value):
-    """The values of a per-stack key without their stack names: each stack's value, then each line without a stack."""
-    named, other = frontmatter.nested(value)
-    return list(named.values()) + other
-
-
-def is_this_plugins(identifier):
-    """True for `<plugin>:<name>` qualified by this plugin's name, in any case (flags.names_this_plugin)."""
-    qualifier, colon, _ = identifier.partition(':')
-    return bool(colon) and flags.names_this_plugin(SimpleNamespace(plugin_root=PLUGIN), qualifier, None)
-
-
-def profile_markers(values):
-    """Identifiers that name agents, tools and skills, with each '-' part of an agent id: every
-    agent id in `implementers` and `test_writers` (the stack name is left out; stack lines are read
-    as frontmatter.nested reads them, so a line without a stack keeps its whole id), every item of
-    `build_skills`, `reviewers` and `gather`, only the first identifier of `mr_tool`, `verify_ui`
-    and `ci` (the rest is prose, such as "or the built-in browser"), and the first identifier of
-    each `conventions` value. A name qualified by this plugin's own name (`<plugin>:<skill>`) is
-    the plugin's, not an environment fact, so it is no marker."""
-    found = []
-    for key in ('implementers', 'test_writers'):
-        for line in stack_values(values.get(key, '')):
-            found += IDENTIFIER.findall(line)
-    for key in ('build_skills', 'reviewers', 'gather'):
-        found += IDENTIFIER.findall(values.get(key, ''))
-    for key in ('mr_tool', 'verify_ui', 'ci'):
-        found += IDENTIFIER.findall(values.get(key, ''))[:1]
-    for line in stack_values(values.get('conventions', '')):
-        found += IDENTIFIER.findall(line)[:1]
-    found = [identifier for identifier in found if not is_this_plugins(identifier)]
-    return set(found) | {part for identifier in found for part in identifier.split(':') if '-' in part}
 
 
 def files_with(root, markers):
@@ -69,7 +34,7 @@ class ProfileMarkersTest(unittest.TestCase):
         values = {'implementers': 'web-ui: acme-kit:web-builder:acme-web-builder',
                   'mr_tool': 'acme-kit:open-mr skill', 'verify_ui': 'look-check, or the built-in browser',
                   'build_skills': 'implement, run-tickets', 'tracker': 'some-tracker-name'}
-        self.assertEqual(profile_markers(values), {
+        self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:web-builder:acme-web-builder', 'acme-kit', 'web-builder', 'acme-web-builder',
             'acme-kit:open-mr', 'open-mr', 'look-check', 'run-tickets'})
 
@@ -77,20 +42,20 @@ class ProfileMarkersTest(unittest.TestCase):
         values = {'test_writers': 'web-ui: acme-kit:test-builder', 'reviewers': '[acme-reviewer, acme-kit:sec-check]',
                   'gather': 'context-pull', 'ci': 'ci-watcher job watch, then log-reader',
                   'conventions': 'web-ui: acme-docs/web-rules.md\nmobile-ui: team-guide.md'}
-        self.assertEqual(profile_markers(values), {
+        self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:test-builder', 'acme-kit', 'test-builder', 'acme-reviewer', 'acme-kit:sec-check', 'sec-check',
             'context-pull', 'ci-watcher', 'acme-docs', 'team-guide'})
 
     def test_a_per_stack_line_without_a_stack_keeps_its_whole_id(self):
         values = {'implementers': 'acme-kit:web-builder\nmobile-ui: acme-kit:app-builder',
                   'conventions': 'acme-docs/rules.md'}
-        self.assertEqual(profile_markers(values), {
+        self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:web-builder', 'acme-kit', 'web-builder', 'acme-kit:app-builder', 'app-builder', 'acme-docs'})
 
     def test_a_name_qualified_by_this_plugin_is_not_a_marker(self):
         own = flags.plugin_name(PLUGIN, PLUGIN)
         values = {'build_skills': f'implement, {own}:build-step, acme-kit:run-tickets'}
-        self.assertEqual(profile_markers(values), {'acme-kit:run-tickets', 'acme-kit', 'run-tickets'})
+        self.assertEqual(profile_markers(values, PLUGIN), {'acme-kit:run-tickets', 'acme-kit', 'run-tickets'})
 
     def test_a_planted_marker_is_found_with_its_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,7 +80,7 @@ class ProfileMarkersTest(unittest.TestCase):
 class OrgNeutralTest(unittest.TestCase):
     def test_no_identifier_from_the_owners_profile_appears_in_a_plugin_file(self):
         home = paths.resolve_home(None, os.environ)
-        markers = profile_markers(profile.load_profile(home).values)
+        markers = profile_markers(profile.load_profile(home).values, PLUGIN)
         if not markers:
             self.skipTest(f'no profile identifiers under {home}')
         self.assertEqual(files_with(PLUGIN, markers), [])
