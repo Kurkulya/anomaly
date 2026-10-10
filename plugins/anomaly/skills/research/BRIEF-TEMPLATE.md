@@ -40,9 +40,9 @@ older than <YYYY-MM-DD, two years back> as `possibly stale`.
    - `Not possible, per <source>` — a primary source forbids or excludes it. **Negative
      findings with proof are the most valuable output of this research.**
    - `Absent, searched <terms> in <URLs>` — the text does NOT contain something (no clause,
-     no restriction, no feature). Carries the search, never a quote: attach the output of
-     the `terms-grep` command. A FETCH FAILED page, or a bare "does not exist",
-     is `Unknown`.
+     no restriction, no feature). Carries the search, never a quote: list the terms and the
+     URLs you searched, and leave the proof for the terms-grep output the main session
+     attaches. A FETCH FAILED page, or a bare "does not exist", is `Unknown`.
    - `Unknown, looked in <where>` — you looked and could not find out.
 4. **Dates matter.** Pricing, terms and platform rules change. Record the "last updated"
    date of each doc page when it is shown.
