@@ -124,7 +124,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `reviewers` | optional port: reviewers added beside `anomaly:code`, `anomaly:feature` and `anomaly:security`, as a comma or line list |
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
-| `models` | optional: the model per dispatch role, one `role: model` per indented line; roles `explore`, `implement`, `review`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse` |
+| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `lookup`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
 | `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
@@ -172,9 +172,16 @@ two or more, `ports` stops with one `anomaly:` line naming the profile key (othe
 first line). An extend port lists every such line after the repo's own docs. The `models` and
 `ui_check:` blocks follow the same `name: value` rule.
 
-**Model roles.** `models` maps each role to a model. Without it: `explore` sonnet, `implement`
-sonnet for contained tickets and opus for cross-cutting ones (the ticket says which), `review`
-opus, `deep_analysis` opus, `browse` sonnet.
+**Model roles.** `models` maps each role to a model, and optionally an effort: a role value is
+`<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
+(`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
+one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
+`implement_wide` opus, `lookup` haiku, `digest` sonnet, `review` opus, `deep_analysis` opus,
+`browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
+roles: one the profile leaves out takes the value of `review`. A model or effort change is a
+measured experiment ([ADR-0018](docs/adr/0018-model-changes-are-measured-experiments.md)).
+`ports` warns when `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` or `CLAUDE_CODE_EFFORT_LEVEL` is set: either
+one makes the profile's model or effort have no effect.
 
 **Repo layer.** The commands `verify` (the full verify), `e2e`, `install` and `codegen` run from
 the repository root. `hook_path` is not a command: it is a folder relative to the repository
@@ -272,8 +279,14 @@ command install = [unresolved]
 command codegen = [unresolved]
 command hook_path = [unresolved]
 model explore = sonnet [core default]
-model implement = sonnet for contained tickets, opus for cross-cutting ones [core default]
+model implement = sonnet [core default]
+model implement_wide = opus [core default]
+model lookup = haiku [core default]
+model digest = sonnet [core default]
 model review = opus [core default]
+model review_code = opus [core default]
+model review_feature = opus [core default]
+model review_security = opus [core default]
 model deep_analysis = opus [core default]
 model browse = sonnet [core default]
 ```
@@ -1725,7 +1738,9 @@ python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] 
 - `nudge` is run by a hook (see The weekly nudge).
 - `ticket` takes an action; its options are in Tickets.
 - `ports` prints the adapter of every port, the repo-layer commands and the model roles for the
-  repository that holds `--repo` (default: the current folder); see Ports and the repo layer.
+  repository that holds `--repo` (default: the current folder), and a `warning:` line on stderr for
+  each of `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` and `CLAUDE_CODE_EFFORT_LEVEL` that is set; see Ports
+  and the repo layer.
 - `bench` takes the action `score`; its inputs and scoring rules are in Benchmark.
 - `check` and `seams` take an action; their options are in The pre-merge check and the seam
   ledger.

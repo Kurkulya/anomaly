@@ -35,6 +35,7 @@
 | **port** | A named extension point of the pipeline with one fixed mode (add, extend or replace) and a core default that works with an empty profile. | hook (that is a Claude Code feature) |
 | **adapter** | The org value or tool the profile injects into a port, such as an org implementer agent or MR tool. | plugin, integration |
 | **core default** | What a port does when the profile names no adapter, written in the plugin's own words. | fallback |
+| **model role** | A kind of dispatch that the `models` key maps to one model, and optionally an effort. | role (alone), agent model |
 | **base branch** | The branch a work unit's integration branch is cut from: the repo layer's `base` key, else the branch `origin/HEAD` points at, else `main`. `ports` prints it as `repo base`. | a ticket's `Base:` line (that holds the **integration branch**) |
 | **ticket key** | The key line of a ticket: `Key: <KEY>` in core, or the line the `key_line` port names. It holds a tracker key or `no-ticket`. The `commit` and `branch` ports use it where their pattern holds `<key>`. Not the work-unit key. | ticket id, ticket number (that is the two-digit NN) |
 | **integration branch** | The one branch per work unit that each ticket branch merges into with `--no-ff`: the ticket's `Base:` line, else the `branch` port pattern with the work-unit key as slug. `build` never commits on it directly and never pushes it. | feature branch (that is a ticket's) |
