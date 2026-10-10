@@ -48,7 +48,7 @@ Start as above, but:
 
 ## Red first, always [N7, AC-32]
 
-1. Dispatch the `test_writer` port for the stack, model `model implement`; core default brief: [TEST-WRITER.md](TEST-WRITER.md).
+1. Dispatch the `test_writer` port for the stack, `implement` role, effort; core default brief: [TEST-WRITER.md](TEST-WRITER.md).
 2. Run it; confirm red for the right reason (a missing feature).
 3. Commit it alone, then `ticket red <sha> <path>`.
 
@@ -56,7 +56,7 @@ Docs-only ticket: no red step; `ticket red --changed '<why>'`. A later test-file
 
 ## Implement [I10-I14]
 
-Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled, model `model implement`. In a worktree, follow and pass on [WORKTREE.md](WORKTREE.md). Follow-ups and resumes at once: SendMessage to the same agent. An "interim" notice: check the branch now. [N3]
+Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled, `implement_wide` role if `Model:` says so, else `implement`, and effort. In a worktree, follow and pass on [WORKTREE.md](WORKTREE.md). Follow-ups and resumes at once: SendMessage to the same agent. An "interim" notice: check the branch now. [N3]
 
 ## Shared close
 

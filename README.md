@@ -184,6 +184,8 @@ experiment ([ADR-0018](docs/adr/0018-model-changes-are-measured-experiments.md))
 when `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` (the profile's models have no effect) or
 `CLAUDE_CODE_EFFORT_LEVEL` (the profile's efforts have no effect) is set.
 A dispatch passes the first word as the Agent tool's `model` and any second word as its `effort`.
+The ticket's `Model:` line picks `implement` or `implement_wide` for the implementer; no line means
+`implement`, and the test writer always uses `implement`. `check slice` refuses any other value.
 
 **Repo layer.** The commands `verify` (the full verify), `e2e`, `install` and `codegen` run from
 the repository root. `hook_path` is not a command: it is a folder relative to the repository
@@ -902,7 +904,7 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
 ```
 
 - A state line is plain (`Status: done`) or bold (`**Status:** done`); both are read, `Blocked
-  by:` included. An edit changes only the lines it names, in the shape each line already has;
+  by:` and `Model:` included. An edit changes only the lines it names, in the shape each line already has;
   every other byte stays, line endings and a missing final newline included. A line that is not
   there yet is added as a plain line after the nearest line that comes before it in the order
   `Status`, `Metrics`, `Reviewed`, `Verified`, `Red`, `Red-changed`, `Result`. Lines inside a
@@ -910,8 +912,8 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes a state line refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, the key line
-  (under the name it has in the ticket), `Tests`, `Repro`, `Base` (the integration branch, which
-  `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
+  (under the name it has in the ticket), `Tests`, `Model`, `Repro`, `Base` (the integration branch,
+  which `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
   the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
   `ticket gate`).
 - `ticket gate` exits 1 for a ticket that waits (`ticket.waits`, the rule `frontier` uses): only a
@@ -1410,7 +1412,7 @@ either, and keep the same size and description limits.
 | `anomaly:code` | defects against the repo's written rules and sound design: correctness, resources, performance, contracts, tests, second copies of ledger-owned seams, design smells, new dependencies, suppressed linter or type errors | ticket, delta, cumulative, combined (adds the feature checklist, read at run time from `agents/feature.md`) |
 | `anomaly:feature` | the diff does what its ticket or spec asks and no more: the AC coverage table, scope, visible changes, docs drift, deferral targets, claims against their sources, known items; in cumulative mode a keep, rewrite or delete verdict per characterization test file | ticket, delta, cumulative, rules (loads `skills/review/rules-mode.md`, 2 KB or less, in that mode only) |
 | `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
-| `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage and a `Tests:` level for every AC | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
+| `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage, a `Tests:` level for every AC and the `Model:` line | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
 | `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
 | `anomaly:facts` | questions about a repository that need inference across lines (a call chain, whether a claim still holds, which callers can pass a value); tools Read, Grep and Glob; model role `explore`; answers in `- <path>:<line> — <fact>` lines (see Facts bench) | one mode: the questions the dispatcher passes |
 | `anomaly:digest` | a transcript or a long page (a local file or a link) as a digest in its own words; tools Read and WebFetch; model role `digest` | one mode: the source and the word limit the dispatcher passes |
@@ -1972,6 +1974,9 @@ and `decisions.md` into the self-contained tickets `anomaly:build` runs.
   offers the next build step.
 - It adds one `slice` line to `log.md` per gate result, a `slice` work-unit line, and offers
   `/anomaly:build <work unit> <NN>` for the first ticket with no open blocker, then `/clear` once.
+- It writes `Model: implement_wide` on a ticket that has `Restates:` or whose `Touches:` names a seam
+  another ticket owns (`seams.md` or its seam row → ticket table), else `Model: implement`
+  ([ADR-0019](docs/adr/0019-slice-picks-the-implementer-model.md)).
 
 ## The diagnose skill
 
