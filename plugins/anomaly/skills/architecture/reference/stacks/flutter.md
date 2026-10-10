@@ -18,7 +18,7 @@ git ls-files 'lib/*' | cut -d/ -f2 | sort | uniq -c | sort -rn      # base: file
 git ls-files pubspec.yaml analysis_options.yaml Makefile '.github/workflows/*'
 # 1 domain importing a higher layer or Flutter: package, then relative
 git grep -nE 'import .package:(<app>/(data|application|presentation)|flutter/)' -- lib/domain   # `.` matches the quote
-git grep -nE "import '(\.\./)+(data|application|presentation)/" -- lib/domain
+git grep -nE 'import .(\.\./)+(data|application|presentation)/' -- lib/domain   # `.` matches the quote
 # 2 wire types past the data layer
 git grep -nE 'Response<dynamic>|Map<String,\s*dynamic>' -- lib/application lib/presentation
 # 3 state holders; read each for a copy of a repository result

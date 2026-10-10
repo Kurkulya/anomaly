@@ -3,8 +3,7 @@
 Every area finding names the principle it breaks. Guards (area 6) and decision records (area 7)
 are not principles; they are how the principles hold. For where each kind of knowledge
 lives (CLAUDE.md, ADR, CONTEXT.md, comments), read the audited repo's own docs (its
-`CLAUDE.md`, `docs/README.md`, `docs/adr/`, `CONTEXT.md`); a rule it does not write down is
-reported in area 7 as missing, not borrowed from elsewhere.
+`CLAUDE.md`, `docs/README.md`, `docs/adr/`, `CONTEXT.md`).
 
 The words here are neutral. Stack wording is in `stacks/<stack>.md`.
 

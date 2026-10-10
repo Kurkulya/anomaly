@@ -9,7 +9,7 @@ allowed-tools: Bash(python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" *)
 Pass one reports 7 areas, with no theory block. Pass two
 shows the fix per area and writes the locks as files. Nothing is implemented.
 
-A **lock** is a guard that stops an area finding from coming back: an import or lint rule at error
+A **lock** is a guard that stops an architecture finding from coming back: an import or lint rule at error
 level, or a failing test. Say "lock", never "guard rail".
 
 **Scope.** Read-only on source. Writes only under `.anomaly/architecture-<YYYY-MM-DD>/research/`, plus
@@ -37,7 +37,8 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature architec
 - **Check the artifact, not the intent.** Read the CI file, lint level, flag value and
   its age (`git log -S`), not the sentence about them.
 - **State corrections openly**: "Correction: pass one said 3; the right number is 11."
-- **Bulk reads**: `anomaly:facts` (`explore` role: model, effort if set) with exact paths and a ≤900-word cap. Never a
+- **Bulk reads**: `anomaly:facts` (`explore` role: model, effort if set) with exact paths and a ≤900-word cap. It has no
+  git: pass it the `git ls-files` path list, and re-count with git every number it returns. Never a
   root-wide search.
 
 Every output file is `research/NN-<slug>.md` or a lock `NN-lock-<area>.<ext>`, `NN` the
@@ -111,7 +112,7 @@ clear defects; the words with two meanings (pitfall 4); the research files.
 Show it. Then `worklog add` (stage `architecture`, `--docs` the unit folder), also when nothing changes. End with the case that fits. An open choice needs a decision; a clear defect has
 one obvious fix.
 
-- **1 or more open choices:** one line, `/anomaly:interview Work unit architecture-<date>. Idea: act on the findings in .anomaly/architecture-<date>/research/<NN>-summary.md`.
+- **1 or more open choices:** one line, `/anomaly:interview Work unit architecture-<date>. Idea: act on the area findings in .anomaly/architecture-<date>/research/<NN>-summary.md`.
   Interview reads only typed text, so the line names the summary file; it lists
   the defects too.
 - **No open choice, 1 or more clear defects:** one line per defect, `/anomaly:diagnose <defect>. Red command: <command that runs research/<NN>-lock-<area>.<ext>>`.

@@ -101,7 +101,8 @@ git log --format=%h -- CLAUDE.md | wc -l                                        
 5. **ADR claims the code drifted from.** For each ADR, take the checkable claims in its
    Decision (a file exists, a value, a count, an import is absent) and re-run the check.
    With more than about 5 ADRs, delegate to `anomaly:facts` (`explore` role: model, effort if set) with the ADR paths and
-   a ≤900-word cap.
+   a ≤900-word cap. It has no git: pass it the `git ls-files` path list, and re-count with git
+   every number it returns.
 
 **Count and report:** ADR count, "why" paragraphs in CLAUDE.md, rewrite count, overdue
 revisit dates, unkeyed deferrals with age, dead paths, commit decisions with no ADR,
