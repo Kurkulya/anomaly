@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from anomaly_loop import check, cli, privacy, ticket
-from anomaly_loop.constants import TICKET_TITLE_MAX_CHARS
+from anomaly_loop.constants import MODEL_ROLES, TICKET_TITLE_MAX_CHARS
 from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 
 NOW_DATE = date(2026, 10, 4)
@@ -1401,6 +1401,10 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(ticket.parse('# 03: T\n\nModel: implement\n').model, 'implement')
         self.assertEqual(ticket.parse('# 03: T\n').model, 'implement')
         self.assertEqual(ticket.parse('# 03: T\n\nSee Model: implement_wide in the spec.\n').model, 'implement')
+
+    def test_the_ticket_model_values_are_model_roles_of_the_core(self):
+        """D-27: `IMPLEMENTER_ROLES` copies two role names, so it must stay inside `constants.MODEL_ROLES`."""
+        self.assertLessEqual(set(ticket.IMPLEMENTER_ROLES), {role for role, _ in MODEL_ROLES})
 
     def test_tests_and_started_are_exposed(self):
         parsed = ticket.parse('# 03: T\n\nTests: unit / e2e\nMetrics: started 2026-10-04 11:00 · merged x\n')
