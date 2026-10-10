@@ -1019,6 +1019,7 @@ class InterviewSkillTest(unittest.TestCase):
         with self.subTest('the rule says Markdown with bold labels, blank lines and list options, and no "no emoji"'):
             self.assertNotIn('no emoji', section.lower())
             rule = next((line for line in section.splitlines() if line.strip()), '')
+            self.assertRegex(rule.lower(), r'^markdown\b')
             self.assertRegex(rule.lower(), r'bold labels')
             self.assertRegex(rule.lower(), r'blank line')
             self.assertRegex(rule.lower(), r'options as a list')
@@ -1035,7 +1036,7 @@ class InterviewSkillTest(unittest.TestCase):
             for letter in 'AB':
                 self.assertTrue(any(line.startswith(f'- **{letter})** ') for line in template),
                                 f'the round template has no option line starting "- **{letter})** "')
-            self.assertFalse([line for line in template if re.match(r'- [a-z]\) ', line)],
+            self.assertFalse([line for line in template if re.match(r'- (\*\*)?[a-z]\)', line)],
                              'the round template still has a lowercase "- a) " option line')
         with self.subTest('the template has a blank line between its blocks'):
             for label in (pending, defaults, question, assumes):
@@ -1047,6 +1048,7 @@ class InterviewSkillTest(unittest.TestCase):
             self.assertEqual(template[at - 1], '', 'no blank line before the Recommend line')
         with self.subTest('the close table and the confirm question carry no icons'):
             close = text.split('\n## The close', 1)[1]
+            self.assertIn('no icons', close.lower())
             self.assertNotRegex(close, '[⌚-⏿☀-➿⭐️\U0001f000-\U0001faff]')
 
     def test_it_writes_d_and_t_lines_with_a_source_after_each_round_and_edits_nothing_else(self):

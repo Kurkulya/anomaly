@@ -70,8 +70,8 @@ Write the settled items to `.anomaly/<work unit>/decisions.md`; no other file ch
 
 Done when the frontier is empty and nothing is assumed silently. [GR8, CM1]
 
-1. Show a table, one line per `D-n` and `T-n`, with the counts of recommendations accepted, rejected and revised, shown here only. [A5, A6]
-2. Ask one confirm question with AskUserQuestion, the only use of it; text everywhere else. Act on nothing before the yes. [GR9, K3, CM11]
+1. Show a table, no icons, one line per `D-n` and `T-n`, with the counts of recommendations accepted, rejected and revised, shown here only. [A5, A6]
+2. Ask one confirm question, no icons, with AskUserQuestion, the only use of it; text everywhere else. Act on nothing before the yes. [GR9, K3, CM11]
 3. On "stop", keep an `Open:` list of the unanswered items only in `decisions.md`.
 4. `worklog add`, stage `interview`; leave out `--docs` when the work unit folder does not exist.
 5. Offer `/anomaly:specify <work unit>` as the next-step line; the stage end and the `/clear` rule are in [boundaries.md](../../docs/boundaries.md). [CM3, CM2]
