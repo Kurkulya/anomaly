@@ -6,7 +6,8 @@ module ranks, records and judges, so the numbers never depend on the conversatio
   effort   set the effort of one or more anomalies (`--set signature=S`)
   declare  write the experiment BEFORE the change: expect, one metric, one guard, check_by, kind,
            and for a switch-over the new skill (ADR-0013)
-  fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed
+  fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed; with
+           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0021)
   verify   judge a due experiment from the numbers and write its result
   decide   the user's result for an experiment the numbers could not judge
   close    mark anomalies wontfix (stale ones)
@@ -20,7 +21,9 @@ workflow-category problem can be fixed only with score WORKFLOW_MIN_SCORE or mor
 highest impact (workflow_gate): below that it is shown
 as waiting and adds nothing to the sum. A problem whose target already had a reverted experiment
 says so, and a target that a win with 2 or more sightings is about is marked as protected
-from removal (flags.protected_by_win).
+from removal (flags.protected_by_win). With no plugin checkout (gitrepo.plugin_repo is None), a problem
+whose target is a skill or agent of this plugin names its addenda file as the fix home (fix_home); a
+skill in addenda.NO_ADDENDA has none, and any other part of the plugin is an upstream defect.
 
 Declaring (ADR-0002). An experiment is declared before the change: one metric, one guard from
 QUALITY_GUARDS, and `declared_on` = today; `fix` refuses a fix dated before it, and sets a blank
@@ -30,19 +33,21 @@ any case, or a path inside the plugin folder or its checkout) needs --approved.
 The metric registry and the verdict live in verdict.py.
 """
 import copy
+import sys
 from collections import Counter, namedtuple
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import digest, flags, gitrepo, observe, privacy, profile, records, trends, verdict
+from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
-                        GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS, SIGHTING_MAX_CHARS,
-                        WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
+                        GUARD_HELP, IMPACT_RANGE, PLUGIN_AGENTS_DIR, QUALITY_GUARDS, SESSION_KINDS,
+                        SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
 from .files import RecordError
 
 MERGED_HEADING = 'Merged'
 WHOLE_SCOPES = ('repo:', 'plugin:')   # scopes that are one batch each; any other scope is split by target
 UNTARGETED = 'untargeted'
+UPSTREAM_DEFECT = 'upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream'
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): calibrate '
 
 
@@ -105,7 +110,8 @@ def tried_before(anomalies, anomaly):
             if other.signature == anomaly.signature or (target and other.target.strip() == target)]
 
 
-def problem_line(context, anomaly):
+def problem_line(context, anomaly, plugin):
+    """The plan's line of one problem; `plugin` is gitrepo.plugin_repo's answer."""
     marks = []
     gate = workflow_gate(anomaly)
     if gate:
@@ -119,6 +125,9 @@ def problem_line(context, anomaly):
     if wins:
         marks.append(f'protected: a win with {wins} sightings is about this target; never remove it '
                      'without an explicit override')
+    home = fix_home(context, target, plugin)
+    if home:
+        marks.append(home)
     head = (f'  - {anomaly.score} {anomaly.signature} · {anomaly.category} · effort {anomaly.effort or "?"}'
             f' · {anomaly.target or "no target"}')
     return ' · '.join([head] + marks)
@@ -139,10 +148,11 @@ def plan_lines(context):
     lines += [f'#{line}' if line.startswith('## ') else line for line in tidy] or ['- nothing to tidy']
     lines += ['', '## Batches (summed score of the problems that can be fixed now)']
     found = batches(context)
+    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
     for number, batch in enumerate(found, start=1):
         count = flags.plural(len(batch.problems), 'problem')
         lines.append(f'{number}. {batch.scope} · score {batch.total} · {count}')
-        lines += [problem_line(context, a) for a in batch.problems]
+        lines += [problem_line(context, a, plugin) for a in batch.problems]
     if not found:
         lines.append('- no open problems')
     counts = recent_sessions_by_kind(context)
@@ -176,19 +186,73 @@ def only_one(values, what):
     return values[0] if values else None
 
 
-def changes_this_plugin(context, target):
-    """True when the target is this plugin: a path inside the plugin folder or its checkout's plugin
-    folder (flags.target_path), or `<plugin name>:...` (flags.names_this_plugin)."""
+PluginPart = namedtuple('PluginPart', 'name agent unit')   # unit: the skill folder or agent file, else None
+
+
+def plugin_part(context, target, plugin):
+    """The part of this plugin a target is, or None when it is not this plugin. A target is this plugin
+    when it is a path inside the plugin folder or its checkout's plugin folder (flags.target_path), or
+    `<plugin name>:...` (flags.names_this_plugin). The part is a skill (`<plugin>:<skill>` or a path inside
+    `skills/<skill>/`), an agent (`<plugin>:<agent>` or `agents/<agent>.md`), or else (name and unit None)
+    plugin code or docs, or a `<plugin>:...` that names no skill or agent. The qualifier ends at the first
+    `:` and is read before any path, and after it only the first word counts, so `anomaly:review step 10:
+    delta` and `anomaly:review asks and/or skips` are the review skill. `plugin` is gitrepo.plugin_repo's answer."""
     target = target.strip()
     if not target:
-        return False
-    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
+        return None
+    root = Path(context.plugin_root)
+    qualifier, colon, rest = target.partition(':')   # flags.resolve_target reads a target differently (paths first)
+    if colon and flags.names_this_plugin(context, qualifier, plugin):
+        name = (rest.split() or [''])[0]
+        if not privacy.is_identifier(name) or ':' in name:
+            return PluginPart(None, False, None)
+        if (root / 'skills' / name / flags.SKILL_FILE).is_file():
+            return PluginPart(name, False, root / 'skills' / name)
+        if (root / PLUGIN_AGENTS_DIR / f'{name}.md').is_file():
+            return PluginPart(name, True, root / PLUGIN_AGENTS_DIR / f'{name}.md')
+        return PluginPart(None, False, None)
     if flags.is_path(target):
         found = flags.target_path(context, target, plugin)
-        folders = [Path(context.plugin_root)] + ([Path(plugin[1])] if plugin else [])
-        return found is not None and any(found.resolve().is_relative_to(f.resolve()) for f in folders)
-    qualifier, colon, _ = target.rpartition(':')
-    return bool(colon) and flags.names_this_plugin(context, qualifier, plugin)
+        folders = [root] + ([Path(plugin[1])] if plugin else [])
+        base = next((f for f in folders if found is not None and found.resolve().is_relative_to(f.resolve())), None)
+        if base is None:
+            return None
+        parts = found.resolve().relative_to(base.resolve()).parts
+        if len(parts) >= 2 and parts[0] == 'skills' and (base / 'skills' / parts[1] / flags.SKILL_FILE).is_file():
+            return PluginPart(parts[1], False, base / 'skills' / parts[1])
+        if len(parts) == 2 and parts[0] == PLUGIN_AGENTS_DIR and found.suffix == '.md' and found.is_file():
+            return PluginPart(found.stem, True, found)
+        return PluginPart(None, False, None)
+    return None
+
+
+def changes_this_plugin(context, target):
+    """True when the target is this plugin (plugin_part)."""
+    if not target.strip():
+        return False
+    return plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile)) is not None
+
+
+def takes_no_addenda(part):
+    return not part.agent and part.name in addenda.NO_ADDENDA
+
+
+def fix_home(context, target, plugin):
+    """The plan's fix-home mark of a target with no plugin checkout (ADR-0021), or None: the addenda file
+    (relative to home), or why there is none. With a checkout (`plugin` set) there is no mark."""
+    part = None if plugin is not None else plugin_part(context, target, plugin)
+    if part is None:
+        return None
+    if part.unit is None:
+        return UPSTREAM_DEFECT
+    if takes_no_addenda(part):
+        return f'fix home: none, {part.name} takes no addenda'
+    return f'fix home: {home_relative(context.home, addenda.addendum_path(context.home, part.name, part.agent))}'
+
+
+def home_relative(home, path):
+    """A path inside home as the plan's fix-home mark and a `fixed_by` ref name it: relative, with `/`."""
+    return Path(path).relative_to(Path(home)).as_posix()
 
 
 def switch_over_text(kind, skill):
@@ -203,6 +267,45 @@ def writable(context):
     """signature -> Anomaly from a strict Context, for a command that reads the context and then
     writes: home is read once, and the records are copied so the context itself is never changed."""
     return {a.signature: copy.deepcopy(a) for a in context.anomalies}
+
+
+Addendum = namedtuple('Addendum', 'path unit line')   # the addenda file, the skill folder or agent file, the rule
+
+
+def checked_addendum(context, anomaly, label, line, environ):
+    """The addendum `fix --addendum` writes for this anomaly, after its checks: the target is one skill
+    (not one in addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text)
+    that no live deny rule fully matches (scans.deny_regex)."""
+    target = anomaly.target.strip()
+    part = plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile))
+    if part is None or part.unit is None:
+        raise RecordError(f'{label}: an addendum adds to one skill or agent of this plugin; the target '
+                          f'{target or "(none)"} is not `<plugin>:<skill>`, `<plugin>:<agent>` or a path inside one '
+                          'skill folder or agent file')
+    if takes_no_addenda(part):
+        raise RecordError(f'{label}: {part.name} takes no addenda')
+    if not line.strip():
+        raise RecordError(f'{label}: --addendum is empty; give the rule in one line')
+    privacy.check_text(label, 'addendum', line, SIGHTING_MAX_CHARS)
+    line = line.strip()
+    for rule in scans.deny_rules(scans.settings_files(environ, sys.platform, Path.home())):
+        regex = scans.deny_regex(rule)
+        if regex is not None and regex.fullmatch(line):
+            raise RecordError(f'{label}: the addendum is a whole command that the deny rule {rule} denies; '
+                              'write the rule in words')
+    return Addendum(addenda.addendum_path(context.home, part.name, part.agent), part.unit, line)
+
+
+def write_addendum(home, anomaly, addendum):
+    """Append the tagged line to its addenda file and commit that file alone; returns the lines to print.
+    The fixed anomaly record is validated first, as observe.write_anomalies does, so a record that cannot be
+    saved leaves no line behind."""
+    problems = records.validate_anomaly(anomaly)
+    if problems:
+        raise RecordError(f'anomaly {anomaly.signature}: ' + '; '.join(problems))
+    tagged = addenda.append_line(addendum.path, addendum.line, anomaly.signature, addenda.stamp(addendum.unit))
+    return [f'addendum: {tagged}',
+            observe.commit_home(home, [addendum.path], COMMIT_PREFIX + f'addendum for {anomaly.signature}')]
 
 
 # ---------- the subcommands ----------
@@ -338,11 +441,14 @@ def run_fix(args, environ):
     if day < date.fromisoformat(experiment.declared_on):
         raise RecordError(f'{label}: --date {day} is before the experiment was declared '
                           f'({experiment.declared_on}); a fix is declared before the change')
-    privacy.check_text(label, 'ref', args.ref.strip(), SIGHTING_MAX_CHARS)
-    anomaly.fixed_by = records.fixed_by_text(day, args.ref)
+    addendum = None if args.addendum is None else checked_addendum(context, anomaly, label, args.addendum, environ)
+    ref = args.ref if addendum is None else home_relative(home, addendum.path)
+    privacy.check_text(label, 'ref', ref.strip(), SIGHTING_MAX_CHARS)
+    anomaly.fixed_by = records.fixed_by_text(day, ref)
     anomaly.status = 'fixed'
     if not records.is_date(experiment.check_by):
         experiment.check_by = (day + timedelta(days=EXPERIMENT_CHECK_DAYS)).isoformat()
+    written = [] if addendum is None else write_addendum(home, anomaly, addendum)
     if experiment.skill:
         lines = [f'fixed: {anomaly.signature} · fixed_by {anomaly.fixed_by} · due after '
                  f'{EXPERIMENT_CHECK_SESSIONS} {experiment.skill} sessions (the check date alone does not make a '
@@ -352,7 +458,7 @@ def run_fix(args, environ):
                  + (f' or after {EXPERIMENT_CHECK_SESSIONS} {experiment.kind} sessions' if experiment.kind else '')]
     lines.append(observe.save_anomalies(home, today, anomalies, [anomaly.signature],
                                         COMMIT_PREFIX + f'fix {anomaly.signature}'))
-    print('\n'.join(lines))
+    print('\n'.join(written + lines))
     return 0
 
 
@@ -495,7 +601,10 @@ def register(commands, common):
                          help="only after the user's explicit yes to changing this plugin")
     fix = action('fix', run_fix, 'record the change after it landed')
     fix.add_argument('--signature', required=True)
-    fix.add_argument('--ref', required=True, help='the commit or file that holds the change')
+    change = fix.add_mutually_exclusive_group(required=True)
+    change.add_argument('--ref', help='the commit or file that holds the change')
+    change.add_argument('--addendum', help="the rule line to append to the target skill's or agent's addenda file "
+                                           'in home; that file becomes the ref')
     fix.add_argument('--date', help='the day it landed (default today)')
     verify = action('verify', run_verify, 'judge a due experiment and write its result')
     verify.add_argument('--signature', required=True)

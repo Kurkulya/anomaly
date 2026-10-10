@@ -56,6 +56,8 @@ METRICS_FILE = 'metrics.jsonl'
 INDEX_FILE = 'INDEX.md'
 ANOMALIES_DIR = 'anomalies'
 IDEAS_DIR = 'ideas'
+ADDENDA_DIR = 'addenda'              # <home>/addenda/<skill>.md and <home>/addenda/agents/<agent>.md (ADR-0021)
+ADDENDA_MAX_LINES = 5                # lines in one addenda file: one line is one experiment
 LENSES_FILE = 'lenses.jsonl'
 SESSION_KINDS_FILE = 'session-kinds.jsonl'
 PROFILE_FILE = 'profile.md'
@@ -153,6 +155,7 @@ TICKET_STATUS_WONTFIX = 'wontfix'
 # ---------- pipeline skills ----------
 
 LOOP_SKILLS = ('measure', 'observe', 'calibrate', 'assess')   # every other skill is a pipeline skill
+PLUGIN_AGENTS_DIR = 'agents'         # the plugin's agent files: <plugin folder>/agents/<agent>.md
 CLI_COMMAND = 'python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py"'   # the one way a skill runs the CLI
 CLI_PATTERN = f'Bash({CLI_COMMAND} *)'   # the one entry of a pipeline skill's allowed-tools
 

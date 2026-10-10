@@ -61,3 +61,4 @@
 | **lock** | A guard that stops an architecture finding from coming back: an import or lint rule at error level, or a failing test. | guard rail |
 | **cover** | The kept test that a test cut relies on: it must fail on each break of the cut test's behaviour. | replacement |
 | **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the README uses "mutation probe" and "probe edit") |
+| **addendum** | One rule line in a user's addenda file in home, tied to one experiment, that adds to or narrows one plugin skill or agent (ADR-0021). | patch, override, local rule |
