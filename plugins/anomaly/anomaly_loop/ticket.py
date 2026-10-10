@@ -58,7 +58,8 @@ STATUS_WORD = re.compile(r'[\w-]+')
 AC_ID = re.compile(r'AC-\d+')
 AMEND_TARGET = re.compile(r'(?:AC|D)-\d+')
 AMENDED_LINE = re.compile(r'(\s*)Amended \d{4}-\d{2}-\d{2}\b')
-CHECKBOX = re.compile(r'(\s*[-*+]\s+\[)([ xX])(\]\s*\**AC-(\d+)(?!\d))')
+CHECKBOX_MARK = r'[ xX]'   # the mark inside an AC checkbox `[ ]`: open, or ticked in either case
+CHECKBOX = re.compile(rf'(\s*[-*+]\s+\[)({CHECKBOX_MARK})(\]\s*\**AC-(\d+)(?!\d))')
 STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
 OPEN_ITEMS = re.compile(r'\bOpen(?:\s*\([^)]*\))?:\s*(.+)$')
@@ -470,7 +471,7 @@ def amend(text, today, note, after=None):
         return join_lines(lines)
     if not AMEND_TARGET.fullmatch(after):
         raise RecordError(f'--after names an AC or a decision like AC-12 or D-3, got: {after}')
-    item, skip = re.compile(rf'\s*[-*+]\s+(?:\[[ x]\]\s+)?\**{re.escape(after)}(?!\d)'), fenced(lines)
+    item, skip = re.compile(rf'\s*[-*+]\s+(?:\[{CHECKBOX_MARK}\]\s*)?\**{re.escape(after)}(?!\d)'), fenced(lines)
     target = next((index for index, (body, _) in enumerate(lines) if index not in skip and item.match(body)), None)
     if target is None:
         raise RecordError(f'no {after} line in the file')

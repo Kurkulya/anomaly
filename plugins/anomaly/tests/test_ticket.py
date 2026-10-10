@@ -431,15 +431,18 @@ class AmendTest(TicketTestCase):
             '- AC-2:', f'Amended 2026-10-04: {AMEND_NOTE}\n- AC-2:'))
 
     def test_after_an_ac_writes_the_line_right_below_a_ticket_checkbox_ac_line_open_or_checked(self):
-        """AC-28, D-23: a ticket writes its ACs as `- [ ] AC-n:` or `- [x] AC-n:`."""
-        text = TICKET_TEXT.replace('- [ ] AC-2:', '- [x] AC-2:')
+        """AC-28, D-23: a ticket writes its ACs as `- [ ] AC-n:` or `- [x] AC-n:`; `- [X] AC-n:`, which `ticket result`
+        also ticks, is found too."""
+        text = TICKET_TEXT.replace('- [ ] AC-2:', '- [x] AC-2:').replace('- [ ] AC-3:', '- [X] AC-3:')
         path = self.ticket_path(text)
-        for ac in ('AC-1', 'AC-2'):
+        for ac in ('AC-1', 'AC-2', 'AC-3'):
             code, out, err = self.run_ticket('amend', str(path), '--after', ac, f'{ac} note')
             self.assertEqual((code, err), (0, ''))
         self.assertEqual(self.read(path), text.replace(
             '- [ ] AC-1: first criterion\n', '- [ ] AC-1: first criterion\nAmended 2026-10-04: AC-1 note\n').replace(
-            '- [x] AC-2: second criterion\n', '- [x] AC-2: second criterion\nAmended 2026-10-04: AC-2 note\n'))
+            '- [x] AC-2: second criterion\n', '- [x] AC-2: second criterion\nAmended 2026-10-04: AC-2 note\n').replace(
+            '- [X] AC-3: not covered by this ticket\n',
+            '- [X] AC-3: not covered by this ticket\nAmended 2026-10-04: AC-3 note\n'))
 
     def test_the_after_help_names_ticket_files_too(self):
         """AC-28, D-23: the `--after` help of `ticket amend` names ticket files besides stories.md and decisions.md."""
