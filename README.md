@@ -601,8 +601,8 @@ existed (older rows lack it; `measure --full` adds it for transcripts still on d
 are offered as `wontfix`; wins and anomalies seen more than once are never offered. Two open
 anomalies of the same kind are near-duplicates when they share a target and category and their
 summaries or proposed fixes share at least 30% of their words, or when their signatures share at least 60% of their words; records that are linked this way are printed
-as one group, 5 groups at most. Each review lens
-shows accepted findings over all findings, summed over `lenses.jsonl`.
+as one group, 5 groups at most. Each lens (a review lens, or `model_pick`)
+shows accepted findings over all findings, summed over `lenses.jsonl`, under the heading `## Lenses`.
 
 **Unused plugin skills.** A skill of this plugin with no use in the last 56 days is proposed for
 removal. Its start is the first commit of its folder in the plugin repository, so nothing

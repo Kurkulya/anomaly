@@ -270,7 +270,7 @@ def lens_rates(context):
         percent = round(100 * accepted[lens] / total)
         lines.append(f'- {lens}: {accepted[lens]} of {total} accepted ({percent}%) in '
                      f'{plural(sessions[lens], "session")}')
-    return ['## Review lenses'] + lines if lines else []
+    return ['## Lenses'] + lines if lines else []
 
 
 # ---------- unused plugin skills ----------
