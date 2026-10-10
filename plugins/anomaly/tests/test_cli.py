@@ -1646,5 +1646,98 @@ class ConductSkillTest(unittest.TestCase):
         self.assertRegex(about, r'(?i)\bpicks?\b')
 
 
+class ModelPickSkillTest(unittest.TestCase):
+    """Model-roles ticket 07 (AC-17, AC-18, with their Amended lines): the skill text that adds the `model_pick`
+    tally at each `implement` ticket's close and moves the session sum behind the session's last close. By key
+    tokens, so the wording stays free. The build SKILL.md byte cap is the all-skills size test, not checked here."""
+    BUILD = PLUGIN / 'skills' / 'build' / 'SKILL.md'
+    REVIEW = PLUGIN / 'skills' / 'review' / 'SKILL.md'
+    OBSERVE = PLUGIN / 'skills' / 'observe' / 'SKILL.md'
+
+    def build_text(self):
+        self.assertTrue(self.BUILD.is_file(), self.BUILD.relative_to(PLUGIN).as_posix())
+        return self.BUILD.read_text(encoding='utf-8')
+
+    def close_items(self):
+        """The numbered items of build's Close, each as one line of text (a wrapped line joins its item)."""
+        section = self.build_text().split('**Close**', 1)[1].split('\n## ', 1)[0]
+        return [' '.join(item.split('\n\n')[0].split()) for item in re.split(r'\n(?=\d+\. )', section)[1:]]
+
+    def pick_item(self):
+        """The one Close item that holds the `model_pick` rule."""
+        found = [item for item in self.close_items() if 'model_pick' in item]
+        self.assertEqual(len(found), 1, found)
+        return found[0]
+
+    def test_build_lists_the_tally_add_the_sum_and_the_apply_as_cli_calls_in_the_exact_form(self):
+        """AC-17, AC-18: the calls sit in the CLI block, where the exact-form checks of test_pipeline_files read them."""
+        text = self.build_text()
+        cli_command = re.escape(constants.CLI_COMMAND)
+        for call in (r'lens tally add\b[^\n]*--lens model_pick\b', r'lens tally sum\b', r'observe apply\b'):
+            with self.subTest(call=call):
+                self.assertRegex(text, rf'(?m)^{cli_command} {call}')
+
+    def test_the_close_item_adds_the_model_pick_tally_after_ticket_result_rejected_at_two_fix_rounds_or_more(self):
+        """AC-17: `fix rounds` 2 or more -> rejected 1, else accepted 1; the count is the one passed to
+        `ticket result --fix-rounds` (`ticket show` prints no Metrics line)."""
+        items = self.close_items()
+        item = self.pick_item()
+        self.assertLess(next(i for i, text in enumerate(items) if 'ticket result' in text), items.index(item))
+        self.assertIn('lens tally add', item)
+        self.assertRegex(item, r'(?i)(?:2 or more|≥ ?2|>= ?2)[^.]{0,80}rejected[^.]{0,20}1[^.]{0,40}(?:else|otherwise)'
+                               r'[^.]{0,40}accepted[^.]{0,20}1')
+        self.assertIn('fix rounds', item)
+        self.assertIn('--fix-rounds', item)
+
+    def test_an_implement_wide_ticket_adds_no_model_pick_line(self):
+        """AC-17."""
+        self.assertRegex(self.pick_item(), r'(?i)`implement_wide`[^.]{0,60}\b(?:no|not|never|without)\b'
+                                           r'|\b(?:no|not|never|skip|without)\b[^.]{0,60}`implement_wide`')
+
+    def test_a_ticket_without_a_model_line_is_implement_and_gets_a_model_pick_line(self):
+        """AC-17, Amended 2026-10-10: adhoc and light-path tickets have no `Model:` line."""
+        self.assertRegex(self.pick_item(), r'(?i)\b(?:no|without|missing|lacks?)\b[^.]{0,40}`Model:`[^.]{0,80}`implement`(?![\w])'
+                                           r'|`Model:`[^.]{0,30}\b(?:missing|absent)\b[^.]{0,60}`implement`(?![\w])')
+
+    def test_a_resumed_build_with_an_unknown_fix_rounds_count_adds_no_model_pick_line(self):
+        """AC-17, Amended 2026-10-10: `ticket show` cannot give the count back."""
+        self.assertRegex(self.pick_item(), r'(?i)\bunknown\b[^.]{0,60}\b(?:adds? no|no|never|skip\w*)\b[^.]{0,30}(?:line|`model_pick`)')
+
+    def test_build_sums_and_applies_after_the_close_only_when_the_user_called_it_and_its_ticket_is_the_last(self):
+        """AC-18, Amended 2026-10-10 (D-33): the tally is added at each close; only the sum waits. `conduct` sums in
+        its cumulative review, so a conduct-called build never sums."""
+        items = self.close_items()
+        close = ' '.join(items)
+        for token in ('model_pick', 'lens tally sum', 'observe apply'):
+            self.assertIn(token, close)
+        self.assertLess(close.index('model_pick'), close.index('lens tally sum'))
+        summing = [item for item in items if 'lens tally sum' in item]
+        self.assertEqual(len(summing), 1, summing)
+        self.assertIn('observe apply', summing[0])
+        self.assertLess(summing[0].index('lens tally sum'), summing[0].index('observe apply'))
+        self.assertRegex(summing[0], r'(?i)\buser\b')
+        self.assertRegex(summing[0], r'(?i)\blast\b')
+
+    def test_build_tells_review_its_rounds_are_not_the_last(self):
+        """AC-18, D-33: the Review paragraph passes "last review: no" in place of "last review of the session"."""
+        review = self.build_text().split('**Review**', 1)[1].split('\n\n', 1)[0]
+        self.assertIn('last review: no', ' '.join(review.split()))
+
+    def test_review_step_10_keeps_the_sum_for_the_user_specify_slice_and_conduct(self):
+        """AC-18, Amended 2026-10-10: step 9 keeps its number (the plan-gate test pins it), so the callers go in
+        step 10."""
+        step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
+        for token in ('lens tally sum', 'observe apply', 'user', '`specify`', '`slice`', '`conduct`', 'last review: yes'):
+            with self.subTest(token=token):
+                self.assertIn(token, step)
+
+    def test_observe_lists_model_pick_among_the_fixed_lens_names(self):
+        """AC-18."""
+        text = ' '.join(self.OBSERVE.read_text(encoding='utf-8').split())
+        names = re.search(r'fixed names[^)]*\([^)]*\)', text)
+        self.assertIsNotNone(names, 'observe no longer lists the fixed lens names')
+        self.assertIn('`model_pick`', names.group(0))
+
+
 if __name__ == '__main__':
     unittest.main()

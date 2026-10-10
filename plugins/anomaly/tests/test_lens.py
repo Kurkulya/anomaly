@@ -157,8 +157,19 @@ class AddTest(LensCase):
 
     def test_a_lens_name_outside_the_allowed_set_is_refused_with_the_allowed_names_and_nothing_is_written(self):
         """AC-97: on an empty profile the allowed lens names are the three core lenses, `plan` and `interview`."""
-        assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security', lens.PLAN_LENS, lens.INTERVIEW_LENS)
+        assert_cli_error(self, self.add('naming'), 'code', 'feature', 'security', lens.PLAN_LENS, lens.INTERVIEW_LENS,
+                         'model_pick')
         self.assertFalse(self.data.exists())
+
+    def test_the_model_pick_lens_is_accepted_without_a_profile_like_the_interview_lens_and_summed_into_the_batch(self):
+        """Model-roles ticket 07, AC-18: `build` counts an `implement` ticket's pick under `model_pick`."""
+        self.assertEqual(lens.MODEL_PICK_LENS, 'model_pick')
+        self.add_ok('model_pick', 0, 1)
+        self.add_ok('code', 2, 0)
+        self.assertEqual([row['lens'] for row in self.tally_lines()], ['model_pick', 'code'])
+        _, batch = self.summed()
+        self.assertEqual(batch, {'lenses': [dict(session=SID, lens='model_pick', accepted=0, rejected=1),
+                                            dict(session=SID, lens='code', accepted=2, rejected=0)]})
 
     def test_an_org_reviewer_from_the_reviewers_port_is_a_lens_under_its_adapter_name(self):
         """AC-97: the allowed names follow the profile's reviewers port, so the refusal lists the org name too."""
