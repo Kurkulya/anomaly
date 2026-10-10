@@ -8,7 +8,7 @@ Revisit: when a second reader of `lenses.jsonl` needs the history of a session's
 
 ## Context
 
-`observe apply` skipped a lens record when the session already had a line for that lens. This kept a repeated apply from inflating the counts. `lens tally sum` adds up every run of the session, and the build and review skills apply after a ticket's close. A session that builds more than one ticket applies more than once, and every apply after the first was skipped. The rule lived only in README.md and in docstrings (`observe.py`, `lens.py`) on main at d33184f, in no ADR. The one reader, `lens_rates` in `flags.py`, sums the counts per lens over all lines and counts one session per line.
+`observe apply` skipped a lens record when the session already had a line for that lens. This kept a repeated apply from inflating the counts. `lens tally sum` adds up every run of the session, and the build and review skills apply after a ticket's close. A session that builds more than one ticket applies more than once, and every apply after the first was skipped. On main at d33184f the rule lived in README.md, in docstrings (`observe.py`, `lens.py`) and, as a premise, in one ADR-0019 Decision sentence (`docs/adr/0019-slice-picks-the-implementer-model.md:18`: a lens counts once per session), which this ADR partly supersedes. The one reader, `lens_rates` in `flags.py`, sums the counts per lens over all lines and counts one session per line.
 
 ## Decision
 
@@ -30,3 +30,4 @@ The newest cumulative sum is the session's true count, and replacing keeps one l
 ## Accepted risks
 
 - [ ] `lenses.jsonl` is no longer append-only; a crash during the whole-file write is covered by the atomic replace only. Owner: VK · Revisit: 2027-01-11.
+- [ ] The rule assumes one apply at a time: the window from reading `lenses.jsonl` to the rename is not locked, and the write goes through a fixed temporary file name (`files.write_text`), so two applies at once can lose one replace. Owner: VK · Revisit: 2027-01-11.
