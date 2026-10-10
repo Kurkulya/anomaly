@@ -2021,7 +2021,7 @@ is read only at the ready gate. Its only pre-approved tool is the CLI.
 branch, then takes the one MR to the ready gate. It is model-invocable but acts only on an explicit
 request from you. Its text is `plugins/anomaly/skills/conduct/SKILL.md` (8 KB or less); the
 kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode, and the parallel text
-`PARALLEL.md` (3 KB or less) only after you pick a parallel wave. Its only pre-approved tool is
+`PARALLEL.md` (3200 bytes or less) only after you pick a parallel wave. Its only pre-approved tool is
 the CLI.
 
 - **Start.** `worklog start`, `ports`, then `frontier` (its warnings are shown; blockers stop the

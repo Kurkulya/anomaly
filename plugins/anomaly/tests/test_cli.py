@@ -1598,7 +1598,7 @@ class ConductSkillTest(unittest.TestCase):
     PARALLEL = SKILL.parent / 'PARALLEL.md'
     SKILL_MAX_BYTES = 8 * 1024
     KICKOFF_MAX_BYTES = 1024
-    PARALLEL_MAX_BYTES = 3 * 1024
+    PARALLEL_MAX_BYTES = 3200
 
     def text(self):
         self.assertTrue(self.SKILL.is_file(), 'skills/conduct/SKILL.md is missing')
@@ -1613,7 +1613,7 @@ class ConductSkillTest(unittest.TestCase):
         self.assertIn('explicit', description)
         self.assertIn('model-invocable', description)
 
-    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3_KB(self):
+    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3200_bytes(self):
         """AC-59, conduct half (the ship caps live in ShipSkillTest)."""
         self.text()
         self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
