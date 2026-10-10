@@ -2,7 +2,7 @@
 
 Status: Proposed · Date: 2026-10-10 · Owner: VK · Revisit-by: 2027-01-10
 
-Decision: each kind of subagent dispatch has its own agent and its own model role (`lookup`, `explore`, `digest`, and per-lens `review_*` roles); a model or effort change for one role is a `calibrate` experiment on the new metric `model-weighted tokens per dispatch <agent>`, with the guard rework sightings, approved by the user; a cheaper model for facts or for a reviewer must first pass a bench. The plugin never switches a model by itself.
+Decision: each kind of subagent dispatch has its own agent and its own model role (`explore`, `digest`, and per-lens `review_*` roles); a model or effort change for one role is a `calibrate` experiment on the new metric `model-weighted tokens per dispatch <agent>`, with the guard rework sightings, approved by the user; a cheaper model for facts or for a reviewer must first pass a bench. The plugin never switches a model by itself.
 Why: `weighted tokens` weighs token types only, so a haiku switch showed no saving; the facts dispatches named a model role but no agent, so their cost could not be told apart; and per-agent quality signals are too thin for an automatic router to trust (ADR-0009).
 Revisit: when Claude Code publishes a per-model quota ratio, when API prices change, when the advisor shows up in transcripts, or 2027-01-10.
 
