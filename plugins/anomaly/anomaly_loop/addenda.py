@@ -53,7 +53,8 @@ def append_line(path, line, signature, stamp):
     is not changed: one line is one experiment."""
     lines = read_lines(path)
     if any(f'[exp: {signature} · ' in old for old in lines):
-        raise RecordError(f'{path}: already holds a line of the experiment {signature}; one line is one experiment')
+        raise RecordError(f'{path}: already holds a line of the experiment {signature}, and one line is one '
+                          'experiment; remove the old line from this file first, then run the fix again')
     if len(lines) >= ADDENDA_MAX_LINES:
         raise RecordError(f'{path}: holds {len(lines)} lines, the cap of an addenda file is {ADDENDA_MAX_LINES}; '
                           'drop or upstream a line first')
