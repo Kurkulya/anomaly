@@ -33,6 +33,11 @@ META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""
 SHORT_PAGE = 2000
 HIT_LIMIT = 6
 SCHEMES = ('http', 'https', 'file')
+COMMENT = re.compile(r'<!--.*?-->', re.S)
+HIDDEN_NAMES = ('script', 'style', 'noscript', 'template')
+HIDDEN_OPEN = re.compile(rf'<({"|".join(HIDDEN_NAMES)})\b', re.I)
+HIDDEN_CLOSE = {name: re.compile(rf'</{name}\s*>', re.I) for name in HIDDEN_NAMES}
+TAG = re.compile(r'<[^>]+>')
 
 
 class FetchError(Exception):
@@ -64,11 +69,36 @@ def fetch(url):
         return content_type, body.decode('utf-8', errors='replace')
 
 
+def up_to_last(raw, regex, closer):
+    """`regex` matches as spaces in `raw` up to the end of its last `closer`. No match can end past it, and
+    leaving that tail out keeps the regex from scanning to the page end once per unclosed opener (quadratic
+    on a page of them)."""
+    end = raw.rfind(closer)
+    end = 0 if end == -1 else end + len(closer)
+    return regex.sub(' ', raw[:end]) + raw[end:]
+
+
+def drop_hidden(raw):
+    """Each script, style, noscript and template element as a space, as `<(name)\\b.*?</\\1\\s*>` would, in one
+    pass: once a name has no closing tag left, its later openers are skipped, not each scanned to the page end."""
+    parts, kept_from, at, unclosed = [], 0, 0, set()
+    while (opener := HIDDEN_OPEN.search(raw, at)) is not None:
+        name = opener[1].lower()
+        closer = None if name in unclosed else HIDDEN_CLOSE[name].search(raw, opener.end())
+        if closer is None:
+            unclosed.add(name)
+            at = opener.end()
+        else:
+            parts += [raw[kept_from:opener.start()], ' ']
+            kept_from = at = closer.end()
+    return ''.join(parts) + raw[kept_from:]
+
+
 def clean(raw):
     """Visible text with tags as spaces and every whitespace run, &nbsp; included, as one space."""
-    raw = re.sub(r'<!--.*?-->', ' ', raw, flags=re.S)
-    raw = re.sub(r'<(script|style|noscript|template)\b.*?</\1\s*>', ' ', raw, flags=re.S | re.I)
-    raw = re.sub(r'<[^>]+>', ' ', raw)
+    raw = up_to_last(raw, COMMENT, '-->')
+    raw = drop_hidden(raw)
+    raw = up_to_last(raw, TAG, '>')
     raw = html.unescape(raw)
     return re.sub(r'\s+', ' ', raw).strip()
 

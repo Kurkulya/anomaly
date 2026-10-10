@@ -61,6 +61,14 @@ class TermsGrepTest(unittest.TestCase):
         self.assertIn("'needle': 1 hit(s)", out)
         self.assertIn("'two words': 1 hit(s)", out)
 
+    def test_an_unclosed_script_keeps_its_text_and_a_later_closed_style_is_dropped(self):
+        url = self.page('<script>kept <style>dropped</style> after')
+        code, out, _ = run_cli('terms-grep', '--terms', 'kept,dropped,after', url)
+        self.assertEqual(code, 0)
+        self.assertIn("'kept': 1 hit(s)", out)
+        self.assertIn("'dropped': 0 hit(s)", out)
+        self.assertIn("'after': 1 hit(s)", out)
+
     def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
