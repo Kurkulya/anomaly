@@ -166,7 +166,7 @@ class PortTableTest(PortsCase):
         found = self.section(result, 'port')
         self.assertEqual(set(found), PORT_NAMES)
         self.assertEqual({source for _, source in found.values()}, {'core default'})
-        self.assertEqual(self.section(result, 'model')['explore'], ('haiku', 'core default'))
+        self.assertEqual(self.section(result, 'model')['explore'], ('sonnet', 'core default'))
 
     def test_the_shipped_template_copied_unchanged_adds_only_its_real_values(self):
         shutil.copy(TEMPLATE, self.home / 'profile.md')
@@ -198,7 +198,7 @@ class ModelRolesTest(PortsCase):
         found = self.section(self.ports(), 'model')
         self.assertEqual(list(found), list(MODEL_ROLES))
         self.assertEqual({role: found[role] for role in MODEL_ROLES if role not in REVIEW_LENSES}, {
-            'explore': ('haiku', 'core default'),
+            'explore': ('sonnet', 'core default'),
             'implement': ('sonnet', 'core default'),
             'implement_wide': ('opus', 'core default'),
             'digest': ('sonnet', 'core default'),
