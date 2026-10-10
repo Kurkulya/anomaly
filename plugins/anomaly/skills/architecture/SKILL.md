@@ -51,7 +51,7 @@ next free two-digit number. Write with Write, never with shell redirection.
    react → `react-ts`; `pubspec.yaml` with a `flutter:` section → `flutter`; `go.mod` → `go`; `pyproject.toml`,
    `setup.py` or `*.py` → `python`. Several matches → audit each stack apart, with its own stack profile and counts and its stack in each area slug (`NN-area-1-<stack>-layers.md`). No match → draft a stack profile with the fields of a shipped
    one, show it, use it only after the user's yes, and save it only in `research/`.
-2. Before any write, make sure the file at `git rev-parse --git-path info/exclude` has a `.anomaly/` line; add it with the Edit tool, or create the file with the Write tool if it is missing.
+2. Before any write, make sure the file at `git rev-parse --git-path info/exclude` has a `.anomaly/` line; add it with the Edit tool, or create the file with the Write tool if it is missing. Use that command for the path: in a worktree `.git` is a file.
 3. Gather the base facts (files per layer, commits, scripts, CI file) with the outline and stack profile commands into `NN-facts.md`.
 4. Read `CLAUDE.md`, `docs/README.md`, `docs/adr/*.md`, `CONTEXT.md` if any. Note
    what the repo *says* about itself; areas 6 and 7 compare that with the artifact.
