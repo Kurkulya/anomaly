@@ -56,8 +56,9 @@ claude plugin install anomaly@anomaly-local
 Inside a running session, run `/reload-plugins` (or start a new session). The four skills,
 `anomaly:measure`, `anomaly:observe`, `anomaly:calibrate` and `anomaly:assess`, should now be
 listed, and the pipeline skills `anomaly:build`, `anomaly:conduct`, `anomaly:review`,
-`anomaly:ship` and `anomaly:diagnose` beside them. `/anomaly:interview`, `/anomaly:specify` and
-`/anomaly:slice` are slash-only: they are not in that list, and you start them by typing them.
+`anomaly:ship`, `anomaly:diagnose` and `anomaly:architecture` beside them. `/anomaly:interview`,
+`/anomaly:specify` and `/anomaly:slice` are slash-only: they are not in that list, and you start
+them by typing them.
 
 The marketplace points at a folder on disk. Skills are read from that folder when you run
 `/reload-plugins`, so editing a skill needs no new version. If a change does not show up after a
@@ -2125,12 +2126,13 @@ principles, the area outline, the pitfalls and one **stack profile** per stack (
   **lock** and a one-sentence why, and is written to `.anomaly/architecture-<date>/research/`. A
   summary table follows, with the change in area scores against an earlier run.
 - **Pass two.** After your yes, per area: one bad snippet from the repo, one good rewrite (not
-  applied), the lock as a file you can apply (an import or lint rule at error level, or a test that
-  fails before the fix), and the proposed work. Nothing is implemented.
+  applied), the lock as a file you can apply (none when a guard already holds it; an import or lint
+  rule at error level, or a test that fails before the fix), and the proposed work. Nothing is
+  implemented.
 - **Hand-off.** `worklog add` (stage `architecture`, `--docs` the unit folder), then the line that
   fits: `/anomaly:interview Work unit architecture-<date>` for open choices,
-  `/anomaly:diagnose <defect>` with a `Red command:` per clear defect, or no line when nothing needs
-  to change.
+  `/anomaly:diagnose <defect>` with a `Red command:` per clear defect (none when pass two is
+  declined), or no line when nothing needs to change.
 
 ## Development
 
