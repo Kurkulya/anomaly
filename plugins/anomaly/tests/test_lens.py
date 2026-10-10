@@ -1,6 +1,6 @@
 """`lens tally add` and `lens tally sum` through the CLI, in-process: one review run's counts per lens go
 to `lens-tally.jsonl` in the data folder (never in home); `sum` writes one batch for a session into the
-data folder, in the shape `observe apply` reads, so home `lenses.jsonl` gets each lens once."""
+data folder, in the shape `observe apply` reads, so home `lenses.jsonl` keeps one line per lens per session."""
 import contextlib
 import io
 import json
