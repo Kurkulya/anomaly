@@ -248,12 +248,14 @@ def parse(text, slug='', key_line=KEY_LINE_CORE):
 
 def state_lines(text, key_line=KEY_LINE_CORE):
     """The lines `ticket show` prints: each state line with bold markers dropped, in SHOWN_KEYS order;
-    the key line is shown under the name the `key_line` port gives it."""
+    the key line is shown under the name the `key_line` port gives it; a ticket with no `Model:` line
+    shows the resolved one, MODEL_DEFAULT, as `Ticket.model` reads it."""
     lines = split_lines(text)
     shown = []
     for key in SHOWN_KEYS:
         key = key_line if key == KEY_LINE_CORE else key
-        shown += [f'{key}: {value}'.rstrip() for value in values_of(lines, key)]
+        values = values_of(lines, key) or ([MODEL_DEFAULT] if key == 'Model' else [])
+        shown += [f'{key}: {value}'.rstrip() for value in values]
     return shown
 
 

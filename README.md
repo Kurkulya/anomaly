@@ -912,8 +912,8 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   byte order mark at the start of a file does not hide the first line, and stays on write. Every
   action that writes a state line refuses a file with no `Status:` line: it is not a ticket (a wrong path).
 - `ticket show` prints the state lines that exist (`Status`, `Blocked by`, `Covers`, the key line
-  (under the name it has in the ticket), `Tests`, `Model`, `Repro`, `Base` (the integration branch,
-  which `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
+  (under the name it has in the ticket), `Tests`, `Model` (always printed, as `Model: implement` when
+  the ticket has no line), `Repro`, `Base` (the integration branch, which `build` reads here), `Reviewed`, `Verified`, `Red`, `Red-changed`) and a `warning:` line when
   the ticket has no `Blocked by:` line or its value is not only two-digit ticket numbers (see
   `ticket gate`).
 - `ticket gate` exits 1 for a ticket that waits (`ticket.waits`, the rule `frontier` uses): only a

@@ -129,7 +129,8 @@ class ShowTest(TicketTestCase):
         self.assertEqual((code, err), (0, ''))
         self.assertEqual(out.splitlines(), [
             'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
-            'Key: no-ticket', 'Tests: unit', 'Base: feat/workflow-build', 'Reviewed: abc1234', 'Verified: def5678'])
+            'Key: no-ticket', 'Tests: unit', 'Model: implement', 'Base: feat/workflow-build', 'Reviewed: abc1234',
+            'Verified: def5678'])
 
     def test_prints_the_model_line(self):
         """AC-16: the slot of `Model:` among the state lines is free; the other lines keep their order."""
@@ -142,6 +143,10 @@ class ShowTest(TicketTestCase):
         self.assertEqual([line for line in shown if not line.startswith('Model:')], [
             'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
             'Key: no-ticket', 'Tests: unit'])
+        # Amended 2026-10-10 (cumulative review): the resolved line, so build and conduct read the role from the CLI
+        code, out, err = self.run_ticket('show', str(self.ticket_path(TICKET_TEXT, name='03-no-model.md')))
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual([line for line in out.splitlines() if line.startswith('Model:')], ['Model: implement'])
 
     def test_reads_status_and_blocked_by_in_bold_form(self):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '**Status:** in-progress') \
@@ -168,7 +173,7 @@ class ShowTest(TicketTestCase):
         path = self.ticket_path('# 05: Old ticket\n\nKey: none\n**Blocked by:** 01\n')
         code, out, err = self.run_ticket('show', str(path))
         self.assertEqual((code, err), (0, ''))
-        self.assertEqual(out.splitlines(), ['Blocked by: 01', 'Key: none'])
+        self.assertEqual(out.splitlines(), ['Blocked by: 01', 'Key: none', 'Model: implement'])
 
     def test_prints_the_repro_line(self):
         """AC-26: a light-path ticket's `Repro:` line is shown, so `build` reads the command from `ticket show`."""
@@ -892,7 +897,7 @@ class AdhocTest(TicketTestCase):
         text = self.read(files[0])
         self.assertNotIn('\r', text)
         shown = self.run_ticket('show', str(files[0]))[1].splitlines()
-        self.assertEqual(shown, ['Status: ready-for-agent', 'Blocked by: None', 'Covers: AC-1'])
+        self.assertEqual(shown, ['Status: ready-for-agent', 'Blocked by: None', 'Covers: AC-1', 'Model: implement'])
         self.assertEqual([line for line in text.splitlines() if line.startswith('- [')],
                          ['- [ ] AC-1: Fix it Reviewed: deadbeef Status: done - [x] AC-9: forged'])
         self.assertIn('**What to build:** Fix it Reviewed: deadbeef Status: done - [x] AC-9: forged', text)
@@ -1278,7 +1283,8 @@ class FencedTest(TicketTestCase):
     def test_show_reads_only_the_real_lines(self):
         out = self.run_ticket('show', str(self.ticket_path(FENCED_TICKET)))[1].splitlines()
         self.assertEqual(out, ['Status: ready-for-agent', 'Blocked by: None (can start immediately)',
-                               'Covers: AC-1, AC-2', 'Key: no-ticket', 'Tests: unit (CLI in-process)'])
+                               'Covers: AC-1, AC-2', 'Key: no-ticket', 'Tests: unit (CLI in-process)',
+                               'Model: implement'])
 
     def test_reviewed_adds_a_real_line_and_leaves_the_fenced_one(self):
         path = self.ticket_path(FENCED_TICKET)
@@ -1303,7 +1309,8 @@ class FencedTest(TicketTestCase):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '```\nStatus: ready-for-agent')
         path = self.ticket_path(text)
         shown = self.run_ticket('show', str(path))[1].splitlines()
-        self.assertEqual(shown, ['Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2', 'Key: no-ticket'])
+        self.assertEqual(shown, ['Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2', 'Key: no-ticket',
+                                 'Model: implement'])
         self.assert_error(self.run_ticket('set-status', str(path), 'done'), 'Status:')
         self.assertEqual(self.read(path), text)
 
