@@ -1392,7 +1392,7 @@ class DiagnoseSkillTest(unittest.TestCase):
         2026-10-08-diagnose-hypothesis-list-in-chat): the ranked hypotheses are a `Hypotheses` section of the
         ticket draft, each with its probe result (confirmed or refuted), and not a chat message; the explore
         brief still asks for facts only, with no question that points at a cause. Loose regexes on the lowered
-        prose, so a short wording passes (5 KB limit)."""
+        prose, so a short wording passes (5248 bytes limit)."""
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'hypotheses[^\n]*\bdraft\b|\bdraft\b[^\n]*hypotheses')
         self.assertRegex(lowered, r'confirmed|refuted')
@@ -1403,7 +1403,7 @@ class DiagnoseSkillTest(unittest.TestCase):
 
     def test_the_probe_step_probes_each_listed_hypothesis_in_rank_order(self):
         """Adhoc 2026-10-09-cumulative-fixes-eval-fixes-3, AC-1: step 6 probes each listed hypothesis, in rank
-        order, not only the first or the likely one. Loose regex on the lowered prose (5 KB limit)."""
+        order, not only the first or the likely one. Loose regex on the lowered prose (5248 bytes limit)."""
         lowered = self.prose().lower()
         self.assertRegex(lowered, r'each (listed )?hypothes[^\n]{0,40}rank order|rank order[^\n]{0,40}each')
 
