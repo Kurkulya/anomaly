@@ -16,15 +16,11 @@ import unittest
 from pathlib import Path
 
 from anomaly_loop import cli, constants, frontmatter
+from anomaly_loop.scans import deny_regex, deny_rules, settings_files
 from tests.fixtures import PLUGIN, plugin_files
 
 ALLOWED_TOOLS_SKILLS = ('architecture', 'build', 'conduct', 'diagnose', 'interview', 'research', 'review', 'ship', 'slice', 'specify', 'tests')   # the pipeline skills whose tools are limited to the CLI
 PLACEHOLDER_FREE_SKILLS = ALLOWED_TOOLS_SKILLS   # the skills whose docs other than SKILL.md hold no `${…}`
-MANAGED_DIRS = {   # as the Claude Code documentation on managed settings gives them
-    'win32': Path('C:/Program Files/ClaudeCode'),            # documented, and read on this machine
-    'darwin': Path('/Library/Application Support/ClaudeCode'),   # documented, unverified (not tried)
-    'linux': Path('/etc/claude-code'),                       # documented (also WSL), unverified (not tried)
-}   # any other platform has no managed folder here: only the user files are read
 
 LIST_MARKER = re.compile(r'^(?:>\s*|(?:[-*+]|\d+[.)]|\$)\s+)+')   # quote and list markers in front of a call
 PREFIX = re.compile(r'^(?:>\s*|(?:[-*+]|\d+[.)]|\$)\s+|[A-Za-z_]\w*=\S*\s+)+')   # quote, list marker, VAR=value
@@ -86,45 +82,6 @@ def commands(text):
 
 def relative(root, path):
     return path.relative_to(root).as_posix()
-
-
-def settings_files(environ, platform, home):
-    """The user settings files and the managed settings files (with the `managed-settings.d` drop-ins)."""
-    config = Path(environ.get('CLAUDE_CONFIG_DIR') or home / '.claude')
-    managed = MANAGED_DIRS.get('linux' if platform.startswith('linux') else platform)
-    files = [config / 'settings.json', config / 'settings.local.json']
-    if managed is not None:
-        files += [managed / 'managed-settings.json', *sorted((managed / 'managed-settings.d').glob('*.json'))]
-    return files
-
-
-def deny_rules(files):
-    """The deny rules of the readable settings files; a missing or unreadable file adds none. The managed
-    file starts with a byte order mark, so files are read as utf-8-sig."""
-    rules = []
-    for path in files:
-        try:
-            data = json.loads(path.read_text(encoding='utf-8-sig'))
-        except (OSError, ValueError):
-            continue
-        permissions = data.get('permissions') if isinstance(data, dict) else None
-        found = permissions.get('deny') if isinstance(permissions, dict) else None
-        rules += [rule for rule in found or [] if isinstance(rule, str)]
-    return rules
-
-
-def deny_regex(rule):
-    """A `Bash(...)` deny rule as a regex over a whole command; None for any other rule. `*` matches any
-    text; a trailing ` *` or the older `:*` also matches the bare command."""
-    found = re.fullmatch(r'Bash\((.+)\)', rule)
-    if not found or not found.group(1).strip('*'):
-        return None
-    pattern, tail = found.group(1), ''
-    for suffix in (':*', ' *'):
-        if pattern.endswith(suffix):
-            pattern, tail = pattern[:-2], r'(?:\s.*)?'
-            break
-    return re.compile('.*'.join(re.escape(part) for part in pattern.split('*')) + tail, re.S)
 
 
 def deny_hits(root, rules):
