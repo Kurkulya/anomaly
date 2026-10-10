@@ -998,9 +998,9 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
 - `ticket amend` writes one dated `Amended <YYYY-MM-DD>: <text>` line, so a change to a ticket or a
   planning file needs no hand edit. The date is today's, from the CLI clock. Without `--after` the
   line goes at the end of the file (a ticket, or any markdown file). With `--after AC-n` (in
-  `stories.md`) or `--after D-n` (in `decisions.md`) it goes right below that list item, and below
-  the `Amended` lines already under it, so the dated lines stay in order; it is indented like those
-  lines, else by two spaces under a `D-n` and not at all under an `AC-n`. An id matches whole
+  `stories.md`, or a ticket's checkbox line `- [ ] AC-n:` or `- [x] AC-n:`) or `--after D-n` (in
+  `decisions.md`) it goes right below that list item, and below the `Amended` lines already under
+  it, so the dated lines stay in order; it is indented like those lines, else by two spaces under a `D-n` and not at all under an `AC-n`. An id matches whole
   (`AC-1` is not the line of `AC-10`), and the first match outside a fenced code block is used. The
   text must be one line and pass the privacy check (no email address, credential, URL with a query,
   pasted program output or long opaque identifier). It has no length limit, because real `Amended`
