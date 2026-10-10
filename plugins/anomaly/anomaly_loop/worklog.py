@@ -1,6 +1,6 @@
 """worklog: one line per pipeline stage run, so the cost of one work unit can be read per stage.
 
-  worklog start K S [--ticket NN]                    stamp the start of stage S on work unit K
+  worklog start K S [--ticket NN]                    stamp the start of stage S on work unit K; print the stage's addenda
   worklog add --feature K --stage S --session ID     write the line when the stage ends
               [--docs FOLDER] [--ticket NN] [--mode M]
   worklog report K                                   print what work unit K cost, from home (read-only)
@@ -53,7 +53,7 @@ there is no per-ticket token number, because one session holds many tickets.
 from datetime import datetime
 from typing import NamedTuple
 
-from . import files, observe, paths, privacy, records
+from . import addenda, files, observe, paths, privacy, records
 from .constants import (COMMIT_SCOPE, METRICS_FILE, NO_START_WARNING, REVIEW_MODES, TICKET_TIME_FORMAT,
                         WORKLOG_BUILD_STAGE, WORKLOG_REVIEW_STAGE, WORKLOG_START_FILE, WORKLOG_TICKET_STAGES)
 from .files import RecordError
@@ -150,6 +150,7 @@ def run_start(args, environ):
     started = now_text(args)
     files.append_line(data / WORKLOG_START_FILE, {**unit_key(args.key, args.stage, args.ticket), 'started': started})
     print(f'start: {args.key} {args.stage} {started}')
+    addenda.print_addenda(home, args.stage)
     return 0
 
 

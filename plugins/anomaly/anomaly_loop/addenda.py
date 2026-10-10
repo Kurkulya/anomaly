@@ -6,15 +6,23 @@ the text the line adds to: the sorted relative paths and bytes of every file in 
 bytes of the one agent file, so it changes only when that skill or agent changes.
 """
 import hashlib
+import re
 from pathlib import Path
 
 from . import files
-from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES
+from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, SKILL_AGENTS
 from .files import RecordError
+from .records import SLUG
 
 AGENTS = 'agents'          # the agent files of the plugin, and their addenda files in home
 NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
+TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
+TAG_SHAPE = f'{TAG_OPEN}<signature>{TAG_SEPARATOR}<stamp>{TAG_CLOSE}'
+TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?:{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
+                    rf'[0-9a-f]{{{STAMP_CHARS}}}{re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
+HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
+HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
 
 
 def addendum_path(home, name, agent=False):
@@ -52,12 +60,41 @@ def append_line(path, line, signature, stamp):
     A file that already holds ADDENDA_MAX_LINES lines, or a line of this experiment, raises RecordError and
     is not changed: one line is one experiment."""
     lines = read_lines(path)
-    if any(f'[exp: {signature} · ' in old for old in lines):
+    if any(f'{TAG_OPEN}{signature}{TAG_SEPARATOR}' in old for old in lines):
         raise RecordError(f'{path}: already holds a line of the experiment {signature}, and one line is one '
                           'experiment; remove the old line from this file first, then run the fix again')
     if len(lines) >= ADDENDA_MAX_LINES:
         raise RecordError(f'{path}: holds {len(lines)} lines, the cap of an addenda file is {ADDENDA_MAX_LINES}; '
                           'drop or upstream a line first')
-    tagged = f'{line} [exp: {signature} · {stamp}]'
+    tagged = f'{line} {TAG_OPEN}{signature}{TAG_SEPARATOR}{stamp}{TAG_CLOSE}'
     files.write_lines(path, lines + [tagged])
     return tagged
+
+
+def file_block(path, heading):
+    """`heading` and the tagged lines of one addenda file, then one warning when the file holds a line
+    without its tag; [] for a missing or empty file. A file that cannot be read is one warning, not a stop."""
+    try:
+        lines = read_lines(path)
+    except (RecordError, OSError) as error:
+        reason = getattr(error, 'strerror', None) or str(error).removeprefix(f'{path}: ')
+        return [f'warning: {path}: not read ({reason})']
+    tagged = [line for line in lines if TAGGED.fullmatch(line)]
+    block = [heading, *tagged] if tagged else []
+    if len(tagged) < len(lines):
+        block.append(f'warning: {path}: lines without an {TAG_SHAPE} tag are not printed '
+                     f'({len(lines) - len(tagged)} of {len(lines)})')
+    return block
+
+
+def print_addenda(home, skill):
+    """Print the addendum of `skill` under HEADER, then the addendum of each agent it dispatches
+    (SKILL_AGENTS) under HAND_OVER. With no addenda file, or for a skill in NO_ADDENDA, nothing is printed,
+    not even an empty line."""
+    if skill in NO_ADDENDA:
+        return
+    out = file_block(addendum_path(home, skill), HEADER.format(skill=skill))
+    for agent in SKILL_AGENTS.get(skill, ()):
+        out += file_block(addendum_path(home, agent, agent=True), HAND_OVER.format(agent=agent))
+    if out:
+        print('\n'.join(out))

@@ -17,7 +17,7 @@ from importlib import import_module
 from pathlib import Path
 from types import MappingProxyType
 
-from . import ideas, paths, profile, records
+from . import addenda, ideas, paths, profile, records
 from .constants import METRICS_FILE
 from .files import load_lines
 
@@ -123,6 +123,8 @@ def register(commands, common):
 
 
 def run_digest(args, environ):
-    lines = render(context_from_args(args, environ))
+    context = context_from_args(args, environ)
+    lines = render(context)
     print('\n'.join(lines))
+    addenda.print_addenda(context.home, 'calibrate')
     return 0

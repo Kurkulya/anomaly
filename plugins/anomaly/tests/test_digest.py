@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import digest, ideas, index, profile, records
+from anomaly_loop import addenda, digest, ideas, index, profile, records
 from tests.fixtures import anomaly_text, context, run_cli, write_text
 
 
@@ -123,6 +123,17 @@ class DigestCommandTest(DigestCase):
                 mock.patch.object(index, 'digest_section', folder):
             code, out, _ = run_cli('digest', '--home', str(self.home))
         self.assertEqual((code, out), (0, 'None\n'))
+
+    def test_the_calibrate_addendum_is_the_last_thing_the_digest_prints(self):
+        """AC-13: the output without an addenda file stays as it was, and the addendum follows it."""
+        _, before, _ = run_cli('digest', '--home', str(self.home))
+        addenda.append_line(addenda.addendum_path(self.home, 'calibrate'), 'Read the backlog top down.',
+                            'skipped-top', '0a1b2c3d')
+        code, after, err = run_cli('digest', '--home', str(self.home))
+        self.assertEqual((code, err), (0, ''))
+        self.assertTrue(before.strip(), before)
+        self.assertTrue(after.startswith(before), after)
+        self.assertIn('Read the backlog top down.', after.rstrip().splitlines()[-1])
 
     def test_digest_refuses_a_data_folder_inside_home(self):
         code, out, err = run_cli('digest', '--home', str(self.home), '--data', str(self.home / 'state'))

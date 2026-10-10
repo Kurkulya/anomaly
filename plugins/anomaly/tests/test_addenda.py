@@ -7,14 +7,19 @@ Signatures this file pins:
   stamp(target) -> str                       target: a skill folder or one agent file
   read_lines(path) -> list[str]              the lines of the file; [] when it is missing
   append_line(path, line, signature, stamp)  -> str, the tagged line it wrote; RecordError past the cap
+  print_addenda(home, skill) -> None         prints to stdout the addenda of `skill` and of the agents it dispatches
+  constants.SKILL_AGENTS                     dict: skill name -> the agent names it dispatches (D-39)
 """
+import contextlib
+import io
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
 from anomaly_loop import addenda, constants
 from anomaly_loop.files import RecordError
-from tests.fixtures import write_text
+from tests.fixtures import PLUGIN, write_text
 
 
 class AddendaCase(unittest.TestCase):
@@ -118,6 +123,78 @@ class AppendTest(AddendaCase):
         self.assertRegex(str(refused.exception), rf'\b{constants.ADDENDA_MAX_LINES}\b')
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(len(addenda.read_lines(self.path)), constants.ADDENDA_MAX_LINES)
+
+
+class PrintTest(AddendaCase):
+    """AC-11, AC-14, AC-15, D-15, D-39: what `print_addenda` writes; where each skill's call places it is in the
+    tests of those commands."""
+    HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
+    HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
+
+    def printed(self, skill):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            addenda.print_addenda(self.home, skill)
+        return out.getvalue()
+
+    def add(self, name, rule, agent=False):
+        addenda.append_line(addenda.addendum_path(self.home, name, agent=agent), rule, f'sig-{name}', '0a1b2c3d')
+
+    def test_a_skill_addendum_is_printed_under_the_core_wins_header(self):
+        self.add('observe', 'Ask which repo before logging.')
+        lines = self.printed('observe').splitlines()
+        header = next(at for at, line in enumerate(lines) if self.HEADER.format(skill='observe') in line)
+        rule = next(at for at, line in enumerate(lines) if 'Ask which repo before logging.' in line)
+        self.assertLess(header, rule)
+
+    def test_each_agent_the_skill_dispatches_is_printed_under_its_hand_over_line_and_no_other_agent(self):
+        self.add('assess', 'Name the source first.')
+        self.add('digest', 'Keep the digest under 100 words.', agent=True)
+        self.add('facts', 'Cite the line.', agent=True)   # `assess` does not dispatch facts (D-39)
+        lines = self.printed('assess').splitlines()
+        hand_over = next(at for at, line in enumerate(lines) if self.HAND_OVER.format(agent='digest') in line)
+        rule = next(at for at, line in enumerate(lines) if 'Keep the digest under 100 words.' in line)
+        self.assertLess(hand_over, rule)
+        self.assertFalse(any('Cite the line.' in line or 'anomaly:facts' in line for line in lines), lines)
+
+    def test_each_skill_in_the_table_names_each_of_its_agents_in_its_own_files(self):
+        """D-39: the table follows the skills; a skill that stops dispatching an agent fails here."""
+        for skill, agents in constants.SKILL_AGENTS.items():
+            texts = [path.read_text(encoding='utf-8') for path in (PLUGIN / 'skills' / skill).rglob('*')
+                     if path.is_file()]
+            for agent in agents:
+                with self.subTest(skill=skill, agent=agent):
+                    self.assertTrue(any(re.search(rf'anomaly:{agent}\b', text) for text in texts))
+
+    def test_a_line_without_the_experiment_tag_is_not_printed_and_one_warning_names_the_file(self):
+        self.add('observe', 'Ask which repo before logging.')
+        path = addenda.addendum_path(self.home, 'observe')
+        write_text(path, path.read_text(encoding='utf-8') + 'A rule with no tag.\n')
+        out = self.printed('observe')
+        self.assertIn('Ask which repo before logging.', out)
+        self.assertNotIn('A rule with no tag.', out)
+        warnings = [line for line in out.splitlines() if line.startswith('warning:')]
+        self.assertEqual(len(warnings), 1, out)
+        self.assertIn('observe.md', warnings[0])
+
+    def test_a_file_that_cannot_be_read_is_one_warning_line_and_not_a_stop(self):
+        for case, make in (('not-utf8', lambda path: path.write_bytes(b'\xe9\n')), ('folder', Path.mkdir)):
+            with self.subTest(case):
+                self.home = self.root / case
+                path = addenda.addendum_path(self.home, 'observe')
+                path.parent.mkdir(parents=True)
+                make(path)
+                lines = self.printed('observe').splitlines()
+                self.assertEqual(len(lines), 1, lines)
+                self.assertRegex(lines[0], r'^warning: .*observe\.md: not read \(.+\)$')
+
+    def test_with_no_addenda_file_nothing_is_printed(self):
+        self.assertEqual(self.printed('review'), '')
+
+    def test_a_skill_that_takes_no_addenda_prints_none_even_with_a_file(self):
+        """D-25 Amended: `worklog start <key> measure` must not print a measure.md."""
+        self.add('measure', 'A rule for measure.')
+        self.assertEqual(self.printed('measure'), '')
 
 
 if __name__ == '__main__':
