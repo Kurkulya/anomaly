@@ -210,6 +210,17 @@ class SkillFileTest(unittest.TestCase):
                 writer = next(text for _, text in self.paragraphs(path) if phrase in text)
                 self.assertRegex(writer, self.role_mention('implement'))
 
+    def test_conduct_dispatches_its_fix_branch_implementer_on_implement_wide_and_its_research_agent_on_deep_analysis(self):
+        """AC-4, AC-16, Amended 2026-10-10 (cumulative review): the two conduct dispatches that named no role. Located
+        by the phrases the paragraphs hold today; the effort word is checked here and by the effort test above."""
+        found = self.paragraphs(PLUGIN / 'skills' / 'conduct' / 'SKILL.md')
+        for phrase, role in ((r'One fix branch off the tip', 'implement_wide'), (r'Research the wave needs', 'deep_analysis')):
+            texts = [text for _, text in found if re.search(phrase, text)]
+            with self.subTest(dispatch=role):
+                self.assertEqual(len(texts), 1, texts)
+                self.assertRegex(texts[0], self.role_mention(role))
+                self.assertRegex(texts[0], r'(?i)\beffort\b')
+
     def docs_agent_lines(self):
         """The docs agent's text as lines; fails while the file is missing."""
         self.assertTrue(self.DOCS_AGENT.is_file(), self.DOCS_AGENT.relative_to(PLUGIN).as_posix())

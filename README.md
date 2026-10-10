@@ -2029,7 +2029,7 @@ is read only at the ready gate. Its only pre-approved tool is the CLI.
 
 `anomaly:conduct` drives every ticket of one work unit through `anomaly:build` on one integration
 branch, then takes the one MR to the ready gate. It is model-invocable but acts only on an explicit
-request from you. Its text is `plugins/anomaly/skills/conduct/SKILL.md` (8 KB or less); the
+request from you. Its text is `plugins/anomaly/skills/conduct/SKILL.md` (9 KB or less); the
 kickoff text `KICKOFF.md` (1 KB or less) is read only in chip mode, and the parallel text
 `PARALLEL.md` (3200 bytes or less) only after you pick a parallel wave. Its only pre-approved tool is
 the CLI.
@@ -2044,9 +2044,9 @@ the CLI.
 - **Plan.** Before each wave, one `anomaly:facts` agent on the `explore` model role checks the
   wave's code claims and returns only the false or moved ones; each becomes a `ticket amend` line,
   and a claim that changes the scope goes to you first. The wave plan is one line per ticket with
-  its `Touches:` paths. A ticket whose gate is closed waits. Research notes go to
-  `research/NN-slug.md` in the unit folder, and a `ticket amend` line puts their path on the
-  ticket, so `build` passes it on.
+  its `Touches:` paths. A ticket whose gate is closed waits. An agent on the `deep_analysis` model
+  role, with effort, writes research notes to `research/NN-slug.md` in the unit folder, and a
+  `ticket amend` line puts their path on the ticket, so `build` passes it on.
 - **Run.** `anomaly:build` once per ticket, in `frontier` order. With an `origin`, one plain
   `git push` after each merge (never forced, never to the base branch); the first push calls
   `anomaly:ship` for the draft MR; a `ci` port that is not on its core default starts `ci watch` in
@@ -2077,7 +2077,8 @@ the CLI.
   of context it stops after the report and offers a fresh session: in the desktop app a chip with the
   kickoff text, in a plain CLI session the printed text.
 - **Finish.** `anomaly:review` in cumulative mode over the whole branch (skipped for a one-ticket
-  unit), one fix branch that also takes every open Low and Nit finding whose fix needs no decision,
+  unit), one fix branch (the `implementer` port on the `implement_wide` model role, with effort) that
+  also takes every open Low and Nit finding whose fix needs no decision,
   one full verify and the `ui_check` port, `mr reviewed` and `mr verified` on the tip, then
   `anomaly:ship` for the ready gate.
 
@@ -2100,7 +2101,7 @@ pipeline (every skill except the four loop skills, its extra docs, the agent fil
 under `docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
-  `SKILL.md` is 8 KB or less (build: 9 KB) and an agent file is 6 KB or less.
+  `SKILL.md` is 8 KB or less (build and conduct: 9 KB) and an agent file is 6 KB or less.
 - The `allowed-tools` of `build` and `review` is the one CLI pattern, defined once as
   `CLI_PATTERN` in `anomaly_loop/constants.py`, and every call of the CLI in their text uses that
   exact command and is never chained.
