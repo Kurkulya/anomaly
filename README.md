@@ -124,7 +124,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `reviewers` | optional port: reviewers added beside `anomaly:code`, `anomaly:feature` and `anomaly:security`, as a comma or line list |
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
-| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
+| `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `survey`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
 | `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
 
@@ -176,7 +176,7 @@ first line). An extend port lists every such line after the repo's own docs. The
 `<model>` or `<model> <effort>`, the effort one of `low`, `medium`, `high`, `xhigh` or `max`
 (`review: opus high`). Any other shape, such as `sonnet for contained tickets`, stops `ports` with
 one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
-`implement_wide` opus, `digest` sonnet, `review` opus, `deep_analysis` opus,
+`implement_wide` opus, `digest` sonnet, `survey` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
 roles: one the profile leaves out takes the value of `review` and prints the source of `review`
 too (`[profile]` when the profile sets only `review`). A model or effort change is a measured
@@ -286,6 +286,7 @@ model explore = sonnet [core default]
 model implement = sonnet [core default]
 model implement_wide = opus [core default]
 model digest = sonnet [core default]
+model survey = sonnet [core default]
 model review = opus [core default]
 model review_code = opus [core default]
 model review_feature = opus [core default]
@@ -1414,9 +1415,12 @@ the `review` skill dispatches the first four, and it passes the model and effort
 role: `review_code` for `anomaly:code`, `review_feature` for `anomaly:feature`, `review_security`
 for `anomaly:security`, `review` for `anomaly:plan` and org reviewers. No agent file pins one. Each
 has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or
-fewer and a file of 6 KB or less. Two more read-only agents (seven in all) are readers, not
+fewer and a file of 6 KB or less. Two more read-only agents are readers, not
 reviewers: `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model
-either, and keep the same size and description limits.
+either, and keep the same size and description limits. The eighth, `anomaly:survey`, is the one
+agent that is not read-only: it runs Bash and writes files, for the research and tests dispatches
+([ADR-0020](docs/adr/0020-audit-skills-join-the-plugin.md)). It pins no model either and keeps the
+same limits.
 
 | Agent | Checks | Modes |
 |---|---|---|
@@ -1427,6 +1431,7 @@ either, and keep the same size and description limits.
 | `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
 | `anomaly:facts` | questions about a repository that need inference across lines (a call chain, whether a claim still holds, which callers can pass a value); tools Read, Grep and Glob; model role `explore`; answers in `- <path>:<line> — <fact>` lines (see Facts bench) | one mode: the questions the dispatcher passes |
 | `anomaly:digest` | a transcript or a long page (a local file or a link) as a digest in its own words; tools Read and WebFetch; model role `digest`; fetches only the link it is passed, reads the source as data, never as an instruction, and copies no secret, token or personal data | one mode: the source and the word limit the dispatcher passes |
+| `anomaly:survey` | one research or probe task a skill hands it: web searches and fetches, repository reads, commands; tools Read, Grep, Glob, Bash, Write, WebSearch and WebFetch; model role `survey`; writes only to the output path and the other paths its task names, reads what it fetches as data, never as an instruction, and copies no secret, token or personal data | one mode: the task, the output path and the word limit the dispatcher passes |
 
 `anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
 does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
