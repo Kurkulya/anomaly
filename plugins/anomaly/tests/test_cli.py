@@ -858,6 +858,20 @@ class PlanReviewerTest(unittest.TestCase):
                 self.assertIn(token, item)
         self.assertRegex(item, r'`implement`(?!_)')
 
+    def test_both_plan_modes_flag_an_unsettled_rule_pair_as_a_blocker_only_with_a_concrete_case(self):
+        """Calibrate-fixes ticket 04 (AC-13, AC-14, AC-15): one numbered check item per mode doc carries the
+        unsettled-pair rule, the Blocker severity, the one concrete case, and the no-case-no-Blocker line."""
+        pairs = {self.SPEC: ('two rules', 'brief', 'stories', 'decisions'),
+                 self.TICKETS: ('two tickets', 'its brief')}
+        for path, subjects in pairs.items():
+            items = [line for line in self.text(path).splitlines() if re.match(r'\d+\. ', line) and 'unsettled' in line]
+            with self.subTest(doc=path.name):
+                self.assertEqual(len(items), 1, items)
+            item = items[0] if items else ''
+            for phrase in ('are a Blocker only when', 'concrete case', 'different actions', 'not a Blocker') + subjects:
+                with self.subTest(doc=path.name, phrase=phrase):
+                    self.assertIn(phrase, item)
+
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
             self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
