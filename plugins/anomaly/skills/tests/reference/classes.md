@@ -11,7 +11,7 @@ Phase 0 resolves each topic to one source, in this order:
 
 | Topic | Look in the repo's docs for | Fallback: this skill's own rule text |
 |---|---|---|
-| Decision rule | which layer tests a behaviour; one test per behaviour | "Extend an existing test of the behaviour first; add a new one only when none exists, at the cheapest layer that proves it" (`TEST-WRITER.md:7`) |
+| Decision rule | which layer tests a behaviour; one test per behaviour | "Extend an existing test of the behaviour first. Add a new test only when none exists, at the cheapest layer that proves it." (`TEST-WRITER.md:7`) |
 | E2e reason list | the reasons that allow an e2e test, and the tag that names one | "An e2e test needs a stated reason" (`TEST-WRITER.md:7`); here: browser- or device-only behaviour |
 | Bans | no real assertion, internals, mocked siblings, tests of dev-only tooling | none → "no rule found" |
 | Characterization | when a test that pins behaviour for a refactor is deleted | "Delete characterization tests when the refactor ends" |

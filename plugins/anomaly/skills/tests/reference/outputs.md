@@ -18,7 +18,7 @@ evidence/              status snapshots, reporter JSON and logs
 
 ```text
 | src/forms/x/tests/fieldProps.test.tsx:12 | 6 | DUPLICATE | cut |
-  src/test/consoleGuard.test.tsx:25 — "fails a test that leaks a DOM prop" |
+  src/test/consoleGuard.test.tsx:25 — 'fails a test that leaks a DOM prop' |
   docs/testing.md:40 | would break unnoticed: nothing; the global guard already fails
   any test that leaks these props (vitest.setup.ts:15), and this file silences
   console.error (:37) and so hides them | 6 tests, whole file |
@@ -51,7 +51,7 @@ cut: there is no behaviour to break.
 
 | # | Cut | Break (file:line — change) | Cover that failed | Cut test failed? | Verdict |
 |---|---|---|---|---|---|
-| 1 | `a.test.ts:10-40` | `src/a.ts:31` — `>=` to `>` | `b.test.ts:22` — "…" | yes | cut |
+| 1 | `a.test.ts:10-40` | `src/a.ts:31` — `>=` to `>` | `b.test.ts:22` — '…' | yes | cut |
 
 ## `report`
 
@@ -92,7 +92,7 @@ One line each: <question> · options: a / b · recommended: a, because … · so
 
 Typical open questions: a duplicate whose higher-layer reason is real but not on the
 list; a characterization test whose refactor may not be finished; a tooling test that may
-gate CI; a whole file that is half keep verdict, half cut; a number that needs an isolated
+gate CI; a whole file whose tests are half `keep`, half `cut`; a number that needs an isolated
 re-time first; a topic with "no rule found".
 
 ## The next step

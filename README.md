@@ -2182,12 +2182,14 @@ Its only pre-approved tool is the CLI.
   bans, characterization) takes the audited repo's own test rule first, else the skill's own rule
   text, else "no rule found"; a class with no rule gets no cut. Writes go only under
   `.anomaly/test-audit-<date>/research/`, plus the git exclude line.
-- **Audit.** Under 60 test files the main session audits alone; above that, value agents (one
-  `anomaly:survey` agent per scope, on the `survey` model role, with effort when set) and then one
-  runtime agent that writes the timings with the CPU load beside every number. Every row answers what
-  would break unnoticed if the test were gone; coverage is never the proof.
-- **Cover check.** A fresh `anomaly:survey` agent re-reads every cover. A cover that is itself cut,
-  tests another unit or asserts less does not hold, and the row becomes `keep` or `rewrite`.
+- **Audit.** Under 60 test files the main session audits alone. From 60 files, value agents (one
+  `anomaly:survey` agent per scope, on the `survey` model role, with effort when set): 2 for 60 to
+  300 files, where the main session times the suite after them, and 3 to 5 above 300, followed by one
+  runtime agent that writes the timings. Every timing carries the CPU load beside it. Every row
+  answers what would break unnoticed if the test were gone; coverage is never the proof.
+- **Cover check.** Under 60 test files the main session re-reads every cover; above that a fresh
+  `anomaly:survey` agent does. A cover that is itself cut, tests another unit or asserts less does
+  not hold, and the row becomes `keep` or `rewrite`.
 - **Break probes.** After your yes, each cut candidate gets 1 to 3 breaks, written by hand in a
   scratchpad copy of the tip, and a cut needs its cover to fail on the break. Without your yes those
   candidates stay `open`, as "not probed".
