@@ -69,6 +69,10 @@ class TermsGrepTest(unittest.TestCase):
         self.assertIn("'dropped': 0 hit(s)", out)
         self.assertIn("'after': 1 hit(s)", out)
 
+    def test_a_non_ascii_tag_that_folds_to_script_is_an_ordinary_tag(self):
+        # U+017F (long s) folds to 's' under Unicode case folding
+        self.assertEqual(terms_grep.clean('a <ſcript>b c'), 'a b c')
+
     def test_an_unreadable_url_prints_fetch_failed_and_exits_1(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
