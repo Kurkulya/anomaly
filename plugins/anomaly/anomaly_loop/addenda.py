@@ -73,8 +73,12 @@ def append_line(path, line, signature, stamp):
 
 def file_block(path, heading):
     """`heading` and the tagged lines of one addenda file, then one warning when the file holds a line
-    without its tag; [] for a missing or empty file."""
-    lines = read_lines(path)
+    without its tag; [] for a missing or empty file. A file that cannot be read is one warning, not a stop."""
+    try:
+        lines = read_lines(path)
+    except (RecordError, OSError) as error:
+        reason = getattr(error, 'strerror', None) or str(error).removeprefix(f'{path}: ')
+        return [f'warning: {path}: not read ({reason})']
     tagged = [line for line in lines if TAGGED.fullmatch(line)]
     block = [heading, *tagged] if tagged else []
     if len(tagged) < len(lines):

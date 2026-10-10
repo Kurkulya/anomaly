@@ -173,6 +173,14 @@ class PrintTest(AddendaCase):
         self.assertEqual(len(warnings), 1, out)
         self.assertIn('observe.md', warnings[0])
 
+    def test_a_file_that_is_not_utf8_is_one_warning_line_and_not_a_stop(self):
+        path = addenda.addendum_path(self.home, 'observe')
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'\xe9\n')
+        lines = self.printed('observe').splitlines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertRegex(lines[0], r'^warning: .*observe\.md: not read \(.+\)$')
+
     def test_with_no_addenda_file_nothing_is_printed(self):
         self.assertEqual(self.printed('review'), '')
 
