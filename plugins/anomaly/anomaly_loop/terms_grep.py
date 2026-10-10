@@ -119,10 +119,10 @@ def run_terms_grep(args, environ):
                 print('date line:', m.group(0))
                 break
         for term in terms:
-            hits = [m.start() for m in pattern(term, args.word).finditer(text)]
+            hits = [m.span() for m in pattern(term, args.word).finditer(text)]
             print(f"\n--- '{term}': {len(hits)} hit(s)")
-            for h in hits[:HIT_LIMIT]:
-                print('   …', text[max(0, h - args.context): h + args.context], '…')
+            for start, end in hits[:HIT_LIMIT]:
+                print('   …', text[max(0, start - args.context): end + args.context], '…')
             if len(hits) > HIT_LIMIT:
                 print(f'   (+{len(hits) - HIT_LIMIT} more)')
     return 1 if failed else 0

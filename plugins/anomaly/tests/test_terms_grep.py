@@ -36,7 +36,7 @@ class TermsGrepTest(unittest.TestCase):
         (line,) = self.hit_lines(out)
         self.assertIn('A' * DEFAULT_CONTEXT + 'needle', line)
         self.assertNotIn('A' * (DEFAULT_CONTEXT + 1), line)
-        self.assertIn('needle' + 'B' * (DEFAULT_CONTEXT - len('needle')), line)
+        self.assertIn('needle' + 'B' * DEFAULT_CONTEXT, line)
         self.assertNotIn('B' * (DEFAULT_CONTEXT + 1), line)
 
     def test_context_sets_the_characters_each_side(self):
