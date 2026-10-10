@@ -8,12 +8,14 @@ says "pending verdict" with no date, which would go stale.
 
 A ledger line is `- <name> · <owner> · <rest>`; the owner part is one or more owner paths (in
 backticks or bare), each followed by its names in parentheses: `a.py` (`parse`, `Ticket`), `b.py`
-(`load`). The names after a path are the names that file is expected to still mention; a later path
-is never a name of an earlier one. A line "names" a file when one of its owner paths is that path or
-the end of it (a bare `paths.py` matches `plugins/x/paths.py`); when a bare name matches several
-changed files and none has exactly that path, that path is `ambiguous`: it is listed and left alone.
-A merge is read as the changes of the merge commit against its first parent, and each owner path is
-judged on its own, with its own names:
+(`load`). The names after a path are the names that file is expected to still mention; a backticked
+part outside parentheses is a later path only when it looks like a file (it holds a `/` or ends in a
+lowercase extension such as `.py`), else it is one more name of the path before it. A line "names" a
+file when one of its owner paths is that path or the end of it (a bare `paths.py` matches
+`plugins/x/paths.py`); when a bare name matches several changed files and none has exactly that
+path, that path is `ambiguous`: the line is listed and left alone, even if another of its paths was
+renamed. A merge is read as the changes of the merge commit against its first parent, and each owner
+path is judged on its own, with its own names; deleted or reshaped in any path removes the line:
 - deleted  a file is gone: the line is removed
 - renamed  that owner path takes the new path (a bare name keeps its form); no other field or path changes
 - reshaped a file changed and no longer mentions one of the names listed for it (as a whole word;
@@ -31,6 +33,7 @@ from .files import RecordError
 
 BACKTICKED = re.compile(r'`([^`]+)`')
 NAME = re.compile(r'[A-Za-z_][\w.]*')
+FILE_EXTENSION = re.compile(r'\.[a-z0-9]+$')
 PENDING = 'pending verdict'
 
 
@@ -50,11 +53,19 @@ def path_before(change):
     return change.old_path if change.status == 'R' else change.path
 
 
+def looks_like_file(span):
+    """True when a backticked part is a file path: it holds a `/`, or ends in a lowercase file extension
+    (`a.py`, `notes.md`; not `constants.LIMIT`)."""
+    return '/' in span or FILE_EXTENSION.search(span) is not None
+
+
 def owner_groups(field):
     """The owner paths of a line, each with the names listed for it: a list of (path, start of the path
-    in the field, names). A path is the bare first word or a backticked part outside parentheses; its
-    names are the backticked parts inside the parentheses that follow it, each cut to its leading
-    identifier (`resolve(home)` gives resolve, `RepoLayer.risk_patterns` gives risk_patterns)."""
+    in the field, names). A path is the bare first word, the first backticked part, or a later backticked
+    part outside parentheses that looks like a file (see `looks_like_file`); its names are the backticked
+    parts inside the parentheses that follow it and any other backticked part outside parentheses, each
+    cut to its leading identifier (`resolve(home)` gives resolve, `RepoLayer.risk_patterns` gives
+    risk_patterns)."""
     groups, depth, pos = [], 0, 0
     words = field.split()
     if words and not words[0].startswith('`'):
@@ -65,7 +76,7 @@ def owner_groups(field):
         between = field[pos:found.start()]
         depth = max(0, depth + between.count('(') - between.count(')'))
         pos = found.end()
-        if depth == 0:
+        if depth == 0 and (not groups or looks_like_file(found.group(1))):
             groups.append((found.group(1), found.start(1), []))
             continue
         name = NAME.match(found.group(1))
@@ -123,11 +134,13 @@ def judge(body, changes, content_at):
     for _, _, (verb, detail, _) in verdicts:
         if verb in ('deleted', 'reshaped'):
             return verb, detail, None
-    renames = [(owner, start, verdict) for owner, start, verdict in verdicts if verdict[0] == 'renamed']
-    if not renames:
-        return (verdicts[0][2][0], verdicts[0][2][1], body) if verdicts else None
+    for _, _, (verb, detail, _) in verdicts:
+        if verb == 'ambiguous':
+            return verb, detail, body
+    if not verdicts:
+        return None
     details = []
-    for owner, start, (_, detail, moved) in reversed(renames):
+    for owner, start, (_, detail, moved) in reversed(verdicts):
         field = field[:start] + moved + field[start + len(owner):]
         details.insert(0, detail)
     fields[1] = field
