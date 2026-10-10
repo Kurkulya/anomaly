@@ -49,8 +49,11 @@ def read_lines(path):
 
 def append_line(path, line, signature, stamp):
     """Add `line` tagged with its experiment and stamp as the file's last line; returns the tagged line.
-    A file that already holds ADDENDA_MAX_LINES lines raises RecordError and is not changed."""
+    A file that already holds ADDENDA_MAX_LINES lines, or a line of this experiment, raises RecordError and
+    is not changed: one line is one experiment."""
     lines = read_lines(path)
+    if any(f'[exp: {signature} · ' in old for old in lines):
+        raise RecordError(f'{path}: already holds a line of the experiment {signature}; one line is one experiment')
     if len(lines) >= ADDENDA_MAX_LINES:
         raise RecordError(f'{path}: holds {len(lines)} lines, the cap of an addenda file is {ADDENDA_MAX_LINES}; '
                           'drop or upstream a line first')
