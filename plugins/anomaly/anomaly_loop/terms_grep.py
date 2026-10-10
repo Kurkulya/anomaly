@@ -37,6 +37,7 @@ HIT_LIMIT = 6
 SCHEMES = ('http', 'https', 'file')
 COMMENT = re.compile(r'<!--.*?-->', re.S)
 HIDDEN_NAMES = ('script', 'style', 'noscript', 'template')
+# tag names match as ASCII, because re.I alone folds ſ to s; so `<scripté>` counts as a script opener
 HIDDEN_OPEN = re.compile(rf'<({"|".join(HIDDEN_NAMES)})\b', re.I | re.A)
 HIDDEN_CLOSE = {name: re.compile(rf'</{name}\s*>', re.I | re.A) for name in HIDDEN_NAMES}
 TAG = re.compile(r'<[^>]+>')
