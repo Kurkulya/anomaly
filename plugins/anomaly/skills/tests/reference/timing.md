@@ -10,8 +10,10 @@ any number a later ticket depends on is re-timed alone before planning.
 1. **Install is fresh.** Compare the installed test runner with the lockfile (the check
    is in the stack profile, "Install freshness"). Stale → stop and ask. Do not install in
    the repo. Options: the user installs, or the runtime agent times a copy: `mkdir -p
-   <scratchpad>/copy && git archive <sha> | tar -x -C <scratchpad>/copy`, then an offline
-   install there (unverified; it may need the network). The copy has no `.git`, so hooks
+   <scratchpad>/copy && git archive <sha> | tar -x -C <scratchpad>/copy`, then, only after
+   the user's yes to that install, an install there with dependency scripts off
+   (`--ignore-scripts` for npm and pnpm, or the stack's equivalent; it may need the
+   network). The copy has no `.git`, so hooks
    and git-based checks may fail there; say so next to those numbers.
 2. **Compare `git status --porcelain`** with `evidence/status-0.txt` after each run.
    Test runs often leave `.snap` files, `test-results/`, `playwright-report/`,
