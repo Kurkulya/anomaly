@@ -173,7 +173,7 @@ PORTS = (
     ('adr_folder', REPLACE, 'adr_folder', ('docs/adr/',)),
 )
 PER_STACK_PORTS = ('implementer', 'test_writer', 'conventions')
-MODELS_KEY = 'models'                # profile key: one `role: model` line per role
+MODELS_KEY = 'models'                # profile key: one `role: model [effort]` line per role
 MODEL_ROLES = (                      # (role, core default), in the order `ports` prints them
     ('explore', 'sonnet'),
     ('implement', 'sonnet'),
@@ -181,7 +181,7 @@ MODEL_ROLES = (                      # (role, core default), in the order `ports
     ('lookup', 'haiku'),
     ('digest', 'sonnet'),
     ('review', 'opus'),
-    ('review_code', ''),             # no core default of its own: the fallback below
+    ('review_code', ''),             # never read: MODEL_FALLBACKS gives the value
     ('review_feature', ''),
     ('review_security', ''),
     ('deep_analysis', 'opus'),
@@ -193,9 +193,11 @@ MODEL_FALLBACKS = {                  # a role the profile leaves out takes the r
     'review_security': 'review',
 }
 MODEL_EFFORTS = ('low', 'medium', 'high', 'xhigh', 'max')   # a role value is `<model>` or `<model> <effort>`
-OVERRIDING_ENV = (                   # (variable, what it overrides): when set, the profile's model or effort has no effect
-    ('CLAUDE_CODE_SUBAGENT_MODEL_FORCE', 'the model of every subagent'),
-    ('CLAUDE_CODE_EFFORT_LEVEL', 'the effort level of every dispatch'),
+OVERRIDING_ENV = (                   # (variable, the warning's consequence): the profile's model or effort has no effect
+    ('CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
+     'it overrides the model of every subagent, so the models below do not take effect'),
+    ('CLAUDE_CODE_EFFORT_LEVEL',
+     'it overrides the effort level of every dispatch, so the efforts below do not take effect'),
 )
 REPO_COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')   # hook_path: a folder, not a command
 INSTRUCTION_FILES = ('CLAUDE.md', 'AGENTS.md')   # a line `<label>: `<text>`` names a command explicitly

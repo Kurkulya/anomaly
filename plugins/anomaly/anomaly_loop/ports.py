@@ -158,16 +158,17 @@ def resolve_models(values):
     MODEL_ROLES is dropped."""
     roles = {re.sub(r'[ _-]+', '_', role.lower()): one_line(model)
              for role, model in frontmatter.nested(values.get(MODELS_KEY, ''))[0].items() if is_set(model)}
-    models, problems = {}, []
+    own, problems = {}, []
     for role, default in MODEL_ROLES:
         if role in roles and not valid_model(roles[role]):
             problems.append(f'profile key {MODELS_KEY}: {role}: {roles[role]!r} must be a model, or a model and '
                             f'an effort ({", ".join(MODEL_EFFORTS)})')
             del roles[role]
         if role in roles:
-            models[role] = Setting(roles[role], PROFILE)
-        else:
-            models[role] = models[MODEL_FALLBACKS[role]] if role in MODEL_FALLBACKS else Setting(default, CORE)
+            own[role] = Setting(roles[role], PROFILE)
+        elif role not in MODEL_FALLBACKS:
+            own[role] = Setting(default, CORE)
+    models = {role: own[role] if role in own else own[MODEL_FALLBACKS[role]] for role, _ in MODEL_ROLES}
     return models, tuple(problems)
 
 
@@ -209,10 +210,9 @@ def run_ports(args, environ):
     resolution = resolve(home, gitrepo.repo_for(args.repo, outside_git=True))
     if resolution.problems:
         raise RecordError('; '.join(resolution.problems))
-    for name, overrides in OVERRIDING_ENV:
+    for name, consequence in OVERRIDING_ENV:
         if environ.get(name):
-            print(f'warning: {name} is set; it overrides {overrides}, so the models and efforts below '
-                  'do not take effect', file=sys.stderr)
+            print(f'warning: {name} is set; {consequence}', file=sys.stderr)
     for line in render(resolution):
         print(line)
     return 0

@@ -178,10 +178,11 @@ first line). An extend port lists every such line after the repo's own docs. The
 one `anomaly:` line naming the role. Without the key: `explore` sonnet, `implement` sonnet,
 `implement_wide` opus, `lookup` haiku, `digest` sonnet, `review` opus, `deep_analysis` opus,
 `browse` sonnet. `review_code`, `review_feature` and `review_security` are optional per-lens
-roles: one the profile leaves out takes the value of `review`. A model or effort change is a
-measured experiment ([ADR-0018](docs/adr/0018-model-changes-are-measured-experiments.md)).
-`ports` warns when `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` or `CLAUDE_CODE_EFFORT_LEVEL` is set: either
-one makes the profile's model or effort have no effect.
+roles: one the profile leaves out takes the value of `review` and prints the source of `review`
+too (`[profile]` when the profile sets only `review`). A model or effort change is a measured
+experiment ([ADR-0018](docs/adr/0018-model-changes-are-measured-experiments.md)). `ports` warns
+when `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` (the profile's models have no effect) or
+`CLAUDE_CODE_EFFORT_LEVEL` (the profile's efforts have no effect) is set.
 
 **Repo layer.** The commands `verify` (the full verify), `e2e`, `install` and `codegen` run from
 the repository root. `hook_path` is not a command: it is a folder relative to the repository
