@@ -13,7 +13,7 @@ METRIC_NAMES (case and outer spaces do not matter; anything else is refused):
     tokens. A session without a dispatch of the agent, with a call of the agent on a model with
     no factor (`unknown_model_by_agent`), or with a spawn without `.meta.json` (`skipped_spawns`,
     whose dispatch count is short) has no value: it is skipped, never read as 0; verify counts
-    the second kind. Resolved by name in resolve_metric, so it is not in REGISTRY;
+    the second and third kinds, a session of both as the third. Resolved by name in resolve_metric, so it is not in REGISTRY;
   - `sightings since the fix`: the anomaly's own sightings (the rare-event primary, judged by
     recurrence), and `<category> sightings` for each category (e.g. `rework sightings`,
     `late-catch sightings`): sightings of problems of that category. Sightings are rare, so they are
