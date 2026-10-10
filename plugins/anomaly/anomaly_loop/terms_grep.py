@@ -32,6 +32,8 @@ TEXT_TYPES = ('text/html', 'application/xhtml+xml', 'text/plain')
 META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""", re.I)
 SHORT_PAGE = 2000
 HIT_LIMIT = 6
+# TODO(VK, revisit 2026-10-17): a file: URL reads any local file, and a redirect can reach loopback or internal
+# hosts — see ADR-0020
 SCHEMES = ('http', 'https', 'file')
 COMMENT = re.compile(r'<!--.*?-->', re.S)
 HIDDEN_NAMES = ('script', 'style', 'noscript', 'template')

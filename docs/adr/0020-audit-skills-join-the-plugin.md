@@ -16,6 +16,7 @@ The architecture audit, the evidence research and the test audit were user-level
 - The architecture skill's bulk reads and ADR-drift check dispatch `anomaly:facts` on `explore`. Research topic and synthesis agents and the tests skill's value, runtime and cover-check agents dispatch `anomaly:survey` on `survey`. The survey agent has Read, Grep, Glob, Bash, Write, WebSearch and WebFetch, and no `model` key.
 - `pkg-facts` and `terms-grep` become CLI modules in `anomaly_loop/`, tested by the suite with recorded fixtures; the neutrality check allows the two registry API hosts the code calls. The repo layer adds both module names to `risk_patterns`, so the security reviewer joins every change to them.
 - The skills keep their rules; this is a move with edits, not a rewrite, so no switch-over experiment runs. ADR-0008 says each new pipeline skill replaces its old skill through one switch-over experiment; this ADR reads that rule as applying to rewrites only, because a moved skill keeps the old skill's rules and has no second version to compare with.
+- TODO(VK, revisit 2026-10-17): `anomaly:survey` holds Bash, Write and the web tools together, so a research topic agent that reads a hostile page is a prompt-injection path; deferred.
 
 ## Why
 
