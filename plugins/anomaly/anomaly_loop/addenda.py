@@ -6,16 +6,23 @@ the text the line adds to: the sorted relative paths and bytes of every file in 
 bytes of the one agent file, so it changes only when that skill or agent changes.
 """
 import hashlib
+import re
 from pathlib import Path
 
 from . import files
-from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES
+from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, SKILL_AGENTS
 from .files import RecordError
+from .records import SLUG
 
 AGENTS = 'agents'          # the agent files of the plugin, and their addenda files in home
 NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
 TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
+TAG_SHAPE = f'{TAG_OPEN}<signature>{TAG_SEPARATOR}<stamp>{TAG_CLOSE}'
+TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?:{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
+                    rf'[0-9a-f]{{{STAMP_CHARS}}}{re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
+HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
+HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
 
 
 def addendum_path(home, name, agent=False):
@@ -62,3 +69,25 @@ def append_line(path, line, signature, stamp):
     tagged = f'{line} {TAG_OPEN}{signature}{TAG_SEPARATOR}{stamp}{TAG_CLOSE}'
     files.write_lines(path, lines + [tagged])
     return tagged
+
+
+def file_block(path, heading):
+    """`heading` and the tagged lines of one addenda file, then one warning when the file holds a line
+    without its tag; [] for a missing or empty file."""
+    lines = read_lines(path)
+    tagged = [line for line in lines if TAGGED.fullmatch(line)]
+    block = [heading, *tagged] if tagged else []
+    if len(tagged) < len(lines):
+        block.append(f'warning: {path}: lines without an {TAG_SHAPE} tag are not printed '
+                     f'({len(lines) - len(tagged)} of {len(lines)})')
+    return block
+
+
+def print_addenda(home, skill):
+    """Print the addendum of `skill` under HEADER, then the addendum of each agent it dispatches
+    (SKILL_AGENTS) under HAND_OVER. With no addenda file nothing is printed, not even an empty line."""
+    out = file_block(addendum_path(home, skill), HEADER.format(skill=skill))
+    for agent in SKILL_AGENTS.get(skill, ()):
+        out += file_block(addendum_path(home, agent, agent=True), HAND_OVER.format(agent=agent))
+    if out:
+        print('\n'.join(out))

@@ -33,7 +33,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import gitrepo, index, paths, privacy, profile, records
+from . import addenda, gitrepo, index, paths, privacy, profile, records
 from .constants import (COMMIT_SCOPE, DIGEST_TOP, IMPACT_RANGE, INDEX_FILE, LENSES_FILE,
                         PARAGRAPH_MAX_CHARS, SESSION_KINDS_FILE, SIGHTING_MAX_CHARS, SUMMARY_CHARS,
                         UNKNOWN_REPO)
@@ -334,6 +334,7 @@ def run_list(args, environ):
         print(message)
     for line in list_lines(records.load_anomalies(home)):
         print(line)
+    addenda.print_addenda(home, 'observe')
     return 0
 
 
