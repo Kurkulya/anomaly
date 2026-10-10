@@ -16,6 +16,20 @@ def shown(sample):
     return sample.value, sample.n
 
 
+PER_DISPATCH = 'model-weighted tokens per dispatch'   # the metric is this name and an agent name
+
+
+def dispatch_row(session, dispatches, model_weighted, agent='anomaly:facts', unknown_models=None, **others):
+    """A metrics row of a session that dispatched `agent` `dispatches` times, whose calls weigh
+    `model_weighted`, as metrics.build_row names the fields (`subagents.by_type`,
+    `model_weighted_by_agent`, `unknown_model_by_agent`). `others` maps other agents to
+    (dispatches, model-weighted tokens)."""
+    spawned = {agent: (dispatches, model_weighted), **others}
+    return metrics_row(session, '2026-10-01', subagents={'by_type': {name: n for name, (n, _) in spawned.items()}},
+                       model_weighted_by_agent={name: total for name, (_, total) in spawned.items()},
+                       unknown_model_by_agent=unknown_models or {})
+
+
 # ---------- the metric registry ----------
 
 class RegistryTest(unittest.TestCase):
@@ -36,11 +50,43 @@ class RegistryTest(unittest.TestCase):
         found = verdict.resolve_metric('weighted tokens without security').read(None, None, rows, None)
         self.assertEqual((found.values, found.value), ((700.0, 900.0, 800.0), 800.0))
 
+    def test_model_weighted_tokens_per_dispatch_resolves_for_any_agent_name_and_divides_by_its_dispatches(self):
+        for agent in ('anomaly:facts', 'Explore'):
+            with self.subTest(agent=agent):
+                rows = [dispatch_row('s1', 4, 800.0, agent, other=(3, 9999.0)),
+                        dispatch_row('s2', 2, 900.0, agent)]
+                found = verdict.resolve_metric(f'{PER_DISPATCH} {agent}')
+                self.assertEqual(found.name, f'{PER_DISPATCH} {agent}')   # the agent's case is kept
+                self.assertEqual(found.read(None, None, rows, None).values, (200.0, 450.0))
+
+    def test_a_session_with_no_dispatch_of_the_agent_has_no_value_rather_than_0(self):
+        rows = [dispatch_row('s1', 2, 400.0),
+                dispatch_row('s2', 1, 50.0, agent='anomaly:code'),
+                metrics_row('s3', '2026-10-01')]
+        found = verdict.resolve_metric(f'{PER_DISPATCH} anomaly:facts').read(None, None, rows, None)
+        self.assertEqual(found.values, (200.0,))
+
+    def test_a_session_with_a_call_of_the_agent_on_a_model_with_no_factor_has_no_value(self):
+        rows = [dispatch_row('s1', 2, 400.0),
+                dispatch_row('s2', 2, 400.0, unknown_models={'anomaly:facts': 1}),
+                dispatch_row('s3', 2, 600.0, other=(1, 5.0), unknown_models={'other': 1})]   # another agent's call
+        found = verdict.resolve_metric(f'{PER_DISPATCH} anomaly:facts').read(None, None, rows, None)
+        self.assertEqual(found.values, (200.0, 300.0))
+
+    def test_a_session_with_a_spawn_without_meta_has_no_value_since_its_calls_count_but_not_its_dispatch(self):
+        short = {**dispatch_row('s2', 2, 400.0), 'skipped_spawns': 1}   # its dispatch is counted as `unknown`
+        rows = [dispatch_row('s1', 2, 400.0), short, {**dispatch_row('s3', 2, 600.0), 'skipped_spawns': 0}]
+        found = verdict.resolve_metric(f'{PER_DISPATCH} anomaly:facts').read(None, None, rows, None)
+        self.assertEqual(found.values, (200.0, 300.0))
+
     def test_a_name_resolves_without_regard_to_case_or_outer_spaces(self):
         self.assertEqual(verdict.resolve_metric('  Active Minutes ').name, 'active minutes')
+        self.assertEqual(verdict.resolve_metric('  Model-Weighted Tokens Per Dispatch anomaly:facts ').name,
+                         f'{PER_DISPATCH} anomaly:facts')   # the prefix is read in any case, the agent keeps its own
 
     def test_an_unknown_or_double_name_is_a_clear_error_that_lists_the_known_ones(self):
-        for name in ('active minutes per build session', 'active minutes, weighted tokens', ''):
+        for name in ('active minutes per build session', 'active minutes, weighted tokens', '',
+                     f'{PER_DISPATCH} a b', f'{PER_DISPATCH} <agent>'):
             with self.assertRaises(records.RecordError) as caught:
                 verdict.resolve_metric(name)
             self.assertIn('unknown metric', str(caught.exception))
@@ -350,6 +396,60 @@ class VerdictTest(VerdictCase):
         self.assertEqual(found[:2], ('revert', 'active minutes got worse; time comes before tokens' + RULE))
         self.baseline_and_after(before_weighted=2000, after_weighted=1000, before_active=10, after_active=10)
         self.assertEqual(self.judged().result, 'keep')
+
+    def dispatch_fields(self, rows, model_weighted, unknown=()):
+        """Give each of `rows` two dispatches of anomaly:facts weighing `model_weighted`; the rows at
+        the indexes `unknown` have a call of it on a model with no factor. Rewrites the metrics file."""
+        for index, row in enumerate(rows):
+            fields = dispatch_row(row['session_id'], 2, model_weighted,
+                                  unknown_models={'anomaly:facts': 1} if index in unknown else None)
+            row.update({key: fields[key] for key in ('subagents', 'model_weighted_by_agent', 'unknown_model_by_agent')})
+
+    def test_model_weighted_tokens_per_dispatch_also_reads_active_minutes_and_time_comes_before_tokens(self):
+        before, after = self.baseline_and_after(before_active=10, after_active=20)
+        self.dispatch_fields(before, 400.0)
+        self.dispatch_fields(after, 200.0)
+        write_metrics_rows(self.home, before + after)
+        self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
+        found = self.judged()
+        self.assertEqual([r.name for r in found.readings],
+                         [f'{PER_DISPATCH} anomaly:facts', 'rework sightings', 'active minutes'])
+        self.assertEqual(found[:2], ('revert', 'active minutes got worse; time comes before tokens' + RULE))
+
+    def test_verify_says_how_many_sessions_it_skipped_for_a_model_with_no_factor(self):
+        before, after = self.baseline_and_after(before_n=7, after_n=6)
+        self.dispatch_fields(before, 400.0, unknown=(0,))
+        self.dispatch_fields(after, 200.0, unknown=(0,))
+        write_metrics_rows(self.home, before + after)
+        self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
+        code, out, err = self.cli('verify', '--signature', 'slow-check')
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('(n=6) before', out)
+        self.assertIn('(n=5) since', out)
+        self.assertIn('- sessions skipped for a model with no factor: 2\n', out)
+        self.assertNotIn('.meta.json', out)   # no row has a spawn without it
+        self.dispatch_fields(before, 400.0)
+        self.dispatch_fields(after, 200.0)
+        write_metrics_rows(self.home, before + after)
+        self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
+        self.assertNotIn('no factor', self.cli('verify', '--signature', 'slow-check')[1])
+
+    def test_verify_counts_sessions_with_a_spawn_without_meta_on_a_line_of_their_own(self):
+        before, after = self.baseline_and_after(before_n=7, after_n=6)
+        self.dispatch_fields(before, 400.0, unknown=(0, 1))
+        self.dispatch_fields(after, 200.0)
+        before[1]['skipped_spawns'] = 1   # also has a call on a model with no factor: counted on the spawn line only
+        after[0]['skipped_spawns'] = 1
+        # every spawn of the agent lacked .meta.json: its dispatch sits under `unknown`, its calls do not
+        before[2].update(subagents={'by_type': {'unknown': 1}}, skipped_spawns=1)
+        write_metrics_rows(self.home, before + after)
+        self.experiment(metric=f'{PER_DISPATCH} anomaly:facts')
+        code, out, err = self.cli('verify', '--signature', 'slow-check')
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('(n=4) before', out)
+        self.assertIn('(n=5) since', out)
+        self.assertIn('- sessions skipped for a model with no factor: 1\n'
+                      '- sessions skipped for a spawn without .meta.json: 3\n', out)
 
     def test_tokens_cannot_be_kept_while_active_minutes_cannot_be_judged(self):
         self.baseline_and_after(before_weighted=2000, after_weighted=1000, before_active=10,

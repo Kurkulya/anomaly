@@ -23,6 +23,14 @@ EXPERIMENT_CHECK_DAYS = 21           # ... or this many days
 BASELINE_DAYS = 28                   # experiment baseline before the fix
 ACTIVE_GAP_SECONDS = 5 * 60          # a gap longer than this between entries is idle time
 PROMPT_CACHE_DAYS = 30               # prompt excerpts older than this are pruned
+# Price of one weighted token by model family relative to sonnet (= 1), from the API list prices
+# (platform.claude.com/docs/en/about-claude/pricing.md, read 2026-10-10); a call's family is the word
+# found in its model id. Only haiku has a long-prompt tier: a call whose prompt (input + cache writes
+# + cache reads) is over LONG_PROMPT_TOKENS counts at LONG_PROMPT_FACTORS instead. Re-read the prices before
+# changing a value; a model with no family here has no factor and is never guessed.
+MODEL_FACTORS = {'haiku': 0.05, 'sonnet': 1, 'opus': 2, 'fable': 5}
+LONG_PROMPT_TOKENS = 100_000
+LONG_PROMPT_FACTORS = {'haiku': 0.25}
 
 # ---------- vocabularies ----------
 

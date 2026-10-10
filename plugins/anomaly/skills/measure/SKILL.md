@@ -32,6 +32,7 @@ The script prints a few lines. Pass them on in plain words:
 - how many sessions were read and how many were skipped
 - how many rows the file holds, the date range they cover, and the total weighted tokens
 - the `subagent seconds:` line and the `subagent seconds by model:` line, when the script prints them, as they are
+- the `not measured:` line, when the script prints it, as it is
 - the path of the metrics file
 
 If the output has a line that starts with `profile:`, it names the profile keys that are

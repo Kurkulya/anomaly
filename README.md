@@ -440,6 +440,22 @@ together (`metrics.skills_used`). That set is for membership checks only: it hol
 bare and the plugin-qualified name and includes built-in commands. To rank skills, use each
 row's `tokens_by_skill`.
 
+A row also holds `model_weighted_by_agent`: per agent (the key of `tokens_by_agent`), the weighted
+tokens of each API call times the factor of the call's model, found by the family word in the
+model id: haiku 0.05, or 0.25 when the call's prompt (input plus cache writes plus cache reads) is
+over 100,000 tokens; sonnet 1; opus 2; fable 5. They are the API list prices relative to sonnet,
+kept as one dated constant with its pricing URL (`MODEL_FACTORS` in `constants.py`). A call on a
+model with no factor adds 0 and is counted in `unknown_model_by_agent` (per agent, `{}` when none),
+never guessed. `skipped_entries` counts assistant entries without `message.model` or
+`message.usage` (a `<synthetic>` entry is not counted) and `skipped_spawns` the spawn files without
+a `.meta.json`. Rows scanned before these fields existed lack them; `measure --full` fills them,
+but only for transcripts still on disk.
+
+After the `subagent seconds` lines, the summary prints one `not measured:` line when the
+`skipped_entries` and `skipped_spawns` of all rows add up to more than 0, for example
+`not measured: 3 assistant entries without model or usage, 2 spawns without .meta.json`. Rows
+without the fields add 0, and the line is left out when both sums are 0.
+
 ### observe
 
 `observe` is the skill that turns a session into anomalies. Say "retro" (or "run the observe
@@ -698,6 +714,7 @@ matter). Fewer is better for all of them.
 | `weighted tokens without security` | a session's weighted tokens less those of the core security reviewer (`anomaly:security` in the row's `tokens_by_agent`; a row without that entry keeps its whole weighted tokens), compared as medians. For a switch-over, which adds the security reviewer as new coverage ([ADR-0013](docs/adr/0013-switch-over-compares-skills.md)). Not a digest trend; read like weighted tokens, with active minutes beside it |
 | `sightings since the fix` | the anomaly's own sightings. As the primary metric (a rare-event metric, for a fix that moves no number) it is judged by whether the anomaly came back, not as a rate (see Verdict) |
 | `<category> sightings`, for example `rework sightings` or `late-catch sightings` | sightings of problems in that category, per session |
+| `model-weighted tokens per dispatch <agent>`, for example `model-weighted tokens per dispatch anomaly:facts` | a session's `model_weighted_by_agent` entry for that agent divided by its dispatch count (`subagents.by_type`), compared as medians. Each API call's weighted tokens are multiplied by its model's factor, so a cheaper model shows as a saving (see measure). The agent name is the one `tokens_by_agent` uses and keeps its case. A session with no dispatch of the agent, with a call of it on a model with no factor, or with a spawn without `.meta.json` (`skipped_spawns` above 0: its dispatch count would be short) has no value: it is skipped, never read as 0, and `verify` counts the second and third kind on a line each (a session of both is counted as the third). Read like weighted tokens, with active minutes beside it |
 
 User corrections and review misses reach the backlog through `observe` as rework and late-catch
 sightings, so those two are the usual guards. Sightings are rare, so a sighting metric is read as
@@ -735,8 +752,8 @@ only chance. `verify` asks instead how often chance alone would give such a chan
   drawn with a fixed seed, so the same data always gives the same answer, and the real split is
   counted too, `(hits + 1) / (10,000 + 1)`, so chance alone is never 0. Each window is read as
   the median of its sessions, or the mean for `interrupts` and for sighting rates.
-- **Real change or within noise.** The metric, and active minutes when the metric is weighted
-  tokens (with or without security), show a **real change** only when chance alone is 10% or less
+- **Real change or within noise.** The metric, and active minutes when the metric is a tokens
+  metric (see the registry), show a **real change** only when chance alone is 10% or less
   (in either direction), the change is 15% or more, and each side has at least 5 sessions. From an earlier value of 0, any
   rise meets the 15% and the line says `from 0`. Anything else is **within noise**, and that also
   covers a change under 15% even when chance alone is 10% or less. With fewer than 5 sessions on
@@ -751,10 +768,10 @@ only chance. `verify` asks instead how often chance alone would give such a chan
 When goals conflict, quality comes first, then your time, then tokens:
 
 1. the guard got worse: `revert`;
-2. the metric is weighted tokens (with or without security) and active minutes got worse: `revert`;
+2. the metric is a tokens metric and active minutes got worse: `revert`;
 3. the metric got worse: `revert`;
 4. the metric made a real change for the better, the guard held (`same`) and, when the metric is
-   weighted tokens (with or without security), active minutes held too (better or the same): `keep`;
+   a tokens metric, active minutes held too (better or the same): `keep`;
 5. anything else: `inconclusive`. The check date moves out 21 days, once. When it comes again
    and the numbers still cannot say, you decide with `decide`.
 
@@ -771,8 +788,8 @@ again, and a later sighting reopens the anomaly as it does for any fixed one.
 Every reason ends with the rule that produced it, `permutation test, ADR-0009` or
 `rare-event rule, ADR-0009`, so a result written under the older 15% rule can be told apart.
 
-`verify` prints the metric and the guard (and active minutes when the metric is weighted tokens,
-with or without security), each as
+`verify` prints the metric and the guard (and active minutes when the metric is a tokens metric,
+see the registry), each as
 `<metric> (<role>): <before> (n=<n>) before, <after> (n=<n>) since, <change>; <N>% of random
 splits change this much → real change` (or `within noise`). The change is `+N%` or `-N%`,
 `from 0`, or left out from 0 to 0. It adds a note only when chance alone is 10% or less but the
@@ -788,6 +805,13 @@ means the one-way test passed (the guard is worse), even when the result is `inc
 because a sighting guard is `thin`. `revert` reopens the anomaly. `decide` is accepted once the
 moved check date of an inconclusive result has come, or when an experiment is due but its metric
 or fix date cannot be measured (older records).
+
+When the metric is `model-weighted tokens per dispatch <agent>`, `verify` prints up to two more lines
+after the readings. `- sessions skipped for a model with no factor: N` counts the sessions of both
+windows that have no value because the agent had a call on a model with no factor.
+`- sessions skipped for a spawn without .meta.json: N` follows it and counts those left out for a spawn
+without `.meta.json`. A session with both is counted on the second line only. Each line is left out when
+its N is 0.
 
 **Housekeeping writes.** `effort` sets the effort of several anomalies in one step. `close` marks
 anomalies `wontfix`. `merge` adds the sightings of one anomaly to another (occurrences added up,

@@ -15,6 +15,13 @@ BR = 'Bear' + 'er'
 FAKE_KEY = 'gh' + 'p_' + 'A1b2C3d4E5f6G7h8I9j0K1l2'
 
 
+def without(entry, field):
+    """A copy of an assistant entry with `field` ('model' or 'usage') missing from its message."""
+    entry = json.loads(json.dumps(entry))
+    del entry['message'][field]
+    return entry
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -73,6 +80,7 @@ class TokensTest(Base):
         bucket = row['tokens']['main']['claude-opus-4']
         self.assertEqual(bucket, {'input': 110, 'cache_write': 50, 'cache_read': 1000, 'output': 27})
         self.assertNotIn('<synthetic>', row['tokens']['main'])
+        self.assertEqual(row['skipped_entries'], 0)   # a <synthetic> entry is not counted as skipped
         expected = 110 * 1 + 50 * 1.25 + 1000 * 0.1 + 27 * 5
         self.assertAlmostEqual(row['weighted'], expected)
 
@@ -101,6 +109,121 @@ class TokensTest(Base):
         self.assertAlmostEqual(skill['weighted'], 200 + 100 * 1.25 + 2000 * 0.1 + 20 * 5)
         self.assertEqual(list(row['tokens_by_agent']), ['Explore'])
 
+    def test_an_assistant_entry_without_model_or_usage_is_counted_as_skipped_in_any_file(self):
+        self.session([
+            assistant(ts(0), 'm1', out=5),
+            without(assistant(ts(1), 'm2', out=999), 'model'),
+            without(assistant(ts(2), 'm3', out=999), 'usage'),
+            assistant(ts(3), 'm4', model='<synthetic>', out=999),
+        ])
+        self.subagent('agent-a1', [without(assistant(ts(4), 's1', out=999), 'usage')],
+                      {'agentType': 'Explore', 'model': 'sonnet'})
+        row, _ = self.summarize()
+        self.assertEqual((row['skipped_entries'], row['skipped_spawns']), (3, 0))
+        self.assertEqual(row['tokens']['main']['claude-opus-4']['output'], 5)
+
+
+class ModelWeightedTest(Base):
+    """`model_weighted_by_agent`: per agent (the key of `tokens_by_agent`), the weighted tokens of each
+    API call times the factor of the call's model; `unknown_model_by_agent`: per agent, the calls on a
+    model with no factor. A call with the default fixture tokens weighs CALL."""
+    CALL = 100 * 1 + 50 * 1.25 + 1000 * 0.1 + 10 * 5
+
+    def call(self, agent, model, msg_id, minute=0, **tokens):
+        return assistant(ts(minute), msg_id, model=model, attributionAgent=agent, **tokens)
+
+    def test_a_call_counts_with_the_factor_of_its_models_family(self):
+        self.session([self.call('a-haiku', 'claude-haiku-4-5', 'h1'),
+                      self.call('a-sonnet', 'claude-sonnet-5', 's1', 1),
+                      self.call('a-opus', 'claude-opus-4', 'o1', 2),
+                      self.call('a-fable', 'claude-fable-5', 'f1', 3),
+                      self.call('a-bedrock', 'us.anthropic.claude-sonnet-4-5-v1:0', 'b1', 4)])
+        row, _ = self.summarize()
+        found = row['model_weighted_by_agent']
+        self.assertEqual(sorted(found), sorted(row['tokens_by_agent']))
+        for agent, factor in (('a-haiku', 0.05), ('a-sonnet', 1), ('a-opus', 2), ('a-fable', 5), ('a-bedrock', 1)):
+            self.assertAlmostEqual(found[agent], self.CALL * factor, msg=agent)
+        self.assertEqual(row['unknown_model_by_agent'], {})
+
+    def test_a_haiku_call_with_a_prompt_over_100k_tokens_counts_at_the_higher_factor(self):
+        at_line = dict(inp=50000, cache_write=25000, cache_read=25000, out=0)   # prompt of exactly 100000
+        weighted = 50000 + 25000 * 1.25 + 25000 * 0.1
+        self.session([self.call('a-at', 'claude-haiku-4-5', 'h1', **at_line),
+                      self.call('a-over', 'claude-haiku-4-5', 'h2', 1, **{**at_line, 'cache_read': 25001}),
+                      self.call('a-sonnet', 'claude-sonnet-5', 's1', 2, **{**at_line, 'cache_read': 25001})])
+        row, _ = self.summarize()
+        found = row['model_weighted_by_agent']
+        self.assertAlmostEqual(found['a-at'], weighted * 0.05, delta=0.1)
+        self.assertAlmostEqual(found['a-over'], (weighted + 0.1) * 0.25, delta=0.1)
+        self.assertAlmostEqual(found['a-sonnet'], weighted + 0.1, delta=0.1)   # only haiku has a tier
+
+    def test_an_agents_value_is_the_sum_over_its_calls_each_with_its_own_factor(self):
+        self.session([self.call('anomaly:facts', 'claude-sonnet-5', 's1', out=10),
+                      self.call('anomaly:facts', 'claude-opus-4', 'o1', 1, out=20),
+                      self.call('anomaly:facts', 'claude-haiku-4-5', 'h1', 2, out=30),
+                      self.call('Explore', 'claude-opus-4', 'o2', 3, out=10)])
+        self.subagent('agent-a1', [self.call('anomaly:facts', 'claude-opus-4', 'o3', 4, out=0)],
+                      {'agentType': 'anomaly:facts', 'model': 'opus'})
+        row, _ = self.summarize()
+
+        def weigh(out):
+            return 100 + 50 * 1.25 + 1000 * 0.1 + out * 5
+        found = row['model_weighted_by_agent']
+        self.assertAlmostEqual(found['anomaly:facts'],
+                               weigh(10) * 1 + weigh(20) * 2 + weigh(30) * 0.05 + weigh(0) * 2)
+        self.assertAlmostEqual(found['Explore'], weigh(10) * 2)
+
+    def test_a_call_on_a_model_with_no_factor_is_counted_for_its_agent_once_per_call(self):
+        self.session([self.call('anomaly:facts', 'claude-mystery-1', 'x1', out=5),
+                      self.call('anomaly:facts', 'claude-mystery-1', 'x1', 1, out=20),   # same API call, another entry
+                      self.call('anomaly:facts', 'claude-mystery-1', 'x2', 2),
+                      self.call('anomaly:facts', 'claude-sonnet-5', 's1', 3),
+                      self.call('Explore', 'claude-sonnet-5', 's2', 4),
+                      self.call('anomaly:facts', '<synthetic>', 'y1', 5)])
+        row, _ = self.summarize()
+        self.assertEqual(row['unknown_model_by_agent'], {'anomaly:facts': 2})
+
+
+class MeasureLineTest(Base):
+    """The summary line of `measure` about what it could not read: it starts with `not measured:` and
+    holds the count of assistant entries without model or usage, then the count of spawns without
+    .meta.json, as the only numbers in it."""
+
+    def measure(self):
+        _, out, _ = run_cli('measure', '--home', str(self.root / 'home'), '--data', str(self.root / 'data'),
+                            '--projects', str(self.projects))
+        return [line for line in out.splitlines() if line.startswith('not measured:')]
+
+    def the_line(self):
+        lines = self.measure()
+        self.assertEqual(len(lines), 1, 'expected one `not measured:` line')
+        return lines[0]
+
+    def test_one_line_holds_both_counts(self):
+        self.session([assistant(ts(0), 'm1'), without(assistant(ts(1), 'm2'), 'usage'),
+                      without(assistant(ts(2), 'm3'), 'usage'), without(assistant(ts(3), 'm4'), 'model')])
+        self.subagent('agent-a1', [assistant(ts(4), 's1')])
+        self.subagent('agent-a2', [assistant(ts(5), 's2')])
+        self.subagent('agent-a3', [assistant(ts(6), 's3')], {'agentType': 'Explore', 'model': 'sonnet'})
+        self.assertEqual(re.findall(r'\d+', self.the_line()), ['3', '2'])
+
+    def test_the_line_shows_a_zero_for_the_count_that_is_not_above_0(self):
+        self.session([assistant(ts(0), 'm1')])
+        self.subagent('agent-a1', [assistant(ts(1), 's1')])
+        self.assertEqual(re.findall(r'\d+', self.the_line()), ['0', '1'])
+
+    def test_no_line_when_both_counts_are_0(self):
+        self.session([assistant(ts(0), 'm1'), assistant(ts(1), 'm2', model='<synthetic>')])
+        self.subagent('agent-a1', [assistant(ts(2), 's1')], {'agentType': 'Explore', 'model': 'sonnet'})
+        self.assertEqual(self.measure(), [])
+
+
+class SummarizeRowsTest(unittest.TestCase):
+    def test_a_row_without_the_skipped_fields_adds_0_to_the_sums(self):
+        older = {}   # a row written before the fields existed lacks them
+        found = metrics.summarize_rows([older, {'skipped_entries': 2, 'skipped_spawns': 1}])
+        self.assertEqual((found['skipped_entries'], found['skipped_spawns']), (2, 1))
+
 
 class SubagentTest(Base):
     def test_subagents_roll_into_parent_with_meta_counts(self):
@@ -126,6 +249,7 @@ class SubagentTest(Base):
             'seconds_by_type': {'Explore': 100, 'general-purpose': 31},
             'seconds_by_model': {'sonnet': 100, 'opus': 31},
         })
+        self.assertEqual(row['skipped_spawns'], 0)   # every spawn here has a .meta.json
 
     def test_subagent_files_are_not_listed_as_sessions(self):
         self.session([assistant(ts(0), 'm1')])
@@ -140,6 +264,7 @@ class SubagentTest(Base):
         self.subagent('agent-a1', [assistant(ts(1), 's1')])
         row, _ = self.summarize()
         self.assertEqual(row['subagents']['by_type'], {'unknown': 1})
+        self.assertEqual(row['skipped_spawns'], 1)
 
     def test_a_spawn_without_meta_adds_its_seconds_to_unknown(self):
         self.session([assistant(ts(0), 'm1')])
