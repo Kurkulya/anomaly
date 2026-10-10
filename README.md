@@ -34,6 +34,9 @@ read what each piece of work cost, and each reviewer's accepted and rejected fin
 can judge the reviewers. Org-specific tools and names come in through **ports** in a profile kept
 outside the plugin.
 
+**architecture** audits a repo in 7 areas against six principles, with an area score and a lock
+for each, and ends in an `interview` line, `diagnose` lines or a report.
+
 This repo is a local marketplace (`anomaly-local`) that holds one plugin, `anomaly`.
 Read this file from top to bottom: install, configure, then the data, then each part of the
 loop in the order you meet it, then the pipeline, from tickets to the stage skills.
@@ -2102,6 +2105,32 @@ the CLI.
   also takes every open Low and Nit finding whose fix needs no decision,
   one full verify and the `ui_check` port, `mr reviewed` and `mr verified` on the tip, then
   `anomaly:ship` for the ready gate.
+
+## The architecture skill
+
+`anomaly:architecture` is model-invocable: it starts on "audit the architecture" or "what is good and
+bad here". It audits the repo in 7 areas against six principles and changes no source. Its text is
+`plugins/anomaly/skills/architecture/SKILL.md` (8 KB or less) with `reference/` beside it: the
+principles, the area outline, the pitfalls and one **stack profile** per stack (`react-ts`,
+`flutter`, `go`, `python`). Its only pre-approved tool is the CLI.
+
+- **Setup.** `worklog start architecture-<date> architecture`, then the stack profile is picked from
+  the repo's files (several matches are audited apart; no match gets a drafted stack profile that is
+  used only after your yes and saved only in `research/`). All facts come from git, and every claim
+  carries `file:line` and a count. Bulk reads go to `anomaly:facts` on the `explore` model role, with
+  effort when set.
+- **Pass one.** The 7 areas in order: layers and dependency direction, module depth, state
+  ownership, side effects and platform adapters, cohesion in the biggest feature, guards on the
+  five-rung ladder, decision records. Each area gets area findings, an area score from 1 to 5, a
+  **lock** and a one-sentence why, and is written to `.anomaly/architecture-<date>/research/`. A
+  summary table follows, with the change in area scores against an earlier run.
+- **Pass two.** After your yes, per area: one bad snippet from the repo, one good rewrite (not
+  applied), the lock as a file you can apply (an import or lint rule at error level, or a test that
+  fails before the fix), and the proposed work. Nothing is implemented.
+- **Hand-off.** `worklog add` (stage `architecture`, `--docs` the unit folder), then the line that
+  fits: `/anomaly:interview Work unit architecture-<date>` for open choices,
+  `/anomaly:diagnose <defect>` with a `Red command:` per clear defect, or no line when nothing needs
+  to change.
 
 ## Development
 

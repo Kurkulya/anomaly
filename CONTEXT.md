@@ -57,3 +57,5 @@
 | **wave** | One round of frontier tickets run together, one after another or in parallel. | batch, round (that is a review round) |
 | **wave report** | The 5-line chat summary `conduct` prints after a wave: done, failed, open, next, cost. | digest (that is the backlog digest command and an Avoid word for **log**) |
 | **MR** | The one merge request of a work unit (a pull request on GitHub), opened as a draft and made ready through `ship`. | PR (in plugin text) |
+| **stack profile** | One file per stack (language and test runner) in a skill's `reference/stacks/` that gives the commands and greps the skill runs on that stack; a stack with no file gets a drafted one. | profile (alone; that is the environment mapping) |
+| **lock** | A guard that stops an architecture finding from coming back: an import or lint rule at error level, or a failing test. | guard rail |
