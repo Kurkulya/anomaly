@@ -17,12 +17,15 @@ A batch is {"sightings": [...], "lenses": [...], "kind": {...}}; every key is op
 
 The whole batch is checked before anything is written. Then: occurrences + 1, `last_seen` and a
 new first line in `## Sightings` for a match (a `fixed` anomaly becomes `reopened`, a `wontfix`
-one keeps its status), a new file otherwise; lens lines and the kind override are appended; the
-index is regenerated (the reply then lists the top anomalies by score); and when home is inside a
-git repository only the paths written, plus the index, are committed.
+one keeps its status), a new file otherwise; new lens lines and the kind override are appended, a
+replaced lens line rewrites the whole file in one step; the index is regenerated (the reply then
+lists the top anomalies by score); and when home is inside a git repository only the paths
+written, plus the index, are committed.
 
-A session counts once per anomaly and once per lens: a second sighting or lens line from the same
-session is skipped, so repeating a run does not inflate the counts.
+A session counts once per anomaly and once per lens: a second sighting from the same session is
+skipped, and a later lens record of the session replaces its line when none of accepted, rejected
+and revised is smaller and one is larger (the session's newest cumulative sum, ADR-0021). The same
+counts write nothing, so repeating a run does not inflate the counts; a smaller one refuses the batch.
 
 Free text (sighting, summary, fix, target, scope) is the writer's own process wording: one short
 line that privacy.privacy_problems finds nothing in. Repository, session and lens names are
@@ -37,7 +40,7 @@ from . import gitrepo, index, paths, privacy, profile, records
 from .constants import (COMMIT_SCOPE, DIGEST_TOP, IMPACT_RANGE, INDEX_FILE, LENSES_FILE,
                         PARAGRAPH_MAX_CHARS, SESSION_KINDS_FILE, SIGHTING_MAX_CHARS, SUMMARY_CHARS,
                         UNKNOWN_REPO)
-from .files import RecordError, read_input
+from .files import RecordError, dump, read_input, write_lines
 
 SIGHTING_KEYS = ('signature', 'text', 'session', 'repo', 'kind', 'category', 'target', 'scope', 'impact',
                  'summary', 'fix')
@@ -202,22 +205,49 @@ def record_sightings(anomalies, sightings, today):
     return lines, changed, counted
 
 
+def lens_change(stored, record):
+    """'smaller', 'same' or 'larger': the record's accepted, rejected and revised against the stored line's.
+    A missing value, or a stored one that is no count, counts as 0; one smaller value makes it 'smaller'."""
+    pairs = [(record.get(key, 0), stored.get(key) if records.is_count(stored.get(key)) else 0)
+             for key in ('accepted', 'rejected', 'revised')]
+    if any(new < old for new, old in pairs):
+        return 'smaller'
+    return 'larger' if any(new > old for new, old in pairs) else 'same'
+
+
 def record_lenses(home, lens_records):
-    """Lens lines to append and the lines to print; a session's lens is counted once."""
-    known = {(row.get('session_id'), row.get('lens')) for row in records.load_lenses(home)}
-    to_write, lines = [], []
+    """(lens lines to append, every line of lenses.jsonl when a stored one was replaced or else None, lines
+    to print). One line per session and lens: a new one is appended, larger totals replace the stored line
+    in place, the same totals write nothing, and a smaller value refuses the whole batch."""
+    rows = records.load_lenses(home)
+    at = {}
+    for number, row in enumerate(rows):
+        at.setdefault((row.get('session_id'), row.get('lens')), number)
+    appended, replaced, lines = [], False, []
     for record in lens_records:
         name, key = record['lens'], (record['session_id'], record['lens'])
+        revised = f', revised {record["revised"]}' if 'revised' in record else ''
+        counts = f'(accepted {record["accepted"]}, rejected {record["rejected"]}{revised})'
         if not record['accepted'] and not record['rejected']:
             lines.append(f'skipped: lens {name} has no accepted or rejected findings')
-        elif key in known:
+            continue
+        if key not in at:
+            at[key] = len(rows)
+            rows.append(record)
+            appended.append(record)
+            lines.append(f'lens: {name} logged {counts}')
+            continue
+        change = lens_change(rows[at[key]], record)
+        if change == 'smaller':
+            raise RecordError(f'lens {name}: session {record["session_id"]} already has a line with a larger '
+                              f'accepted, rejected or revised count than {counts}; a tally sum only grows')
+        if change == 'same':
             lines.append(f'skipped: lens {name} already logged for this session')
-        else:
-            known.add(key)
-            to_write.append(record)
-            revised = f', revised {record["revised"]}' if 'revised' in record else ''
-            lines.append(f'lens: {name} logged (accepted {record["accepted"]}, rejected {record["rejected"]}{revised})')
-    return to_write, lines
+            continue
+        rows[at[key]] = record
+        replaced = True
+        lines.append(f'lens: {name} replaced {counts}')
+    return appended, (rows if replaced else None), lines
 
 
 def record_kind(home, kind_record):
@@ -273,27 +303,32 @@ def save_anomalies(home, today, anomalies, changed, message):
 
 
 def apply_batch(home, batch, today):
-    """Record the whole batch, regenerate the index, commit the paths written; returns the lines to print."""
+    """Record the whole batch, regenerate the index, commit the paths written; returns the lines to print.
+    A refused record (a lens line with a smaller count among them) raises RecordError before anything is written."""
     if batch.empty:
         return ['nothing to record']
     anomalies = {a.signature: a for a in records.load_anomalies(home, strict=True)}
     lines, changed, counted = record_sightings(anomalies, batch.sightings, today.isoformat())
-    lens_records, lens_lines = record_lenses(home, batch.lenses)
+    lens_records, lens_rows, lens_lines = record_lenses(home, batch.lenses)
     kind_record, kind_line = record_kind(home, batch.kind) if batch.kind else (None, None)
 
     written = write_anomalies(home, today, anomalies, changed)
-    for record in lens_records:
-        records.append_lens(home, record)
+    if lens_rows is not None:
+        write_lines(Path(home) / LENSES_FILE, [dump(row) for row in lens_rows])
+    else:
+        for record in lens_records:
+            records.append_lens(home, record)
+    lens_written = lens_records or lens_rows is not None
     if kind_record:
         records.append_session_kind(home, kind_record)
-    written += [Path(home) / name for name, wrote in ((LENSES_FILE, lens_records),
+    written += [Path(home) / name for name, wrote in ((LENSES_FILE, lens_written),
                                                        (SESSION_KINDS_FILE, kind_record)) if wrote]
 
     ranked = records.ranked(anomalies.values())
     lines += lens_lines + ([kind_line] if kind_line else [])
     lines.append(index.backlog_line(anomalies.values()))
     lines += [f'top: {a.score} {a.signature}' for a in ranked[:DIGEST_TOP]]
-    lines.append(commit_home(home, written, commit_message(counted, changed, lens_records, kind_record)))
+    lines.append(commit_home(home, written, commit_message(counted, changed, lens_written, kind_record)))
     return lines
 
 
