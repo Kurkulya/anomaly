@@ -40,6 +40,7 @@ class RegistryTest(unittest.TestCase):
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
     BUILD_SKILL_MAX_BYTES = 9 * 1024   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10)
+    CONDUCT_SKILL_MAX_BYTES = 9 * 1024   # conduct only: the fix-branch and research dispatches name roles and effort (model-roles cumulative review, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
@@ -77,7 +78,7 @@ class SkillFileTest(unittest.TestCase):
         for path in self.skills():
             if path.parent.name not in constants.LOOP_SKILLS:
                 with self.subTest(skill=path.parent.name):
-                    cap = self.BUILD_SKILL_MAX_BYTES if path.parent.name == 'build' else self.SKILL_MAX_BYTES
+                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
                     self.assertLessEqual(path.stat().st_size, cap)
         for path in self.agents():
             with self.subTest(agent=path.stem):
@@ -1599,7 +1600,7 @@ class ConductSkillTest(unittest.TestCase):
     SKILL = PLUGIN / 'skills' / 'conduct' / 'SKILL.md'
     KICKOFF = SKILL.parent / 'KICKOFF.md'
     PARALLEL = SKILL.parent / 'PARALLEL.md'
-    SKILL_MAX_BYTES = 8 * 1024
+    SKILL_MAX_BYTES = SkillFileTest.CONDUCT_SKILL_MAX_BYTES
     KICKOFF_MAX_BYTES = 1024
     PARALLEL_MAX_BYTES = 3200
 
@@ -1616,7 +1617,7 @@ class ConductSkillTest(unittest.TestCase):
         self.assertIn('explicit', description)
         self.assertIn('model-invocable', description)
 
-    def test_the_conduct_skill_fits_in_8_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3200_bytes(self):
+    def test_the_conduct_skill_fits_in_9_KB_its_kickoff_doc_in_1_KB_and_its_parallel_doc_in_3200_bytes(self):
         """AC-59, conduct half (the ship caps live in ShipSkillTest)."""
         self.text()
         self.assertTrue(self.KICKOFF.is_file(), 'skills/conduct/KICKOFF.md is missing')
