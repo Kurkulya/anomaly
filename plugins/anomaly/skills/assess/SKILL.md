@@ -52,9 +52,9 @@ Use the first form for a link and the second for anything else.
 
 ## 2. Read it
 
-- A link: do not fetch it into this window. Send the link straight to one subagent with the
-  model `sonnet` and ask for a digest of at most 300 words in its own words: what the thing
-  claims, what it changes, what it costs, what evidence it gives. Work from the digest.
+- A link: do not fetch it into this window. Send the link straight to one
+  `anomaly:digest` agent on the `digest` model role (model, then effort if set) and ask for a
+  digest of at most 300 words in its own words: what the thing claims, what it changes, what it costs, what evidence it gives. Work from the digest.
 - A text or an opinion: use it as given.
 
 Never keep long passages of the source. You will write about it in your own words.

@@ -68,7 +68,7 @@ Review → verify → CI check → merge → close. `conduct`'s parallel path en
 1. The agent's touched tests.
 2. One full verify: `command verify`, no changed-only selection, in the foreground, even after agent green. [I16, I18]
 3. `Tests:` says e2e: `command e2e` on the area specs plus `--only-changed`; full e2e only in CI. [I17]
-4. `Tests:` says UI: the `ui_check` port, `browse` model role; core default brief: [UI-CHECK.md](UI-CHECK.md), loaded only then. Pass it the `app` lines of `ports`. [N16, I27]
+4. `Tests:` says UI: the `ui_check` port, `browse` model role and effort; core default brief: [UI-CHECK.md](UI-CHECK.md), loaded only then. Pass it the `app` lines of `ports`. [N16, I27]
 5. The ticket asks: one real-data probe on a copy. [N2]
 
 No `Tests:` line: 1-2, 3 if the area has e2e specs, 4 for a UI ticket. [N10] Failure only in untouched files: re-run them alone once; green = a flake for `--open`, red = real (pending verdict, I19). A real failure: the same agent fixes it, a delta round, verify again. Then `ticket verified`.
