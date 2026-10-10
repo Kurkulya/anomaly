@@ -7,7 +7,7 @@
   stories     exit 1 when stories.md or decisions.md of a work unit breaks the shapes in
               docs/formats.md; oversize files only warn
   slice       exit 1 when the tickets of a work unit cannot be run by build (an AC in no Covers:,
-              a missing line, a bad Status:, a blocker with no file or in a cycle, a path:NN
+              a missing line, a bad Status:, a bad Model:, a blocker with no file or in a cycle, a path:NN
               anchor); a ticket over 5 KB only warns. Prints as `stories` does
               (`slice check passed`).
 

@@ -1534,7 +1534,7 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   ticket's `Covers:` (`Covers: none` is allowed); a ticket with no `Status:`, `Blocked by:`,
   `Covers:`, `Tests:` or key line, or one with an empty value (the key line is the line the
   `key_line` port names, core `Key:`, read from the profile in `--home`; it accepts any word for
-  now, see ADR-0017, Revisit); a `Status:`
+  now, see ADR-0017, Revisit); an empty `Model:` or one other than `implement` or `implement_wide`; a `Status:`
   that is not a triage word or run state of `formats.md`, or `ready-for-human` without
   `(<why>)`; a blocker with no `NN-*.md` file or in a cycle; a path with a line number
   (`check.py:42`) outside fenced code blocks and copied `- D-n:` lines (a host:port after `://`
