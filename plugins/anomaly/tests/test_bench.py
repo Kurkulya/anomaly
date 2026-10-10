@@ -832,7 +832,8 @@ class FactsScoreTest(FactsCase):
 
     def test_prose_lines_are_ignored(self):
         prose = ['The answer is in a.py:11 — see below.', 'a.py:11 — no bullet', '- see a.py:11 for details',
-                 '- a note with no place', '', 'old.py:30 — also prose']
+                 '- a note with no place', '', 'old.py:30 — also prose',
+                 '- Rejected: a.py:11 — stale', '- at 10:30 — the job ran']
         answers = bench.parse_answers('\n'.join(prose + [self.answer('b.py', 20, 'real claim')]) + '\n', 'answers.txt')
         self.assertEqual([(a.path, a.line, a.fact) for a in answers], [('b.py', 20, 'real claim')])
         result = self.score_text(*prose)
