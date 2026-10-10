@@ -6,7 +6,7 @@ from unittest import mock
 
 from datetime import date
 
-from anomaly_loop import assess, cli, constants, digest, ideas, records
+from anomaly_loop import addenda, assess, cli, constants, digest, ideas, records
 from tests.fixtures import (GitFixture, NOW, anomaly_text, context, run_cli, write_anomaly_text, write_idea_file,
                             write_text)
 
@@ -138,6 +138,16 @@ class CheckTest(HomeCase):
         self.assertEqual(sum(line.startswith('profile: ') for line in out.splitlines()), 1)
         self.assertTrue(out.splitlines()[0].startswith('profile: '), out)
         self.assertIn('missing keys: tracker', out)
+
+    def test_the_addendum_of_assess_comes_after_all_the_existing_output(self):
+        """AC-12: the output without an addenda file stays as it was, profile line first, and the addendum follows."""
+        _, before, _ = self.run_assess('check', '--source', 'an opinion')
+        addenda.append_line(addenda.addendum_path(self.home, 'assess'), 'Name the source first.', 'vague-source',
+                            '0a1b2c3d')
+        _, after, _ = self.run_assess('check', '--source', 'an opinion')
+        self.assertTrue(before.startswith('profile: '), before)
+        self.assertTrue(after.startswith(before), after)
+        self.assertIn('Name the source first.', after[len(before):])
 
     def test_a_complete_profile_prints_no_profile_line(self):
         write_text(self.home / 'profile.md', FULL_PROFILE)

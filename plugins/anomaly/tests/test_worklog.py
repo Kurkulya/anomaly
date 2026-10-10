@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from anomaly_loop import cli
+from anomaly_loop import addenda, cli
 from tests.fixtures import (NOW, SID, GitFixture, assert_cli_error, metrics_row, run_cli, write_metrics_rows,
                             write_text)
 
@@ -162,6 +162,14 @@ class StartTest(WorklogCase):
         self.assertEqual(out, ['start: workflow-build build 2026-10-04 09:30'])
         self.assertTrue(any(path.is_file() for path in self.records))
         self.assertFalse(self.home.exists())
+
+    def test_start_prints_the_addendum_of_the_skill_the_stage_names_after_its_start_line(self):
+        """AC-11: the stage is the skill name; the header and the agent block are in test_addenda.py."""
+        addenda.append_line(addenda.addendum_path(self.home, 'build'), 'Run the unit tests first.', 'slow-run',
+                            '0a1b2c3d')
+        out = self.start_ok('workflow-build', 'build')
+        self.assertEqual(out[0], 'start: workflow-build build 2026-10-04 09:30')
+        self.assertTrue(any('Run the unit tests first.' in line for line in out[1:]), out)
 
     def test_add_after_start_has_started_and_ended_and_no_warning(self):
         self.start_ok('workflow-build', 'build', now=EARLIER)
