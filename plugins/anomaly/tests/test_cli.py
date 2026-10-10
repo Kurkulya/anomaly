@@ -1801,5 +1801,26 @@ class ModelPickSkillTest(unittest.TestCase):
         self.assertIn('`model_pick`', names.group(0))
 
 
+class LensReplaceDocsTest(unittest.TestCase):
+    """Calibrate-fixes-1 ticket 02 (AC-6): the README and review step 10 no longer say that a later lens line of
+    the session is skipped or lost. The docstrings of observe.py and lens.py are checked by the ticket review."""
+    README = PLUGIN.parent.parent / 'README.md'
+    REVIEW = PLUGIN / 'skills' / 'review' / 'SKILL.md'
+
+    def test_the_readme_no_longer_says_observe_apply_skips_a_lens_or_puts_each_lens_in_once(self):
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = ' '.join(self.README.read_text(encoding='utf-8').split())
+        for old in ('skips a lens it already logged', 'home gets each lens once', 'put each lens into home once'):
+            with self.subTest(old=old):
+                self.assertFalse(old in text, f'README.md still says: {old}')
+
+    def test_review_step_10_no_longer_says_an_applied_lens_is_skipped_and_a_later_run_lost(self):
+        step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
+        for old in ('a lens already applied in the session is skipped', 'a later run is lost'):
+            with self.subTest(old=old):
+                self.assertFalse(old in step, f'review step 10 still says: {old}')
+
+
 if __name__ == '__main__':
     unittest.main()
