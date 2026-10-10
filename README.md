@@ -1835,6 +1835,8 @@ python plugins/anomaly/scripts/anomaly.py mr        body <work unit folder | ad-
 python plugins/anomaly/scripts/anomaly.py mr        put|ready|show <work unit folder | ad-hoc ticket> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit folder> <ref> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py pkg-facts <ecosystem>:<name>|<name>... [--json] [--repo <dir>]
+python plugins/anomaly/scripts/anomaly.py terms-grep --terms '<words>' <url>... [--context <n>] [--word]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -1866,6 +1868,17 @@ python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] 
 - `conduct` takes the action `status`, which prints the five-line wave report of a work unit; see Wave report.
 - `mr` takes the actions `body` (writes the MR body of a work unit or an ad-hoc ticket to a file), `put`, `ready`, `show`, `reviewed` and `verified`; see MR body and MR.
 - `docs` takes the action `scan`, which prints the overdue ADRs, the deferral notes without an owner and date, and the dead paths of `CLAUDE.md` files; see Docs scan.
+- `pkg-facts` prints the same registry facts (latest version, date, licence, deprecated,
+  repository, stars, open issues, Scorecard, downloads) for every package, one table row each, or
+  a JSON list with `--json`; it reads deps.dev for npm, pypi, go, maven, cargo and nuget, and
+  pub.dev for pub. A bare name takes its ecosystem from the one manifest family in `--repo`
+  (default: the current folder, read as given, inside or outside git). A failed fetch prints
+  `FETCH FAILED` and an ecosystem with no adapter `no adapter: <system>`, each with Unknown cells
+  and exit 1; a bare name with no single ecosystem, or a name of `.` or `..`, is an error.
+- `terms-grep` fetches each page (`http`, `https` or `file://`) and prints every hit of each
+  comma-separated term in `--terms` with `--context` characters on each side (default 300);
+  `--word` matches whole words only. A page it cannot read prints `FETCH FAILED` and exits 1,
+  since that output cannot prove a clause absent.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
