@@ -1,20 +1,14 @@
 """`ports`: the resolved adapter of every port, the repo-layer commands and the model roles (ADR-0007),
 run in-process against a temporary home and a temporary git repository."""
-import contextlib
-import io
 import json
-import os
 import re
 import shutil
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
-from unittest import mock
 
 from anomaly_loop import constants, ports, profile, repolayer
-from anomaly_loop.files import RecordError
 from tests.fixtures import GitFixture, run_cli, write_text
 
 LINE = re.compile(r'(\S+) (\S+) = (.*?) ?\[([^\[\]]*)\]')
@@ -198,22 +192,6 @@ class ModelRolesTest(PortsCase):
     def resolved_models(self):
         return ports.resolve(self.home, self.repo.root).models
 
-    def run_ports(self, set_vars=()):
-        """`ports.run_ports` called directly with exactly the env vars in `set_vars` set, in os.environ and in
-        the injected environ; returns (stdout, stderr, the RecordError it raised or None)."""
-        env = {name: 'x' for name in set_vars}
-        out, err, error = io.StringIO(), io.StringIO(), None
-        args = SimpleNamespace(home=str(self.home), repo=str(self.repo.root))
-        with mock.patch.dict(os.environ), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            for name in OVERRIDING_ENV:
-                os.environ.pop(name, None)
-            os.environ.update(env)
-            try:
-                ports.run_ports(args, dict(env))
-            except RecordError as caught:
-                error = caught
-        return out.getvalue(), err.getvalue(), error
-
     def test_no_models_key_gives_the_core_defaults(self):
         found = self.section(self.ports(), 'model')
         self.assertEqual(list(found), list(MODEL_ROLES))
@@ -259,33 +237,35 @@ class ModelRolesTest(PortsCase):
                 self.assertEqual(resolution.problems, ())
                 setting = resolution.models['review_code']
                 self.assertEqual(setting.source, ports.PROFILE)
-                self.assertIn('opus', setting.value)
-                self.assertIn(effort, setting.value)
+                self.assertEqual(setting.value, f'opus {effort}')
 
     def test_any_other_role_value_shape_is_a_problem_line_and_ports_prints_nothing_else(self):
         for value in ('sonnet for contained tickets', 'sonnet turbo', 'opus high please'):
             with self.subTest(value=value):
                 self.write_profile('models:', f'  implement: {value}')
-                self.assertEqual(len(ports.resolve(self.home, self.repo.root).problems), 1)
-                out, err, error = self.run_ports()
-                self.assertIsNotNone(error, 'ports printed instead of refusing')
-                self.assertEqual(out + err, '')
+                code, out, err = run_cli('ports', '--home', str(self.home), '--repo', str(self.repo.root))
+                self.assertEqual(code, 2)
+                self.assertEqual(out, '')
+                self.assertEqual(len(err.splitlines()), 1)
+                self.assertTrue(err.startswith('anomaly: '), err)
+                self.assertIn('implement', err)
 
     def test_ports_warns_once_for_each_env_var_that_overrides_the_profile_and_for_no_other(self):
         for set_vars in ((), OVERRIDING_ENV[:1], OVERRIDING_ENV[1:], OVERRIDING_ENV):
             with self.subTest(set_vars=set_vars):
-                out, err, error = self.run_ports(set_vars)
-                self.assertIsNone(error)
-                lines = (out + err).splitlines()
+                code, out, err = run_cli('ports', '--home', str(self.home), '--repo', str(self.repo.root),
+                                         environ={name: 'x' for name in set_vars})
+                self.assertEqual(code, 0, err)
+                self.assertEqual(set(self.section(parse(out), 'model')), set(MODEL_ROLES))
+                lines = err.splitlines()
                 for name in OVERRIDING_ENV:
                     self.assertEqual(len([line for line in lines if name in line]), 1 if name in set_vars else 0, name)
-                self.assertEqual(len([line for line in lines if 'CLAUDE_CODE_' in line]), len(set_vars))
+                self.assertEqual(len(lines), len(set_vars))
 
     def test_the_models_key_maps_a_new_role_with_an_effort_to_its_printed_model_line(self):
         self.write_profile('models:', '  lookup: haiku medium')
         value, source = self.section(self.ports(), 'model')['lookup']
-        self.assertIn('haiku', value)
-        self.assertIn('medium', value)
+        self.assertEqual(value, 'haiku medium')
         self.assertEqual(source, 'profile')
 
     def test_a_role_written_with_a_space_or_a_hyphen_maps_to_its_role(self):
