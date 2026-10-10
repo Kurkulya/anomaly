@@ -1,6 +1,6 @@
 ---
 name: research
-description: Evidence-graded comparison of options or vendors, with proofs and a decision matrix. Use for "research with proofs", not narrative reports. When a choice rests on unverified facts, suggest it in one line; start it only after the user's yes.
+description: Evidence-graded comparison of options or vendors with a decision matrix. For "research with proofs", not narrative reports. When a library, service or vendor choice rests on unverified facts, suggest it in one line; start only after the user's yes.
 allowed-tools: Bash(python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" *)
 ---
 
@@ -12,13 +12,14 @@ file shape are in [BRIEF-TEMPLATE.md](BRIEF-TEMPLATE.md); this file does not rep
 
 ## The CLI calls
 
-One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes; write a ' as ’. No `python`: try `python3`. `<unit folder>` is `.anomaly/<unit>/` in `<checkout>`. `pkg-facts` takes one `<ecosystem>:<name>` per package; `terms-grep` takes the words after `--terms` and one URL per page.
+One plain command each, exactly in this form: no chains, inline code, pipe into an interpreter, heredoc or redirection. Free text goes in single quotes; write a ' as ’. No `python`: try `python3`. `<unit folder>` is `.anomaly/<unit>/` in `<checkout>`. `pkg-facts` takes one `<ecosystem>:<name>` per package, and `...` stands for more of them; `terms-grep` takes comma-separated words or phrases after `--terms` (a space inside one term makes it a phrase) and one URL per page.
 
 ```
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog start <unit> research --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <unit> --stage research --session ${CLAUDE_SESSION_ID} --docs <unit folder> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
-python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" terms-grep --terms '<words>' <urls>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" pkg-facts <ecosystem>:<name>
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" terms-grep --terms '<word>,<phrase>' <urls>
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" pkg-facts <ecosystem>:<name>...
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" pkg-facts --json <ecosystem>:<name>...
 ```
 
 **Paths.** `<checkout>` is the root of the repo the decision is for (ask when the session is
@@ -46,8 +47,8 @@ add it with the Edit tool, or create the file with the Write tool if it is missi
    yes, no, a number or a quote.
 3. **Dispatch `anomaly:survey` agents in parallel, in one message** (`survey` role: model,
    effort if set): one per topic (a library run: exactly one). The prompt is three lines: read
-   `<research>/<NN>-brief.md` fully, you own topic N, write the topic's file named in the
-   brief, reply in 8 lines. Done when every topic file exists with `Status:`.
+   `<research>/<NN>-brief.md` fully, you own topic N, write `<research>/<NN>-<slug>.md` (the
+   path the brief names for that topic), reply in 8 lines. Done when every topic file exists with `Status:`.
 4. **Verify the deciding sources yourself, in the main session.** Any claim that decides the
    recommendation (a licence clause, a platform rule, a hard limit) is re-read from the live
    page, with `curl` into a new empty folder under the scratchpad when WebFetch truncates;
@@ -62,7 +63,8 @@ add it with the Edit tool, or create the file with the Write tool if it is missi
    FAILED and `no adapter` notes go there. An Unknown cell never proves a fact.
 5. **Synthesise** into `<research>/<NN>-decision-matrix.md`, as section 5 of the brief says:
    in a library run the main session writes it; in a service or vendor run one
-   `anomaly:survey` agent does (`survey` role: model, effort if set).
+   `anomaly:survey` agent does (`survey` role: model, effort if set), told to read the brief
+   and the topic files, write `<research>/<NN>-decision-matrix.md` and reply in 8 lines.
    Done when the recommendation names the facts that would flip it, and the matrix has a
    `Revisit by: <YYYY-MM-DD>` line, dated by the rule in section 5 of the brief. An ADR citing
    the matrix uses that date as its `Revisit:`.
