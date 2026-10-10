@@ -74,12 +74,12 @@ class ScoreCase(unittest.TestCase):
 
 
 class RegistryTest(ScoreCase):
-    def test_bench_is_registered_once_with_the_score_action(self):
+    def test_bench_is_registered_once_with_the_score_and_facts_actions(self):
         self.assertEqual(cli.COMMANDS.count('bench'), 1)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['bench', '--help'], environ={})
-        self.assertEqual(re.findall(r'^ {4}([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['score'])
+        self.assertEqual(sorted(re.findall(r'^ {4}([a-z-]+)\s{2,}\S', out.getvalue(), re.M)), ['facts', 'score'])
 
 
 class FoundTest(ScoreCase):
@@ -716,6 +716,113 @@ class DocsFixtureTest(ScoreCase):
             with self.subTest(defect=spec['defects'][number]['id']):
                 alone = block(self.score(self.PATH, self.write_run(line, name=f'alone{number}.txt'))[1])
                 self.assertEqual((alone['found'], alone['missed']), ('1 of 2', '1 of 2'))
+
+
+class FactsCase(ScoreCase):
+    """AC-5, AC-6: the facts bench. A facts list is JSON:
+    `{"fixture": <name>, "questions": [{"id", "kind", "ask"}],
+      "facts": [{"id", "question", "places"}], "decoys": [{"id", "question", "places"}]}`
+    with `places` written as in a defect list. An answer line is `- <path>:<line> — <fact>`."""
+    FACT_A = {'id': 'F1', 'question': 'Q1', 'places': [{'file': 'a.py', 'lines': [10, 12]}]}
+    FACT_B = {'id': 'F2', 'question': 'Q1', 'places': [{'file': 'b.py', 'lines': [20, 20]}]}
+    DECOY = {'id': 'X1', 'question': 'Q1', 'places': [{'file': 'old.py', 'lines': [30, 31]}]}
+
+    def write_facts(self, facts=None, decoys=None, name='facts'):
+        path = self.root / f'{name}.json'
+        write_text(path, json.dumps({
+            'fixture': 'demo',
+            'questions': [{'id': 'Q1', 'kind': 'call-chain', 'ask': 'where is it?'}],
+            'facts': [self.FACT_A, self.FACT_B] if facts is None else facts,
+            'decoys': [self.DECOY] if decoys is None else decoys}))
+        return path
+
+    def answer(self, path, line, fact='a claim'):
+        return f'- {path}:{line} {DASH} {fact}'
+
+    def score_text(self, *lines):
+        """The scored result of one answer text against the small facts list."""
+        facts = bench.load_facts(self.write_facts())
+        return bench.score_facts(facts, bench.parse_answers('\n'.join(lines) + '\n', 'answers.txt'))
+
+
+class FactsFixtureTest(FactsCase):
+    PATH = BENCH / 'facts' / 'facts.json'
+    KINDS = {'call-chain', 'moved-claim', 'none-callers'}
+
+    def spec(self):
+        self.assertTrue(self.PATH.is_file(), self.PATH.relative_to(BENCH.parent).as_posix())
+        return json.loads(self.PATH.read_text(encoding='utf-8'))
+
+    def test_the_real_fixture_loads_with_its_questions_expected_facts_and_decoys(self):
+        spec = self.spec()
+        loaded = bench.load_facts(self.PATH)
+        self.assertGreaterEqual(len(loaded.questions), 3)
+        self.assertGreaterEqual(len(loaded.facts), 1)
+        self.assertGreaterEqual(len(loaded.decoys), 1)
+        self.assertEqual((len(loaded.questions), len(loaded.facts), len(loaded.decoys)),
+                         (len(spec['questions']), len(spec['facts']), len(spec['decoys'])))
+
+    def test_the_questions_cover_a_3_file_call_chain_a_moved_claim_and_callers_that_can_pass_none(self):
+        spec = self.spec()
+        self.assertEqual({question['kind'] for question in spec['questions']}, self.KINDS)
+        for question in spec['questions']:
+            with self.subTest(question=question['id']):
+                self.assertTrue(question['ask'].strip())
+                self.assertTrue([fact for fact in spec['facts'] if fact['question'] == question['id']],
+                                'a question with no expected fact')
+        chain = next(question['id'] for question in spec['questions'] if question['kind'] == 'call-chain')
+        files = {place['file'] for fact in spec['facts'] if fact['question'] == chain for place in fact['places']}
+        self.assertGreaterEqual(len(files), 3, files)
+
+    def test_every_expected_fact_and_decoy_points_at_a_file_of_the_base_repository(self):
+        spec = self.spec()
+        for kind in ('facts', 'decoys'):
+            for item in spec[kind]:
+                for place in item['places']:
+                    with self.subTest(item=item['id']):
+                        self.assertTrue((self.PATH.parent / 'base' / place['file']).is_file(), place['file'])
+
+
+class FactsScoreTest(FactsCase):
+    def test_an_answer_line_inside_the_place_window_matches_an_expected_fact(self):
+        edge = 12 + constants.BENCH_WINDOW
+        result = self.score_text(self.answer('a.py', edge), self.answer('b.py', 20))
+        self.assertCountEqual(result.found, ['F1', 'F2'])
+
+    def test_an_answer_line_outside_the_place_window_matches_nothing(self):
+        result = self.score_text(self.answer('a.py', 12 + constants.BENCH_WINDOW + 1),
+                                 self.answer('a.py', 10 - constants.BENCH_WINDOW - 1),
+                                 self.answer('c.py', 11))
+        self.assertEqual(list(result.found), [])
+        self.assertEqual(list(result.decoy_hits), [])
+
+    def test_a_decoy_hit_is_named_and_is_not_an_expected_fact(self):
+        result = self.score_text(self.answer('old.py', 31), self.answer('a.py', 11))
+        self.assertEqual(list(result.decoy_hits), ['X1'])
+        self.assertEqual(list(result.found), ['F1'])
+
+    def test_prose_lines_are_ignored(self):
+        prose = ['The answer is in a.py:11 — see below.', 'a.py:11 — no bullet', '- see a.py:11 for details',
+                 '- a note with no place', '', 'old.py:30 — also prose']
+        answers = bench.parse_answers('\n'.join(prose + [self.answer('b.py', 20, 'real claim')]) + '\n', 'answers.txt')
+        self.assertEqual([(a.path, a.line, a.fact) for a in answers], [('b.py', 20, 'real claim')])
+        result = self.score_text(*prose)
+        self.assertEqual((list(result.found), list(result.decoy_hits)), ([], []))
+
+    def test_empty_answer_text_is_refused(self):
+        for text in ('', '  \n\n'):
+            with self.subTest(text=text), self.assertRaises(bench.RecordError) as raised:
+                bench.parse_answers(text, 'blank.txt')
+            self.assertIn('blank.txt', str(raised.exception))
+
+
+class FactsCommandTest(FactsCase):
+    def test_bench_facts_reports_the_facts_found_and_names_a_decoy_hit(self):
+        answers = self.write_run(self.answer('a.py', 11), self.answer('old.py', 30), 'some prose', name='answers.txt')
+        code, out, err = run_cli('bench', 'facts', str(self.write_facts()), str(answers))
+        self.assertEqual((code, err), (0, ''))
+        self.assertRegex(out, r'(?i)found[^\n]*\b1\b')
+        self.assertIn('X1', out)
 
 
 if __name__ == '__main__':
