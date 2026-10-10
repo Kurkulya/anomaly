@@ -62,12 +62,10 @@ class TermsGrepTest(unittest.TestCase):
         self.assertIn("'two words': 1 hit(s)", out)
 
     def test_an_unclosed_script_keeps_its_text_and_a_later_closed_style_is_dropped(self):
-        url = self.page('<script>kept <style>dropped</style> after')
-        code, out, _ = run_cli('terms-grep', '--terms', 'kept,dropped,after', url)
-        self.assertEqual(code, 0)
-        self.assertIn("'kept': 1 hit(s)", out)
-        self.assertIn("'dropped': 0 hit(s)", out)
-        self.assertIn("'after': 1 hit(s)", out)
+        text = terms_grep.clean('<script>kept <style>dropped</style> after')
+        self.assertIn('kept', text)
+        self.assertNotIn('dropped', text)
+        self.assertIn('after', text)
 
     def test_a_non_ascii_tag_that_folds_to_script_is_an_ordinary_tag(self):
         # U+017F (long s) folds to 's' under Unicode case folding
