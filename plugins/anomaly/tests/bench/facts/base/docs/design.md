@@ -8,5 +8,5 @@
 
 ## Retries
 
-A failed job goes back to the queue until it has used `MAX_ATTEMPTS` attempts (3). The check that
-enforces this limit is in `jobs/service.py`, line 24.
+A failed job goes back to the queue until it has used its third attempt; after that it is marked
+failed. The check that makes this decision is in `jobs/service.py`, line 8.

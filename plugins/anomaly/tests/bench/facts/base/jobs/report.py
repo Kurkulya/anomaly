@@ -1,5 +1,5 @@
 """Text for job summaries."""
-from . import store
+from . import directory
 
 
 def render_owner(owner):
@@ -9,7 +9,7 @@ def render_owner(owner):
 
 def owner_table(jobs):
     """Map each job id to the name of its owner."""
-    return {job.id: render_owner(store.require_owner(job.owner_id)) for job in jobs}
+    return {job.id: render_owner(directory.require_owner(job.owner_id)) for job in jobs}
 
 
 def count_by_state(jobs):
@@ -24,6 +24,6 @@ def daily_summary(jobs):
     """One line for each job: its id and who owns it."""
     lines = []
     for job in jobs:
-        owner = store.find_owner(job.owner_id)
+        owner = directory.find_owner(job.owner_id)
         lines.append(f'{job.id} {render_owner(owner)}')
     return lines

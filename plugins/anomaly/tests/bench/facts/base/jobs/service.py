@@ -1,11 +1,11 @@
 """Job operations."""
-from . import retry, store
+from . import directory, retry, store
 from .model import Job
 
 
 def submit(owner_id, priority=5):
     """Create a job for a known owner."""
-    owner = store.require_owner(owner_id)
+    owner = directory.require_owner(owner_id)
     job = Job(f'j{len(store.JOBS) + 1}', owner.id, priority)
     return store.save_record(job)
 

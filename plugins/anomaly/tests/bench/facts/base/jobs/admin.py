@@ -1,5 +1,5 @@
 """Commands for operators that do not change a priority."""
-from . import bulk, report, store
+from . import bulk, directory, report, store
 
 
 def cancel_command(args):
@@ -10,5 +10,5 @@ def cancel_command(args):
 def show_command(args):
     """`show <job id>`: print who owns a job."""
     job = store.load_job(args[0])
-    owner = store.find_owner(job.owner_id) or store.SYSTEM_OWNER
+    owner = directory.find_owner(job.owner_id) or directory.SYSTEM_OWNER
     return report.render_owner(owner)

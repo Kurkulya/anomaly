@@ -4,17 +4,17 @@
     {
       "id": "Q1",
       "kind": "call-chain",
-      "ask": "An operator runs the `reprioritize` command. Trace that command from the command-line entry point down to the code that writes the changed job record. Name one function in each file on the path, in order from the entry to the write."
+      "ask": "An operator runs the `reprioritize` command. Trace that command from the command-line entry point down to the code that writes the changed job record. Name one function in each file on the path, in order from the entry to the write. Give each answer as one line `- <path>:<line> — <fact>` with a bare path and one line number (no backticks, no range, no bold), only for a place that is an answer; put places you reject or quote as context in prose."
     },
     {
       "id": "Q2",
       "kind": "moved-claim",
-      "ask": "docs/design.md says where the retry limit is enforced. Check that claim against the code. Where is the code that decides whether a failed job gets another attempt?"
+      "ask": "docs/design.md says where the retry limit is checked. Check that claim against the code. Where is the code that decides whether a failed job gets another attempt? Give each answer as one line `- <path>:<line> — <fact>` with a bare path and one line number (no backticks, no range, no bold), only for a place that is an answer; put places you reject or quote as context in prose."
     },
     {
       "id": "Q3",
       "kind": "none-callers",
-      "ask": "`render_owner` in jobs/report.py reads `owner.name` and does not check for None. Which call sites of `render_owner` can pass it None at run time? Give each such call site and leave out the ones where None cannot arrive."
+      "ask": "`render_owner` in jobs/report.py reads `owner.name` and does not check for None. Which call sites of `render_owner` can pass it None at run time? Give each such call site and leave out the ones where None cannot arrive. Give each answer as one line `- <path>:<line> — <fact>` with a bare path and one line number (no backticks, no range, no bold), only for a place that is an answer; put places you reject or quote as context in prose."
     }
   ],
   "facts": [
@@ -29,12 +29,12 @@
     {
       "id": "F2",
       "question": "Q1",
-      "places": [{"file": "jobs/service.py", "lines": [13, 17]}]
+      "places": [{"file": "jobs/service.py", "lines": [15, 17]}]
     },
     {
       "id": "F3",
       "question": "Q1",
-      "places": [{"file": "jobs/store.py", "lines": [27, 30]}]
+      "places": [{"file": "jobs/store.py", "lines": [16, 19]}]
     },
     {
       "id": "F4",
@@ -61,12 +61,12 @@
     {
       "id": "X2",
       "question": "Q1",
-      "places": [{"file": "jobs/store.py", "lines": [9, 11]}]
+      "places": [{"file": "jobs/store.py", "lines": [6, 8]}]
     },
     {
       "id": "X3",
       "question": "Q2",
-      "places": [{"file": "jobs/service.py", "lines": [24, 24]}]
+      "places": [{"file": "jobs/service.py", "lines": [8, 8]}]
     },
     {
       "id": "X4",
