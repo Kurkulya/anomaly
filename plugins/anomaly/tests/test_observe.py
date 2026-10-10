@@ -255,6 +255,19 @@ class LensTest(ObserveCase):
         self.assertIn('lens: reviewer-a replaced (accepted 5, rejected 1, revised 2)', out.splitlines())
         self.assertIn('lens: reviewer-c logged (accepted 1, rejected 0)', out.splitlines())
 
+    def test_a_replaced_key_missing_from_the_file_is_appended_and_the_other_lines_stay_byte_for_byte(self):
+        """Review round 2: `rewrite_lenses` meets a replaced key whose line vanished since the batch was read."""
+        damaged = 'not json'
+        spaced = (f'{{"lens": "reviewer-b",  "session_id": "{SID}", "date": "2026-09-01", '
+                  f'"rejected": 1, "accepted": 1}}')
+        write_text(self.home / 'lenses.jsonl', damaged + '\n' + spaced + '\n')
+        record = dict(session_id=SID, date=TODAY, lens='reviewer-a', accepted=4, rejected=1)
+        observe.rewrite_lenses(self.home, {(SID, 'reviewer-a'): record}, [])
+        lines = (self.home / 'lenses.jsonl').read_bytes().decode('utf-8').split('\n')
+        self.assertEqual(lines[:2], [damaged, spaced])
+        self.assertEqual(json.loads(lines[2]), record)
+        self.assertEqual(lines[3:], [''])
+
     def test_a_replace_keeps_every_other_line_byte_for_byte_a_damaged_one_included(self):
         """AC-1 (review round 1): only the matched line changes; a line that is not JSON and a hand-written line
         with its own spacing and key order stay exactly as they were, in place."""

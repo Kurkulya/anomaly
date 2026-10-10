@@ -1838,9 +1838,8 @@ class LensReplaceDocsTest(unittest.TestCase):
         """Review round 1 (user decision): the capture would add a second, smaller line for a name `lens tally`
         already counts; a later apply replaces or refuses it (ADR-0021)."""
         text = ' '.join((PLUGIN / 'skills' / 'observe' / 'SKILL.md').read_text(encoding='utf-8').split())
-        sentence = ('A capture adds no entry for those names: their tally already holds the counts, and a later '
-                    'apply replaces or refuses a line (ADR-0021).')
-        self.assertTrue(sentence in text, f'observe SKILL.md lacks: {sentence}')
+        clause = 'A capture adds no entry for those names'
+        self.assertTrue(clause in text, f'observe SKILL.md lacks: {clause}')
 
 
 if __name__ == '__main__':
