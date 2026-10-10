@@ -12,13 +12,14 @@ Signatures this file pins:
 """
 import contextlib
 import io
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
 from anomaly_loop import addenda, constants
 from anomaly_loop.files import RecordError
-from tests.fixtures import write_text
+from tests.fixtures import PLUGIN, write_text
 
 
 class AddendaCase(unittest.TestCase):
@@ -156,11 +157,14 @@ class PrintTest(AddendaCase):
         self.assertLess(hand_over, rule)
         self.assertFalse(any('Cite the line.' in line or 'anomaly:facts' in line for line in lines), lines)
 
-    def test_the_skill_to_agents_table_is_the_one_of_d39(self):
-        expected = {'review': {'code', 'feature', 'security', 'plan'}, 'conduct': {'facts'}, 'interview': {'facts'},
-                    'diagnose': {'facts'}, 'architecture': {'facts'}, 'research': {'survey'}, 'tests': {'survey'},
-                    'ship': {'docs'}, 'assess': {'digest'}, 'observe': {'digest'}}
-        self.assertEqual({skill: set(agents) for skill, agents in constants.SKILL_AGENTS.items()}, expected)
+    def test_each_skill_in_the_table_names_each_of_its_agents_in_its_own_files(self):
+        """D-39: the table follows the skills; a skill that stops dispatching an agent fails here."""
+        for skill, agents in constants.SKILL_AGENTS.items():
+            texts = [path.read_text(encoding='utf-8') for path in (PLUGIN / 'skills' / skill).rglob('*')
+                     if path.is_file()]
+            for agent in agents:
+                with self.subTest(skill=skill, agent=agent):
+                    self.assertTrue(any(re.search(rf'anomaly:{agent}\b', text) for text in texts))
 
     def test_a_line_without_the_experiment_tag_is_not_printed_and_one_warning_names_the_file(self):
         self.add('observe', 'Ask which repo before logging.')
