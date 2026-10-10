@@ -96,8 +96,7 @@ class SkillFileTest(unittest.TestCase):
                 self.assertEqual([tool.strip() for tool in fields.get('tools', '').split(',')], tools[path.stem])
                 self.assertNotIn('model', fields)
 
-    DISPATCH_ROLES = tuple(role for role, _ in constants.MODEL_ROLES
-                           if role not in ('implement', 'implement_wide'))   # these two are the implementer dispatch, checked apart (ticket 06)
+    DISPATCH_ROLES = tuple(role for role, _ in constants.MODEL_ROLES)
     MODEL_NAME = re.compile(r'\b(?:sonnet|haiku|opus)\b', re.I)
     BUILT_IN_EXPLORE = re.compile(r'\bExplore\b|`explore`\s+sub-?agents?|\bexplore\s+agent')   # the built-in agent, or the old "explore sub-agent" wording
     OLD_FACTS_DISPATCH = re.compile(r'\bmodel\s+`?explore\b|`explore`\s+sub-?agents?', re.I)
@@ -173,7 +172,7 @@ class SkillFileTest(unittest.TestCase):
     def test_every_dispatch_that_names_a_model_role_or_a_model_agent_also_says_to_pass_the_effort(self):
         """AC-4, Amended 2026-10-10 (ports value `<model> <effort>`): the rule is per paragraph, where a paragraph is
         one list item, table row or text block with its wrapped lines. A paragraph that names a role (`model <role>`,
-        `<role> model`, `<role> role`, for every role but the implementer's) or the agent `anomaly:facts`,
+        `<role> model`, `<role> role`, for every model role, `implement` and `implement_wide` included) or the agent `anomaly:facts`,
         `anomaly:digest` or `anomaly:docs`, the phrase "model role(s)" or a backticked lens role (the review
         skill's model line) must also hold the word `effort`."""
         dispatches = [self.role_mention(role) for role in self.DISPATCH_ROLES]
@@ -183,6 +182,29 @@ class SkillFileTest(unittest.TestCase):
                 if any(pattern.search(text) for pattern in dispatches):
                     with self.subTest(at=f'{path.relative_to(PLUGIN).as_posix()}:{number}'):
                         self.assertRegex(text, r'(?i)\beffort\b')
+
+    def test_build_and_conduct_dispatch_the_implementer_on_the_ticket_model_role_and_the_test_writer_on_implement(self):
+        """AC-16: the implementer paragraph reads the ticket's `Model:` line and names `implement_wide`; the
+        test-writer paragraph never does (build names `implement` for it). Located by the dispatch phrases both
+        files hold today, so a missing paragraph fails loudly. The effort rule is the test above."""
+        parallel = PLUGIN / 'skills' / 'conduct' / 'PARALLEL.md'
+        for path, implementer, writer in ((self.BUILD_SKILL, r'Dispatch the `implementer` port', r'Dispatch the `test_writer` port'),
+                                          (parallel, r'one `implementer` agent per', r'one `test_writer` dispatch per')):
+            found = self.paragraphs(path)
+            name = path.relative_to(PLUGIN).as_posix()
+            implementers = [text for _, text in found if re.search(implementer, text)]
+            writers = [text for _, text in found if re.search(writer, text)]
+            with self.subTest(file=name, dispatch='implementer'):
+                self.assertEqual(len(implementers), 1, implementers)
+                self.assertIn('`Model:`', implementers[0])
+                self.assertRegex(implementers[0], self.role_mention('implement_wide'))
+            with self.subTest(file=name, dispatch='test_writer'):
+                self.assertEqual(len(writers), 1, writers)
+                self.assertNotIn('`Model:`', writers[0])
+                self.assertNotRegex(writers[0], self.role_mention('implement_wide'))
+        with self.subTest(file='skills/build/SKILL.md', dispatch='test_writer role'):
+            writer = next(text for _, text in self.paragraphs(self.BUILD_SKILL) if 'Dispatch the `test_writer` port' in text)
+            self.assertRegex(writer, self.role_mention('implement'))
 
     def docs_agent_lines(self):
         """The docs agent's text as lines; fails while the file is missing."""
@@ -785,6 +807,17 @@ class PlanReviewerTest(unittest.TestCase):
         self.assertIn('`Covers:` is complete', self.text(self.TICKETS))
         self.assertIn('`Restates:` lists must not share a file', self.text(self.TICKETS))
 
+    def test_tickets_mode_checks_the_model_line_against_the_slice_rule_and_reports_a_break_as_medium(self):
+        """AC-15: one numbered check item names the `Model:` line, the rule's two triggers, `seams.md` and the
+        severity Medium."""
+        items = [line for line in self.text(self.TICKETS).splitlines() if re.match(r'\d+\. ', line) and '`Model:`' in line]
+        self.assertEqual(len(items), 1, items)
+        item = items[0]
+        for token in ('`implement_wide`', '`Restates:`', '`Touches:`', '`seams.md`', 'Medium'):
+            with self.subTest(token=token):
+                self.assertIn(token, item)
+        self.assertRegex(item, r'`implement`(?!_)')
+
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
             self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
@@ -1305,6 +1338,19 @@ class SliceSkillTest(unittest.TestCase):
         self.assertRegex(text, r'T-n|T-\d')
         self.assertRegex(lowered, r'\badr\b')
         self.assertRegex(lowered, r'first ticket')
+
+    def test_it_writes_the_model_line_by_the_restates_and_seam_rule(self):
+        """AC-13, D-14 (Amended 2026-10-10): one line of the skill holds the whole rule: `implement_wide` when the
+        ticket has `Restates:` or its `Touches:` names a seam owned by another ticket in `seams.md` or in the
+        seam row -> ticket table of step 3, else `implement`."""
+        lines = [line for line in self.text().splitlines() if '`Model:`' in line]
+        self.assertEqual(len(lines), 1, lines)
+        rule = lines[0]
+        for token in ('`implement_wide`', '`Restates:`', '`Touches:`', '`seams.md`'):
+            with self.subTest(token=token):
+                self.assertIn(token, rule)
+        self.assertRegex(rule, r'`implement`(?!_)')
+        self.assertRegex(rule, r'(?i)seam row|row\W+(?:→|->)\W*ticket table')
 
     def test_it_runs_check_slice_then_the_tickets_review_and_a_blocker_stops_it_before_the_next_build_step(self):
         """AC-24, with the Blocker, warning and last-review rules of the review amendments."""

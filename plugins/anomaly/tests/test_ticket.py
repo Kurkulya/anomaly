@@ -131,6 +131,18 @@ class ShowTest(TicketTestCase):
             'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
             'Key: no-ticket', 'Tests: unit', 'Base: feat/workflow-build', 'Reviewed: abc1234', 'Verified: def5678'])
 
+    def test_prints_the_model_line(self):
+        """AC-16: the slot of `Model:` among the state lines is free; the other lines keep their order."""
+        path = self.ticket_path(TICKET_TEXT.replace('Tests: unit (CLI in-process)',
+                                                    'Tests: unit\nModel: implement_wide'))
+        code, out, err = self.run_ticket('show', str(path))
+        self.assertEqual((code, err), (0, ''))
+        shown = out.splitlines()
+        self.assertIn('Model: implement_wide', shown)
+        self.assertEqual([line for line in shown if not line.startswith('Model:')], [
+            'Status: ready-for-agent', 'Blocked by: None (can start immediately)', 'Covers: AC-1, AC-2',
+            'Key: no-ticket', 'Tests: unit'])
+
     def test_reads_status_and_blocked_by_in_bold_form(self):
         text = TICKET_TEXT.replace('Status: ready-for-agent', '**Status:** in-progress') \
                           .replace('**Blocked by:** None (can start immediately)', '**Blocked by:** 01, 03')
@@ -1381,6 +1393,14 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(parsed.red_changed, ('one', 'two'))
         empty = ticket.parse('# 03: T\n')
         self.assertEqual((empty.reviewed, empty.verified, empty.red, empty.red_changed), ('', '', None, ()))
+
+    def test_model_is_read_plain_or_bold_and_a_ticket_without_it_means_implement(self):
+        """AC-14, D-27: the parsed field is `model`; a missing line reads as the role `implement`."""
+        self.assertEqual(ticket.parse('# 03: T\n\nModel: implement_wide\n').model, 'implement_wide')
+        self.assertEqual(ticket.parse('# 03: T\n\n**Model:** implement_wide\n').model, 'implement_wide')
+        self.assertEqual(ticket.parse('# 03: T\n\nModel: implement\n').model, 'implement')
+        self.assertEqual(ticket.parse('# 03: T\n').model, 'implement')
+        self.assertEqual(ticket.parse('# 03: T\n\nSee Model: implement_wide in the spec.\n').model, 'implement')
 
     def test_tests_and_started_are_exposed(self):
         parsed = ticket.parse('# 03: T\n\nTests: unit / e2e\nMetrics: started 2026-10-04 11:00 · merged x\n')
