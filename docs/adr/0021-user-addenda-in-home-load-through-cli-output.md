@@ -13,10 +13,10 @@ The calibrate loop fixes a problem by editing its target and recording the chang
 ## Decision
 
 - Routing: with no checkout, `calibrate plan` sends a target `anomaly:<skill>`, `anomaly:<agent>`, or a path inside one skill folder or agent file to its addenda file. A target in plugin code or docs becomes a defect report (ADR-0022). With a checkout, nothing changes.
-- Writing: `calibrate fix --addendum '<line>'` appends the line with `[exp: <signature> · <stamp>]` and refuses it without a declared experiment, over the cap, on a failed `check_text`, or when it fully matches a live deny rule. A revert result removes exactly that line; `calibrate drop` removes a line whose experiment has a result. `declare` keeps its `--approved` gate.
+- Writing: `calibrate fix --addendum '<line>'` appends the line with `[exp: <signature> · <stamp>]` and refuses it without a declared experiment, over the cap, on a failed `check_text`, or when it fully matches a live deny rule. A revert result removes exactly that line; `calibrate drop` removes a line whose experiment has a verdict (`keep` or `unproven`; an `inconclusive` result is none). `declare` keeps its `--approved` gate.
 - Loading: the call prints the skill's addendum last, then the addendum of each agent the skill dispatches, with a line asking the skill to add it to that agent's brief. A header says the lines add or narrow, and that the core rules and invariants win on a clash. With no file, the output is unchanged.
 - Stamp: 8 hex characters of sha256 over the target's files, on each line, so only a changed skill asks for a re-check and an append never hides an older line. A missing target is listed too.
-- Removal: `calibrate drop <signature>` removes a line whose experiment has a result and keeps that result; re-check, a full file and an upstreamed line use it.
+- Removal: `calibrate drop <signature>` removes a line whose experiment has a verdict (`keep` or `unproven`; an `inconclusive` result is none) and keeps that result; re-check, a full file and an upstreamed line use it.
 - The deny-shape matcher and the org-marker list move from the tests into the CLI, and the tests import them back.
 - **Partly supersedes ADR-0010**, its rejected alternative "a CLI subcommand that reads the settings at run time": the CLI now reads the settings files at run time for the write-time deny check of an addendum line. It reads them and never writes them; only `anomaly_loop/scans.py` names them, and the settings guard in the tests exempts that one file by path. The rest of ADR-0010 stands.
 

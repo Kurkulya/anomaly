@@ -39,6 +39,7 @@ The `calibrate` actions:
 | `decide` | `--signature`, `--result keep\|revert` | the user's result, when the numbers cannot judge |
 | `close` | `--signature` (repeat) | marks anomalies `wontfix` |
 | `merge` | `--into <stays>`, `--from <folded in>` | folds a near-duplicate into the anomaly that stays |
+| `drop` | `<signature>`, `--reason '<text>'` | removes the addenda line of an experiment that has a verdict, keeps the result, and logs the reason under the anomaly's `## Addenda log`; a blank or `inconclusive` result is no verdict yet |
 
 Passing values safely: every value goes on the command line in single quotes, and a `'` inside
 it is written as `'\''`. Values are short single lines; never use a here-document or standard
@@ -70,8 +71,9 @@ Work through the `## Housekeeping` part, one kind at a time, and ask before each
 - **Experiments due**: run `verify` for each one and report the numbers in a few words: the
   metric and the guard before and since, how many sessions, the sightings since the fix, any
   sessions skipped for a model with no factor and any skipped for a spawn without `.meta.json`, and
-  the result. `revert` means the change did not help: the anomaly is reopened, and you offer to
-  undo the change in its home. `inconclusive` moves the check date once. When it comes back as still
+  the result. `revert` means the change did not help: the anomaly is reopened. When the fix was an
+  addenda line, the script removes that line itself and prints it as `removed:`; otherwise you offer
+  to undo the change in its home. `inconclusive` moves the check date once. When it comes back as still
   inconclusive, ask the user for `keep` or `revert` and run `decide`. `unproven` means the
   anomaly did not come back, which chance alone would also explain: it is kept, not proven, the
   anomaly is not reopened and the experiment is not due again; say so in those words, never as
@@ -82,6 +84,11 @@ Work through the `## Housekeeping` part, one kind at a time, and ask before each
 - **Stale anomalies**: offer to close them; after a yes, run `close` with every chosen signature.
 - **Unused plugin skills**: propose removal as an anomaly about that skill (see step 5); a line
   that says it is protected by a win is not proposed.
+- **Addenda to re-check**: the digest's `## Addenda to re-check` section lists addenda lines whose
+  skill or agent changed, or is gone, since the line was written. Read each line against the core
+  text now. When the core text now holds the rule, offer to drop the line; after a yes, run
+  `calibrate drop <signature> --reason '<text>'`. A line with no verdict yet shows its check date
+  instead: report that date and leave the line until the experiment is judged.
 
 ## 3. Pick one batch
 

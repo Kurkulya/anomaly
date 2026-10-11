@@ -655,6 +655,7 @@ python plugins/anomaly/scripts/anomaly.py calibrate verify  --home <dir> --signa
 python plugins/anomaly/scripts/anomaly.py calibrate decide  --home <dir> --signature <s> --result keep|revert
 python plugins/anomaly/scripts/anomaly.py calibrate close   --home <dir> --signature <s> [--signature ...]
 python plugins/anomaly/scripts/anomaly.py calibrate merge   --home <dir> --into <stays> --from <folded in>
+python plugins/anomaly/scripts/anomaly.py calibrate drop    --home <dir> <signature> --reason '<text>'
 ```
 
 Every action also takes the `--data`, `--user-config` and `--plugin-root` options of `digest`.

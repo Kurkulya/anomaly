@@ -7,9 +7,10 @@ bytes of the one agent file, so it changes only when that skill or agent changes
 """
 import hashlib
 import re
+from collections import namedtuple
 from pathlib import Path
 
-from . import files
+from . import files, flags
 from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, SKILL_AGENTS
 from .files import RecordError
 from .records import SLUG
@@ -19,10 +20,12 @@ NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
 TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
 TAG_SHAPE = f'{TAG_OPEN}<signature>{TAG_SEPARATOR}<stamp>{TAG_CLOSE}'
-TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?:{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
-                    rf'[0-9a-f]{{{STAMP_CHARS}}}{re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
+TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?P<signature>{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
+                    rf'(?P<stamp>[0-9a-f]{{{STAMP_CHARS}}}){re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
 HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
 HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
+LOG_HEADING = 'Addenda log'   # the anomaly section that records what happened to its addenda line
+RECHECK_HEADING = '## Addenda to re-check'
 
 
 def addendum_path(home, name, agent=False):
@@ -71,14 +74,63 @@ def append_line(path, line, signature, stamp):
     return tagged
 
 
+def is_tagged_with(line, signature):
+    found = TAGGED.fullmatch(line)
+    return found is not None and found['signature'] == signature
+
+
+def tagged_line(path, signature):
+    """The line of the file tagged with this experiment's signature (TAGGED), or None."""
+    return next((line for line in read_lines(path) if is_tagged_with(line, signature)), None)
+
+
+def remove_line(path, signature):
+    """Remove the line tagged with this signature from the file and keep every other line as it is (blank lines
+    are not kept, as in append_line); returns the removed line, or None when the file holds no such line and is
+    not changed."""
+    lines = read_lines(path)
+    removed = next((line for line in lines if is_tagged_with(line, signature)), None)
+    if removed is not None:
+        files.write_lines(path, [line for line in lines if not is_tagged_with(line, signature)])
+    return removed
+
+
+def log_line(anomaly, line):
+    """Append `line` as the last `- ` line of the anomaly's `## Addenda log`, which is added when missing; the
+    one writer of that section."""
+    for number, (name, content) in enumerate(anomaly.sections):
+        if name.lower() == LOG_HEADING.lower():
+            anomaly.sections[number] = (name, '\n'.join([content, f'- {line}']).strip())
+            return
+    anomaly.sections.append((LOG_HEADING, f'- {line}'))
+
+
+def has_verdict(experiment):
+    """True when the experiment has a verdict. A blank or `inconclusive` result is none: the experiment is still
+    in flight (ADR-0002), so its line is not dropped yet."""
+    return experiment is not None and experiment.result not in ('', 'inconclusive')
+
+
+def addenda_files(home):
+    """(path, name, agent) of every addenda file in home: the skills' files, then the agents', each by name."""
+    folder = Path(home) / ADDENDA_DIR
+    return ([(path, path.stem, False) for path in sorted(folder.glob('*.md'))]
+            + [(path, path.stem, True) for path in sorted((folder / AGENTS).glob('*.md'))])
+
+
+def not_read(path, error):
+    """Why a file could not be read, as `not read (<reason>)`."""
+    reason = getattr(error, 'strerror', None) or str(error).removeprefix(f'{path}: ')
+    return f'not read ({reason})'
+
+
 def file_block(path, heading):
     """`heading` and the tagged lines of one addenda file, then one warning when the file holds a line
     without its tag; [] for a missing or empty file. A file that cannot be read is one warning, not a stop."""
     try:
         lines = read_lines(path)
     except (RecordError, OSError) as error:
-        reason = getattr(error, 'strerror', None) or str(error).removeprefix(f'{path}: ')
-        return [f'warning: {path}: not read ({reason})']
+        return [f'warning: {path}: {not_read(path, error)}']
     tagged = [line for line in lines if TAGGED.fullmatch(line)]
     block = [heading, *tagged] if tagged else []
     if len(tagged) < len(lines):
@@ -98,3 +150,55 @@ def print_addenda(home, skill):
         out += file_block(addendum_path(home, agent, agent=True), HAND_OVER.format(agent=agent))
     if out:
         print('\n'.join(out))
+
+
+# ---------- the re-check ----------
+
+Recheck = namedtuple('Recheck', 'path note lines')   # an addenda file, why it is listed, its TAGGED matches to re-check
+
+
+def scan_rechecks(home, plugin_root):
+    """The addenda files to re-check: one whose target (`<plugin_root>/skills/<name>` with its SKILL.md, or
+    `<plugin_root>/agents/<name>.md`) is gone, with all its tagged lines, and one with tagged lines whose stamp
+    differs from the target's stamp now, with those lines. A file or target that cannot be read is listed with why."""
+    found = []
+    for path, name, agent in addenda_files(home):
+        target = Path(plugin_root) / AGENTS / f'{name}.md' if agent else Path(plugin_root) / 'skills' / name
+        part = f'the {"agent" if agent else "skill"} {name}'
+        try:
+            tagged = tuple(match for match in map(TAGGED.fullmatch, read_lines(path)) if match)
+        except (RecordError, OSError) as error:
+            found.append(Recheck(path, not_read(path, error), ()))
+            continue
+        if not (target if agent else target / flags.SKILL_FILE).is_file():
+            found.append(Recheck(path, f'{part} is gone from the plugin', tagged))
+            continue
+        try:
+            now = stamp(target)
+        except OSError as error:
+            found.append(Recheck(path, f'{part} {not_read(target, error)}', ()))
+            continue
+        changed = tuple(line for line in tagged if line['stamp'] != now)
+        if changed:
+            found.append(Recheck(path, f'{part} changed since these lines were written', changed))
+    return tuple(found)
+
+
+def recheck_section(context):
+    """The addenda lines to re-check (scan_rechecks), each with `calibrate drop` once its experiment has a verdict
+    (has_verdict), else with its check date; a line whose signature names no anomaly says so."""
+    anomalies = {anomaly.signature: anomaly for anomaly in context.anomalies}
+    lines = []
+    for recheck in context.rechecks:
+        lines.append(f'- {recheck.path}: {recheck.note}')
+        for line in recheck.lines:
+            signature, anomaly = line['signature'], anomalies.get(line['signature'])
+            experiment = anomaly.experiment if anomaly is not None else None
+            if anomaly is None:
+                then = f'no anomaly {signature} in home'
+            elif has_verdict(experiment):
+                then = f"`calibrate drop {signature} --reason '<text>'`"
+            else:
+                then = f'no verdict yet, check by {(experiment.check_by if experiment else "") or "?"}'
+            lines.append(f'  - {line[0]} · {then}')
+    return [RECHECK_HEADING] + lines if lines else []
