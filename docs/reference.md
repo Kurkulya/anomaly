@@ -1291,7 +1291,7 @@ python plugins/anomaly/scripts/anomaly.py mr body <work unit folder | ad-hoc tic
   - Still open: the `Open:` text of each merged ticket's `Result:` line, except `none`, with the ticket
     number.
   - Breaking changes: the `- Breaking:` lines of `decisions.md` and the numbered form
-    `- D-n: Breaking: ...` (see `docs/formats.md`); for the numbered form the fact stops before its
+    `- D-n: Breaking: ...` (see `plugins/anomaly/docs/formats.md`); for the numbered form the fact stops before its
     `Why:` or `Source:`.
   - Tested: the `full suites`, `type-checks`, `reviewer passes` and `High` counts of the merged tickets'
     `Metrics:` lines, summed (`ticket.metric_counts` reads them); `Docs gate: <text>` when
@@ -2181,8 +2181,8 @@ ADRs are read from the working folder even when git ignores them.
 ## Planning formats
 
 The planning skills share their file shapes (`stories.md`, `decisions.md`, tickets, `log.md`, triage
-words, the next-step offer, the ADR front block) in `docs/formats.md`. Where each planning stage ends,
-and when `/clear` may be offered, is in `docs/boundaries.md`.
+words, the next-step offer, the ADR front block) in `plugins/anomaly/docs/formats.md`. Where each planning stage ends,
+and when `/clear` may be offered, is in `plugins/anomaly/docs/boundaries.md`.
 
 ## The interview skill
 
