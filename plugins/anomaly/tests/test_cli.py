@@ -1743,15 +1743,17 @@ class ConductSkillTest(unittest.TestCase):
 
     def test_the_finish_fix_branch_step_calls_a_warm_review_delta_round_on_the_merge_before_its_trace_tags(self):
         """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge, a call of
-        the review skill's delta mode (so its tally, worklog and sum run), placed before the step's trace tags. Its
-        tally counts only this round: `lens tally sum` adds every run, and step 17 already tallied the earlier rounds."""
+        the review skill's delta mode (so its tally, worklog and sum run), placed before the step's trace tags. As the
+        review skill's step 9 says, the delta is the last round of step 17's review: each agent tallies once, after
+        it, over all its rounds."""
         step = ' '.join(next(line for line in self.text().splitlines() if 'One fix branch off the tip' in line).split())
         self.assertTrue(step.endswith(']'), 'the step does not end with its trace tags')
         after_merge = step.split('Merge `--no-ff`', 1)[-1].split('[O38', 1)[0]
         for token in ('`anomaly:review` delta', '`<pre-merge tip>..<merge>`', 'warm', '"last review: yes"',
-                      'tally counts only this round'):
+                      "last round of step 17's review", 'tallies once', 'over all its rounds'):
             with self.subTest(token=token):
                 self.assertIn(token, after_merge)
+        self.assertNotIn('only this round', after_merge)
 
     def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
         """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
