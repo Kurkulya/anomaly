@@ -28,7 +28,7 @@ whose target is a skill or agent of this plugin names its addenda file as the fi
 skill in addenda.NO_ADDENDA has none, a `<plugin>:...` that names no skill or agent has none (NO_PART), and
 the plugin's other code and docs are an upstream defect. The plan
 then lists one offer line per upstream report not yet sent (upstream_offers): a kept addenda line, and
-a plugin-code problem that `upstream defect` takes.
+a problem on plugin code or docs, or on a skill that takes no addenda, that `upstream defect` takes.
 
 Declaring (ADR-0002). An experiment is declared before the change: one metric, one guard from
 QUALITY_GUARDS, and `declared_on` = today; `fix` refuses a fix dated before it, and sets a blank
@@ -160,11 +160,14 @@ def upstream_offer(context, anomaly, action, environ):
 def upstream_offers(context, found, plugin, environ):
     """The plan's offer lines with no plugin checkout (`plugin` is gitrepo.plugin_repo's answer; with one there are
     none): upstream_offer of `tuning` for each anomaly, then of `defect` for each problem of the batches `found`
-    whose fix home is UPSTREAM_DEFECT."""
+    whose target is a part of the plugin with no addenda file to fix it in: plugin code or docs (UPSTREAM_DEFECT), or
+    a skill that takes no addenda (takes_no_addenda), which keeps its fix-home mark too."""
     if plugin is not None:
         return []
-    problems = [problem for batch in found for problem in batch.problems
-                if fix_home(context, problem.target.strip(), plugin) == UPSTREAM_DEFECT]
+    parts = ((problem, addenda.plugin_part(context, problem.target.strip(), plugin))
+             for batch in found for problem in batch.problems)
+    problems = [problem for problem, part in parts
+                if part is not None and (part.unit is None or takes_no_addenda(part))]
     offers = [upstream_offer(context, anomaly, 'tuning', environ) for anomaly in context.anomalies]
     offers += [upstream_offer(context, anomaly, 'defect', environ) for anomaly in problems]
     return [offer for offer in offers if offer is not None]

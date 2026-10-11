@@ -866,6 +866,7 @@ class BatchTest(CalibrateCase):
         self.lay_out_plugin()
         write_anomaly_with(self.home, 'slow-measure', target='anomaly:measure', scope='repo:demo')
         self.assertIn('fix home: none, measure takes no addenda', self.plan_line('slow-measure'))
+        self.assertEqual(self.plan_offers(), ['upstream: defect slow-measure'])
 
     def test_without_a_checkout_plugin_code_and_docs_are_an_upstream_defect_not_an_addenda_fix(self):
         self.lay_out_plugin()

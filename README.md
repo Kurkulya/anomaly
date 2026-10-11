@@ -738,8 +738,8 @@ checkout of its own, and `plugin_repo` names none), a section
 `## Upstream reports not yet sent (offer each; send one only after the user's yes)` follows when
 there is a report to offer: one
 `upstream: tuning <signature>` line for each kept addenda line that `upstream tuning` would take,
-then one `upstream: defect <signature>` line for each problem marked `upstream defect` that
-`upstream defect` would take, each only until its report was sent (see Upstream reports). A file
+then one `upstream: defect <signature>` line for each problem marked `upstream defect` or
+`fix home: none, measure takes no addenda` that `upstream defect` would take, each only until its report was sent (see Upstream reports). A file
 such a report needs that cannot be read gives a `warning:` line in its place. The plan ends with
 the metric names, the allowed guards and the number of sessions per kind in the last 28 days.
 Marks on a problem:
@@ -755,7 +755,7 @@ Marks on a problem:
 - `fix home: addenda/<skill>.md` (or `addenda/agents/<agent>.md`): only with no plugin checkout,
   for a target that is one skill or agent of this plugin. The fix is one line in that addenda
   file, written with `fix --addendum`. `fix home: none, measure takes no addenda` means that skill
-  takes none. `fix home: none, names no skill or agent of the plugin` marks an `anomaly:<name>`
+  takes none; the upstream section offers it as a defect when `upstream defect` takes it. `fix home: none, names no skill or agent of the plugin` marks an `anomaly:<name>`
   target whose name is no skill or agent: there is no addenda file to fix and no upstream offer,
   since `upstream defect` refuses it.
 - `upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream`:
