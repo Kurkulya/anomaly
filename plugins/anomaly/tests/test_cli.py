@@ -307,6 +307,33 @@ class SkillFileTest(unittest.TestCase):
         section = text.split('## Delta rounds', 1)[1].split('\n## ', 1)[0]
         self.assertIn('worklog start', section)
 
+    def test_the_delta_row_gives_every_agent_whose_finding_was_fixed_a_delta_round_after_any_fix_round(self):
+        """Calibrate-fixes-1 ticket 05, AC-16 (D-11)."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        row = ' '.join(next(line for line in text.splitlines() if line.startswith('| delta |')).split())
+        self.assertIn('any fix round', row)
+        self.assertIn('every agent whose finding was fixed', row)
+        self.assertIn('SendMessage', row)
+
+    def test_a_delta_round_after_only_medium_low_or_nit_fixes_reports_only_blocker_and_high_and_a_new_lower_finding_is_open(self):
+        """Calibrate-fixes-1 ticket 05, AC-17 (D-11): the three clauses sit in one block of the review text."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        blocks = [' '.join(block.split()) for block in text.split('\n\n')]
+        blocks = [block for block in blocks if 'only blocker and high' in block.lower()]
+        self.assertEqual(len(blocks), 1, 'no block of the review text says a lower-fix delta round reports only Blocker and High')
+        block = blocks[0]
+        self.assertRegex(block.lower(), r'medium,? low,? (?:or|and) nit')
+        self.assertIn('Open:', block)
+        self.assertIn('no further round', block)
+
+    def test_step_9_says_an_agent_is_done_after_its_last_delta_round_or_after_its_first_when_none_of_its_findings_was_fixed(self):
+        """Calibrate-fixes-1 ticket 05, AC-18 (D-11): the old "no Blocker or High" clause is replaced."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        step9 = ' '.join(next(line for line in text.splitlines() if line.startswith('9. ')).split())
+        self.assertIn('last delta round', step9)
+        self.assertIn('none of its findings was fixed', step9)
+        self.assertNotIn('had no Blocker or High', step9)
+
     def test_cumulative_mode_reads_stories_md_and_decisions_md_and_not_spec_md(self):
         """AC-85; the old layout's `spec.md` is no longer read (ADR-0011)."""
         text = self.review_text()
@@ -408,6 +435,12 @@ class SkillFileTest(unittest.TestCase):
         self.assertIn('rule trace', section)
         self.assertIn('rules', section)
 
+    def test_the_build_review_step_follows_any_fix_round_with_a_delta_round(self):
+        """Calibrate-fixes-1 ticket 05, AC-30 and its Amended line (the cap test above takes the byte rise)."""
+        step = ' '.join(next(line for line in self.build_text().splitlines() if line.startswith('**Review**')).split())
+        self.assertIn('any fix round', step)
+        self.assertIn('delta round', step)
+
     def test_the_build_start_section_stops_and_asks_on_an_unresolved_command_verify(self):
         """Build-unresolved-verify ticket 01, AC-1: the rule sits in Start, before the red step."""
         text = self.build_text()
@@ -466,6 +499,18 @@ class ReadmeTest(unittest.TestCase):
         self.assertNotIn('measure', missing)
         self.assertNotIn('observe list', missing)
         self.assertNotIn('assess record', missing)
+
+    def test_the_readme_delta_line_states_the_any_fix_round_rule_and_the_blocker_and_high_only_rule(self):
+        """Calibrate-fixes-1 ticket 05, AC-19: the same rule as the review skill's AC-16 and AC-17."""
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = self.README.read_text(encoding='utf-8')
+        item = ' '.join(text.split('- **delta**', 1)[1].split('\n- **', 1)[0].split())
+        self.assertIn('any fix round', item)
+        self.assertIn('whose finding was fixed', item)
+        self.assertIn('only Blocker and High', item)
+        self.assertIn('Open:', item)
+        self.assertIn('no further round', item)
 
 
 class ErrorContractTest(unittest.TestCase):
