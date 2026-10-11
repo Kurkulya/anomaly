@@ -641,7 +641,22 @@ It uses no model: the line is a JSON `systemMessage`, which is shown to you and 
 the model's context (plain output from a start hook would be). The hook gets `home` and the data
 folder from `CLAUDE_PLUGIN_OPTION_HOME` and `CLAUDE_PLUGIN_DATA`, which Claude Code sets for hook
 processes, and starts `python` from the `PATH` without a shell. On a system where the command is
-only `python3`, change `command` in `plugins/anomaly/hooks/hooks.json`.
+only `python3`, change both `command` values (the nudge and the subagent Bash check) in
+`plugins/anomaly/hooks/hooks.json`.
+
+### The subagent Bash check
+
+```
+python plugins/anomaly/scripts/anomaly.py check subagent-bash < <hook JSON>
+```
+
+The second hook in `plugins/anomaly/hooks/hooks.json` is a `PreToolUse` hook on `Bash` that runs this
+check on every Bash call, with the same `python` command and no shell as the nudge. It reads the hook
+JSON on standard input and, for a subagent that is not `anomaly:survey`, denies a command that writes
+a file through the shell, so the rule of the build briefs (edit files only with Edit or Write) is
+enforced and not only asked. The deny reason names Write and Edit. What counts as a write is in The
+pre-merge check and the seam ledger. The main window is never checked, and the check uses no model
+([ADR-0022](docs/adr/0022-subagent-bash-write-check.md)).
 
 ### calibrate
 
@@ -1492,6 +1507,7 @@ runs through `bench score`, with at most 1 false High per run.
 file and git. `check pre-push` holds a push to the review and the verify of the head.
 `check stories` checks the shapes of a work unit's `stories.md` and `decisions.md`;
 `check slice` checks that its tickets can be run.
+`check subagent-bash` is the check of the plugin's second hook (see The subagent Bash check).
 `seams prune` and `seams add` keep the seam ledger true after a merge. None of them
 needs a home or a profile; `check stories` and `check slice` read the `key_line` and `adr_folder`
 ports from the profile in `--home` when there is one.
@@ -1501,6 +1517,7 @@ python plugins/anomaly/scripts/anomaly.py check pre-merge <ticket> [--head <rev>
 python plugins/anomaly/scripts/anomaly.py check pre-push  <work-unit folder | ad-hoc ticket> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py check stories     <work-unit folder> [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py check slice       <work-unit folder> [--home <dir>]
+python plugins/anomaly/scripts/anomaly.py check subagent-bash < <PreToolUse hook JSON>
 python plugins/anomaly/scripts/anomaly.py seams prune     <ledger> [--merge <rev>] [--repo <dir>] [--dry-run]
 python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name> --owner <owner file> --replaces <old way> --ticket <NN>
 ```
@@ -1575,6 +1592,40 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `https://host/x/check.py:42`, is skipped too). Warning: a ticket over 5 KB. Exit codes and the
   `warning:` prefix as for `check stories` (a clean run prints `slice check passed for <folder>`).
   Nothing is written.
+- `check subagent-bash` reads the `PreToolUse` hook JSON of a Bash call on standard input. When the
+  input has `agent_id` (a subagent or an in-process teammate) and its `agent_type` is not
+  `anomaly:survey`, it prints `{"hookSpecificOutput": {"hookEventName": "PreToolUse",
+  "permissionDecision": "deny", "permissionDecisionReason": "..."}}` for a `tool_input.command`
+  that holds, outside quotes: a heredoc `<<` or `<<-` (whatever it feeds, `python3 - <<'EOF'`
+  included), `sed -i`, `tee`, a `>`, `>>`, `>|` or `&>` redirection to anything but `/dev/null`,
+  `curl -o` or `wget -O` (not when the target is `-` or `/dev/null`, attached as in `-qO-` or the next
+  argument: `wget -O - url` and `curl -s -o /dev/null url` write no file). The reason names Write and
+  Edit. Allowed: `2>&1`, `>/dev/null`,
+  `2>/dev/null`, a copy of one stream to another (`>&2`), a here-string `<<<`, a `>` or `<<` inside
+  a quoted argument (a `$(...)` or backtick substitution inside double quotes runs, so its body is
+  checked as a command), inline code with `-c` or `-e`, pipes and chains. The check returns before it
+  reads the command when `agent_id` is absent (the main window, also a session started with
+  `--agent`), and it fails open: input that is not JSON, no `tool_input.command` and any error are an
+  allow with no output. An unclosed quote ends the scan of the command, but a write before it still
+  counts: `echo x > f 'oops` and a heredoc whose body holds an apostrophe are denied, `echo "a > b`
+  is allowed. The exit code is always 0. A `tee`, `sed`,
+  `curl` or `wget` counts only as the name of a command, not as an argument: the first word after
+  `|`, `;`, `&&`, `$(` or a newline, past the keywords `if`, `then`, `else`, `elif`, `do`, `while`,
+  `until`, `!` and `{`, assignments such as `FOO=1`, and the wrappers `sudo`, `env`, `nice`, `nohup`,
+  `time`, `timeout`, `xargs`, `command` and `exec` with their options. An option is skipped alone,
+  and with the next word as its value only when it is in the table of that wrapper (the options
+  whose `--help` shows a required value; `--name=value` and `-nVALUE` are always one word, and an
+  option with an optional or no value, such as `sudo --preserve-env` or `xargs -i`, takes no next
+  word). Short: `sudo -u -g -h -p -C -D -R -T -U`, `env -u -C -S -f -a`, `nice -n`, `time -f -o`,
+  `timeout -s -k`, `xargs -n -I -L -P -s -d -E -a -J`, `exec -a`. Long: `sudo --chdir --chroot
+  --close-from --command-timeout --group --host --other-user --prompt --user`, `env --chdir --file --unset --split-string --argv0`,
+  `nice --adjustment`, `time --format --output`, `timeout --signal --kill-after`, `xargs --arg-file
+  --delimiter --max-args --max-chars --max-lines --max-procs --process-slot-var`. `timeout` also
+  skips its duration (`timeout 5 tee f`). `command -v tee` and `command -V tee` look a name up and
+  run nothing, so they are allowed; `command tee f` is denied.
+  The scan is not a shell parser, so some commands that write no file are denied, and the subagent
+  writes them another way: the arithmetic shift `$((1<<2))`, the arithmetic test `(( i > 0 ))` and the
+  string test `[[ $a > $b ]]` read as a heredoc or a redirect.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner> · <rest>`). The owner is
   one or more owner paths, each followed by its names in parentheses; a non-file part after a path
@@ -1840,7 +1891,7 @@ python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py bench     score <defects.json> <findings>...
 python plugins/anomaly/scripts/anomaly.py bench     facts <facts.json> <answers>...
-python plugins/anomaly/scripts/anomaly.py check     pre-merge|pre-push|stories|slice ...
+python plugins/anomaly/scripts/anomaly.py check     pre-merge|pre-push|stories|slice|subagent-bash ...
 python plugins/anomaly/scripts/anomaly.py seams     prune|add ...
 python plugins/anomaly/scripts/anomaly.py ci        watch|log <target> [--project <group/project>] [--repo <dir>] ...
 python plugins/anomaly/scripts/anomaly.py risk      <range> [--repo <dir>]
@@ -1867,7 +1918,8 @@ python plugins/anomaly/scripts/anomaly.py terms-grep --terms '<words>' <url>... 
   described under The digest. The data folder is optional here, and a section that needs it
   says so.
 - `observe`, `assess` and `calibrate` take an action; their options are in their sections.
-- `nudge` is run by a hook (see The weekly nudge).
+- `nudge` is run by a hook (see The weekly nudge); `check subagent-bash` is run by the other (see The
+  subagent Bash check).
 - `ticket` takes an action; its options are in Tickets.
 - `ports` prints the adapter of every port, the repo-layer commands and the model roles for the
   repository that holds `--repo` (default: the current folder), and a `warning:` line on stderr for

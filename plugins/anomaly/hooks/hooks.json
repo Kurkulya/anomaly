@@ -1,5 +1,5 @@
 {
-  "description": "Once a week, in the first session, tell the user when the anomaly backlog needs them",
+  "description": "Once a week, in the first session, tell the user when the anomaly backlog needs them; deny shell file writes in subagents",
   "hooks": {
     "SessionStart": [
       {
@@ -9,6 +9,19 @@
             "type": "command",
             "command": "python",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py", "nudge"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py", "check", "subagent-bash"],
             "timeout": 10
           }
         ]

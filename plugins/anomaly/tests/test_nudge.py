@@ -179,21 +179,31 @@ class HookFileTest(unittest.TestCase):
     def setUp(self):
         self.config = json.loads(HOOKS_FILE.read_text(encoding='utf-8'))
 
-    def test_one_session_start_hook_runs_the_nudge_at_startup_only(self):
+    def test_the_nudge_runs_at_startup_only_and_one_bash_pre_tool_use_hook_sits_beside_it(self):
+        """AC-20: the nudge group is unchanged; the second group is the subagent Bash check."""
         groups = self.config['hooks']['SessionStart']
-        self.assertEqual(list(self.config['hooks']), ['SessionStart'])
+        self.assertEqual(sorted(self.config['hooks']), ['PreToolUse', 'SessionStart'])
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]['matcher'], 'startup')
         handlers = groups[0]['hooks']
         self.assertEqual(len(handlers), 1)
         self.assertEqual(handlers[0]['type'], 'command')
+        checks = self.config['hooks']['PreToolUse']
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0]['matcher'], 'Bash')
+        self.assertEqual(len(checks[0]['hooks']), 1)
+        self.assertEqual(checks[0]['hooks'][0]['type'], 'command')
 
-    def test_the_command_runs_the_plugin_script_without_a_shell_and_without_user_config(self):
+    def test_the_commands_run_the_plugin_script_without_a_shell_and_without_user_config(self):
         handler = self.config['hooks']['SessionStart'][0]['hooks'][0]
         self.assertEqual(handler['command'], 'python')
         self.assertEqual(handler['args'], ['${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py', 'nudge'])
-        self.assertNotIn('user_config', json.dumps(self.config))
         self.assertLessEqual(handler['timeout'], 30)
+        check = self.config['hooks']['PreToolUse'][0]['hooks'][0]
+        self.assertEqual(check['command'], 'python')
+        self.assertEqual(check['args'], ['${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py', 'check', 'subagent-bash'])
+        self.assertLessEqual(check['timeout'], 30)
+        self.assertNotIn('user_config', json.dumps(self.config))
 
     def test_the_manifest_leaves_the_default_hooks_location_alone(self):
         manifest = json.loads(PLUGIN_FILE.read_text(encoding='utf-8'))
