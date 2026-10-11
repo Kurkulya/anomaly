@@ -24,7 +24,9 @@ as waiting and adds nothing to the sum. A problem whose target already had a rev
 says so, and a target that a win with 2 or more sightings is about is marked as protected
 from removal (flags.protected_by_win). With no plugin checkout (gitrepo.plugin_repo is None), a problem
 whose target is a skill or agent of this plugin names its addenda file as the fix home (fix_home); a
-skill in addenda.NO_ADDENDA has none, and any other part of the plugin is an upstream defect.
+skill in addenda.NO_ADDENDA has none, and any other part of the plugin is an upstream defect. The plan
+then lists one offer line per upstream report not yet sent (upstream_offers): a kept addenda line, and
+a plugin-code problem that `upstream defect` takes.
 
 Declaring (ADR-0002). An experiment is declared before the change: one metric, one guard from
 QUALITY_GUARDS, and `declared_on` = today; `fix` refuses a fix dated before it, and sets a blank
@@ -38,7 +40,7 @@ from collections import Counter, namedtuple
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, verdict
+from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, upstream, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
                         GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS,
                         SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
@@ -48,6 +50,7 @@ MERGED_HEADING = 'Merged'
 WHOLE_SCOPES = ('repo:', 'plugin:')   # scopes that are one batch each; any other scope is split by target
 UNTARGETED = 'untargeted'
 UPSTREAM_DEFECT = 'upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream'
+UPSTREAM_HEADING = "## Upstream reports not yet sent (offer each; send one only after the user's yes)"
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): calibrate '
 
 
@@ -133,6 +136,33 @@ def problem_line(context, anomaly, plugin):
     return ' · '.join([head] + marks)
 
 
+def upstream_accepts(check, *args):
+    """True when `check(*args)`, an upstream check that raises RecordError on a report it refuses, takes it; a file
+    it cannot read counts as a refusal, so the plan still prints."""
+    try:
+        check(*args)
+    except (RecordError, OSError):
+        return False
+    return True
+
+
+def upstream_offers(context, found, plugin):
+    """The plan's offer lines with no plugin checkout (`plugin` is gitrepo.plugin_repo's answer; with one there are
+    none): `upstream: tuning <signature>` for each anomaly that upstream tuning takes (upstream.tuning_source), then
+    `upstream: defect <signature>` for each problem of the batches `found` whose fix home is UPSTREAM_DEFECT and
+    whose target upstream defect takes (upstream.part_word). An anomaly already sent (upstream.sent_lines) has none."""
+    if plugin is not None:
+        return []
+    offers = [f'upstream: tuning {anomaly.signature}' for anomaly in context.anomalies
+              if not upstream.sent_lines(anomaly) and upstream_accepts(upstream.tuning_source, context, anomaly)]
+    for anomaly in (problem for batch in found for problem in batch.problems):
+        target = anomaly.target.strip()
+        if (fix_home(context, target, plugin) == UPSTREAM_DEFECT and not upstream.sent_lines(anomaly)
+                and upstream_accepts(upstream.part_word, context, target)):
+            offers.append(f'upstream: defect {anomaly.signature}')
+    return offers
+
+
 HOUSEKEEPING = (flags.near_duplicates, flags.stale, trends.experiments_due_section, flags.unused_skills)
 
 
@@ -155,6 +185,9 @@ def plan_lines(context):
         lines += [problem_line(context, a, plugin) for a in batch.problems]
     if not found:
         lines.append('- no open problems')
+    offers = upstream_offers(context, found, plugin)
+    if offers:
+        lines += ['', UPSTREAM_HEADING] + offers
     counts = recent_sessions_by_kind(context)
     lines += ['', 'metrics: ' + ', '.join(verdict.METRIC_NAMES), 'guards: ' + ', '.join(QUALITY_GUARDS),
               f'sessions in the last {BASELINE_DAYS} days: '
