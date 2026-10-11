@@ -84,6 +84,11 @@ Work through the `## Housekeeping` part, one kind at a time, and ask before each
 - **Stale anomalies**: offer to close them; after a yes, run `close` with every chosen signature.
 - **Unused plugin skills**: propose removal as an anomaly about that skill (see step 5); a line
   that says it is protected by a win is not proposed.
+- **Addenda to re-check**: the digest's `## Addenda to re-check` section lists addenda lines whose
+  skill or agent changed, or is gone, since the line was written. Read each line against the core
+  text now. When the core text now holds the rule, offer to drop the line; after a yes, run
+  `calibrate drop <signature> --reason '<text>'`. A line with no verdict yet shows its check date
+  instead: report that date and leave the line until the experiment is judged.
 
 ## 3. Pick one batch
 
