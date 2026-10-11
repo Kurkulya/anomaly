@@ -14,7 +14,7 @@ The build briefs ask implementers and test writers to edit files only with Edit 
 
 - Subagent test: `agent_id` present. The main window, also a session started with `--agent`, is never checked.
 - Exemption: `agent_type` `anomaly:survey`.
-- Denied: any heredoc `<<` or `<<-`, whatever it feeds, `sed -i`, `tee`, `>` or `>>` to a file, `curl -o`, `wget -O`. Allowed: `2>&1`, `>/dev/null`, `2>/dev/null`, a here-string `<<<`, quoted text, inline code with `-c` or `-e`, pipes and chains.
+- Denied: any heredoc `<<` or `<<-`, whatever it feeds, `sed -i`, `tee`, `>`, `>>`, `>|` or `&>` to a file, `curl -o`, `wget -O`. Allowed: `2>&1`, `>/dev/null`, `2>/dev/null`, a copy of one stream to another such as `>&2`, a here-string `<<<`, quoted text, inline code with `-c` or `-e`, pipes and chains, and `curl -o` or `wget -O` with the target `-` or `/dev/null`, which write no file.
 - A deny prints `permissionDecision: deny` with a reason that names Write and Edit, exit 0. Input that is not JSON, or with no command, is allowed (fail open). An unclosed quote ends the scan of the command, and a write before it still counts: `echo x > f 'oops` and a heredoc whose body holds an apostrophe are denied, `echo "a > b` is allowed.
 - It applies in every project where the plugin is on.
 

@@ -641,7 +641,8 @@ It uses no model: the line is a JSON `systemMessage`, which is shown to you and 
 the model's context (plain output from a start hook would be). The hook gets `home` and the data
 folder from `CLAUDE_PLUGIN_OPTION_HOME` and `CLAUDE_PLUGIN_DATA`, which Claude Code sets for hook
 processes, and starts `python` from the `PATH` without a shell. On a system where the command is
-only `python3`, change `command` in `plugins/anomaly/hooks/hooks.json`.
+only `python3`, change both `command` values (the nudge and the subagent Bash check) in
+`plugins/anomaly/hooks/hooks.json`.
 
 ### The subagent Bash check
 
@@ -1597,7 +1598,9 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   "permissionDecision": "deny", "permissionDecisionReason": "..."}}` for a `tool_input.command`
   that holds, outside quotes: a heredoc `<<` or `<<-` (whatever it feeds, `python3 - <<'EOF'`
   included), `sed -i`, `tee`, a `>`, `>>`, `>|` or `&>` redirection to anything but `/dev/null`,
-  `curl -o` or `wget -O`. The reason names Write and Edit. Allowed: `2>&1`, `>/dev/null`,
+  `curl -o` or `wget -O` (not when the target is `-` or `/dev/null`, attached as in `-qO-` or the next
+  argument: `wget -O - url` and `curl -s -o /dev/null url` write no file). The reason names Write and
+  Edit. Allowed: `2>&1`, `>/dev/null`,
   `2>/dev/null`, a copy of one stream to another (`>&2`), a here-string `<<<`, a `>` or `<<` inside
   a quoted argument (a `$(...)` or backtick substitution inside double quotes runs, so its body is
   checked as a command), inline code with `-c` or `-e`, pipes and chains. The check returns before it

@@ -887,8 +887,9 @@ def register(commands, common):
         help='the PreToolUse hook: deny a subagent\'s Bash command that writes a file (reads the hook JSON on stdin)',
         description=('Read the PreToolUse hook JSON on standard input. For a subagent (the input has agent_id) other\n'
                      'than anomaly:survey, print a deny that names Write and Edit when tool_input.command holds a\n'
-                     'heredoc, sed -i, tee, a > or >> redirect to a file, curl -o or wget -O; 2>&1, >/dev/null,\n'
-                     'a here-string, quoted text, inline code and pipes are allowed. Anything else prints nothing.\n'
+                     'heredoc, sed -i, tee, a >, >>, >| or &> redirect to a file, curl -o or wget -O; 2>&1,\n'
+                     '>/dev/null, a stream copy such as >&2, a here-string, quoted text, inline code, pipes, and\n'
+                     'curl -o or wget -O with the target - or /dev/null are allowed. Anything else prints nothing.\n'
                      'Always exit 0: input that is not JSON, no tool_input.command and any error are an allow. An\n'
                      'unclosed quote ends the scan but a write before it still counts (echo x > f \'oops is denied,\n'
                      'echo "a > b is allowed).'
