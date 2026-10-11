@@ -633,7 +633,16 @@ def shell_tokens(command):
     for an unquoted operator (`;`, `|`, `>>`, `<<`, ...) or a newline. A `>` or `<<` inside quotes stays
     part of a word. An unclosed quote ends the stream: what came before it still counts, so a heredoc
     whose body holds an apostrophe is still seen. A `#` that starts a word is a comment."""
-    tokens, word, index = [], None, 0
+    tokens, word, index = [], [], 0   # `word` holds the parts of the word being read; it is empty between words
+    started = False                   # a word is open (it may still be empty: `""`)
+
+    def end_word():
+        nonlocal started
+        if started:
+            tokens.append(('word', ''.join(word)))
+            word.clear()
+            started = False
+
     while index < len(command):
         char = command[index]
         if char in '\'"':
@@ -641,22 +650,23 @@ def shell_tokens(command):
             while end < len(command) and command[end] != char:
                 end += 2 if char == '"' and command[end] == '\\' else 1
             if end >= len(command):
-                return tokens + ([('word', ''.join(word))] if word is not None else [])
+                end_word()
+                return tokens
             body = command[index + 1:end]
-            word = (word or []) + [re.sub(r'\\(.)', r'\1', body) if char == '"' else body]
+            word.append(re.sub(r'\\(.)', r'\1', body) if char == '"' else body)
+            started = True
             index = end + 1
             continue
         index += 1
         if char == '\\':
-            word = (word or []) + ([] if command[index:index + 1] == '\n' else [command[index:index + 1]])
+            word.append('' if command[index:index + 1] == '\n' else command[index:index + 1])
+            started = True
             index += 1
-        elif char == '#' and word is None:
+        elif char == '#' and not started:
             end = command.find('\n', index)
             index = len(command) if end < 0 else end
         elif char in ' \t\r\n' or char in SHELL_OPERATOR_CHARS:
-            if word is not None:
-                tokens.append(('word', ''.join(word)))
-                word = None
+            end_word()
             if char == '\n':
                 tokens.append(('op', char))
             elif char in SHELL_OPERATOR_CHARS:
@@ -666,9 +676,9 @@ def shell_tokens(command):
                 tokens.extend(('op', op) for op in SHELL_OPERATOR.findall(command[index - 1:end]))
                 index = end
         else:
-            word = (word or []) + [char]
-    if word is not None:
-        tokens.append(('word', ''.join(word)))
+            word.append(char)
+            started = True
+    end_word()
     return tokens
 
 
