@@ -192,7 +192,10 @@ fixed here: tell the user.
 
 Finish with a short summary: experiments verified and their results, records merged or closed,
 the batch that was picked, each experiment declared (metric, guard, check date) and each fix
-recorded with its reference, and the `commit:` lines. Mention anything left waiting.
+recorded with its reference, and the `commit:` lines. Mention anything left waiting. Then offer
+each `upstream: tuning <signature>` and `upstream: defect <signature>` line that `plan` printed,
+one at a time: run `upstream tuning|defect <signature>` only after the user's yes, and its
+`--comment <number>` or `--create` only after a second yes. Nothing is sent without it.
 
 ## Rules
 

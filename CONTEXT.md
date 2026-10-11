@@ -64,3 +64,4 @@
 | **addendum** | One rule line in a user's addenda file in home, tied to one experiment, that adds to or narrows one plugin skill or agent (ADR-0021). | patch, override, local rule |
 | **upstream report** | Opt-in text an installed-copy user sends to the plugin's repository as a GitHub issue or a +1 comment, in one of two lanes (ADR-0022). | report (alone), telemetry, issue (alone) |
 | **defect report** | The upstream report lane for a plugin fault, sent with no experiment. | bug report |
+| **tuning report** | The upstream report lane for a kept addendum, sent with its experiment result. | patch report |
