@@ -703,6 +703,20 @@ class AddendumRemovalTest(CalibrateCase):
                 self.assertEqual(path.read_bytes(), file_before)
                 self.assertEqual(records.anomaly_path(self.home, signature).read_bytes(), record_before)
 
+    def test_declare_is_refused_while_the_last_experiments_line_is_in_its_file_and_works_after_drop(self):
+        path, _ = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', result='keep', status='reopened')
+        declare = ('declare', '--signature', 'slow-check', '--expect', 'fewer slow checks', '--metric',
+                   'active minutes', '--guard', 'rework sightings', '--approved')
+        file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'slow-check').read_bytes()
+        assert_cli_error(self, self.cli(*declare), 'addenda/observe.md', "calibrate drop slow-check --reason '<text>'")
+        self.assertEqual(path.read_bytes(), file_before)
+        self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
+        self.assertEqual(self.drop('slow-check')[0], 0)
+        code, _, err = self.cli(*declare)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.anomaly('slow-check').experiment.declared_on, TODAY.isoformat())
+
     def test_without_git_a_revert_and_a_drop_say_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
         seed_addenda_file(self.home, self.plugin, 'observe', 'reverted-one')
         self.experiment('reverted-one', 'observe', metric='minutes per build')

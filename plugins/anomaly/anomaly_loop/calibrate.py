@@ -407,6 +407,10 @@ def run_declare(args, environ):
         anomaly.effort = args.effort
     earlier = tried_before(anomalies.values(), anomaly)
     if (current is not None and current.result) or anomaly.fixed_by.strip():
+        path = addendum_file(home, anomaly)
+        if path is not None and addenda.tagged_line(path, anomaly.signature) is not None:
+            raise RecordError(f'{label}: {home_relative(home, path)} still holds the line of the last experiment; '
+                              f"remove it first with `calibrate drop {anomaly.signature} --reason '<text>'`")
         records.archive_experiment(anomaly)
     anomaly.experiment = records.Experiment(expect=expect, metric=metric, guard=guard, kind=kind, skill=skill,
                                             declared_on=today.isoformat(), check_by=check_by)
