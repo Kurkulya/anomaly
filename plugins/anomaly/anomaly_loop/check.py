@@ -633,6 +633,7 @@ SHELL_WRAPPERS = {
     'xargs': ('nILPsdEaJ', ('arg-file', 'delimiter', 'max-args', 'max-chars', 'max-lines', 'max-procs',
                             'process-slot-var')),
 }
+COMMAND_LOOKUP = re.compile(r'-p*[vV][pvV]*')   # the options of `command` that look a name up
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
 NO_FILE_TARGETS = ('-', '/dev/null')
@@ -777,6 +778,8 @@ def command_words(words):
         word = words[index]
         index += 1
         if word in SHELL_WRAPPERS:
+            if word == 'command' and index < len(words) and COMMAND_LOOKUP.fullmatch(words[index]):
+                return []   # `command -v tee` looks the name up and runs nothing
             short, long = SHELL_WRAPPERS[word]
             while index < len(words) and words[index].startswith('-'):
                 option = words[index]

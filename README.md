@@ -1621,7 +1621,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   --other-user --prompt --user`, `env --chdir --file --unset --split-string --argv0`,
   `nice --adjustment`, `time --format --output`, `timeout --signal --kill-after`, `xargs --arg-file
   --delimiter --max-args --max-chars --max-lines --max-procs --process-slot-var`. `timeout` also
-  skips its duration (`timeout 5 tee f`).
+  skips its duration (`timeout 5 tee f`). `command -v tee` and `command -V tee` look a name up and
+  run nothing, so they are allowed; `command tee f` is denied.
   The scan is not a shell parser, so some commands that write no file are denied, and the subagent
   writes them another way: the arithmetic shift `$((1<<2))`, the arithmetic test `(( i > 0 ))` and the
   string test `[[ $a > $b ]]` read as a heredoc or a redirect.

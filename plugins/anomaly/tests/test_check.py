@@ -1027,7 +1027,8 @@ class SubagentBashVerdictTest(unittest.TestCase):
         """AC-21: the command name is found past `do`, `then`, `!`, `{`, `sudo -u root` and the like."""
         for command in ("for f in *.py; do sed -i 's/a/b/' \"$f\"; done", 'if [ -f x ]; then tee x; fi', '{ tee f; }',
                         '! tee f', 'sudo -u root tee f', 'nice -n 10 tee f', 'xargs -n 1 sed -i s/a/b/',
-                        'timeout 5 tee f', 'sudo tee f', 'FOO=1 sed -i s/a/b/ f', "xargs -i sed -i 's/a/b/' {}"):
+                        'timeout 5 tee f', 'sudo tee f', 'FOO=1 sed -i s/a/b/ f', "xargs -i sed -i 's/a/b/' {}",
+                        'command tee f', 'command -p tee f'):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
@@ -1096,7 +1097,8 @@ class SubagentBashVerdictTest(unittest.TestCase):
 
     def test_a_write_command_name_as_an_argument_is_allowed(self):
         """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
-        for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f'):
+        for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f', 'command -v tee', 'command -V tee',
+                        'command -pv tee'):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
