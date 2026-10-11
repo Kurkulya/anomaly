@@ -39,12 +39,12 @@ class RegistryTest(unittest.TestCase):
 
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
-    BUILD_SKILL_MAX_BYTES = 9 * 1024   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10)
+    BUILD_SKILL_MAX_BYTES = 9 * 1024 + 13   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10); +13: a delta round after any fix round (calibrate-fixes-1 ticket 05)
     CONDUCT_SKILL_MAX_BYTES = 9 * 1024   # conduct only: the fix-branch and research dispatches name roles and effort (model-roles cumulative review, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
     RULES_DOC = PLUGIN / 'skills' / 'review' / 'rules-mode.md'
-    REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window after each round (AC-53)
+    REVIEW_BRIEF_MAX_BYTES = 3 * 1024   # the review skill's reviewer brief doc, loaded at dispatch; its last section is for the main window (AC-53)
     DOCS_AGENT = PLUGIN / 'agents' / 'docs.md'
     REVIEW_SKILL = PLUGIN / 'skills' / 'review' / 'SKILL.md'
     REVIEW_BRIEF = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
@@ -56,6 +56,7 @@ class SkillFileTest(unittest.TestCase):
         'WORKTREE.md': 2 * 1024,      # the commit recipe, loaded only inside a worktree
         BUILD_UI_DOC.name: 3 * 1024,  # the UI walkthrough, loaded only when Verify step 4 runs
     }
+    REVIEW_SKILL_MAX_BYTES = 8 * 1024 + 24   # review only: the D-11 delta rule, a round for every fixed finding (calibrate-fixes-1 ticket 05)
 
     def skills(self):
         return sorted((PLUGIN / 'skills').glob('*/SKILL.md'))
@@ -78,7 +79,7 @@ class SkillFileTest(unittest.TestCase):
         for path in self.skills():
             if path.parent.name not in constants.LOOP_SKILLS:
                 with self.subTest(skill=path.parent.name):
-                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
+                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES, 'review': self.REVIEW_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
                     self.assertLessEqual(path.stat().st_size, cap)
         for path in self.agents():
             with self.subTest(agent=path.stem):
@@ -306,6 +307,34 @@ class SkillFileTest(unittest.TestCase):
         text = self.REVIEW_SKILL.read_text(encoding='utf-8')
         section = text.split('## Delta rounds', 1)[1].split('\n## ', 1)[0]
         self.assertIn('worklog start', section)
+        self.assertIn('docs-only included', section)   # calibrate-fixes-1 ticket 05: every fix round gets a delta round
+
+    def test_the_delta_row_gives_every_agent_whose_finding_was_fixed_a_delta_round_after_any_fix_round(self):
+        """Calibrate-fixes-1 ticket 05, AC-16 (D-11)."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        row = ' '.join(next(line for line in text.splitlines() if line.startswith('| delta |')).split())
+        self.assertIn('any fix round', row)
+        self.assertIn('every agent whose finding was fixed', row)
+        self.assertIn('SendMessage', row)
+
+    def test_a_delta_round_after_only_medium_low_or_nit_fixes_reports_only_blocker_and_high_and_a_new_lower_finding_is_open(self):
+        """Calibrate-fixes-1 ticket 05, AC-17 (D-11): the three clauses sit in one block of the review text."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        blocks = [' '.join(block.split()) for block in text.split('\n\n')]
+        blocks = [block for block in blocks if 'only blocker and high' in block.lower()]
+        self.assertEqual(len(blocks), 1, 'no block of the review text says a lower-fix delta round reports only Blocker and High')
+        block = blocks[0]
+        self.assertRegex(block.lower(), r'medium,? low,? (?:or|and) nit')
+        self.assertIn('Open:', block)
+        self.assertIn('no further round', block)
+
+    def test_step_9_says_an_agent_is_done_after_its_last_delta_round_or_after_its_first_when_none_of_its_findings_was_fixed(self):
+        """Calibrate-fixes-1 ticket 05, AC-18 (D-11): the old "no Blocker or High" clause is replaced."""
+        text = self.REVIEW_SKILL.read_text(encoding='utf-8')
+        step9 = ' '.join(next(line for line in text.splitlines() if line.startswith('9. ')).split())
+        self.assertIn('last delta round', step9)
+        self.assertIn('none of its findings was fixed', step9)
+        self.assertNotIn('had no Blocker or High', step9)
 
     def test_cumulative_mode_reads_stories_md_and_decisions_md_and_not_spec_md(self):
         """AC-85; the old layout's `spec.md` is no longer read (ADR-0011)."""
@@ -345,6 +374,20 @@ class SkillFileTest(unittest.TestCase):
                 self.assertTrue(path.is_file(), f'skills/build/{name} is missing')
                 self.assertLessEqual(path.stat().st_size, max_bytes)
                 self.assertIn(name, text)
+
+    NEVER_CUT_LINE = ('A file at its byte cap: never cut existing rule text to fit; '
+                      'stop and report the file, its cap and the bytes needed.')
+
+    NEVER_CUT_ASK = 'The main window then asks the user to raise the cap or move detail into a doc loaded only when used.'
+
+    def test_both_build_briefs_never_cut_rule_text_to_fit_a_cap_and_have_the_main_window_ask_how_to_make_room(self):
+        """AC-7 (BRIEFS.md), AC-8 (TEST-WRITER.md), D-5, D-22 and its Amended line: each brief holds the never-cut line
+        and the sentence that has the main window ask the user how to make room."""
+        for name in ('BRIEFS.md', 'TEST-WRITER.md'):
+            with self.subTest(doc=name):
+                text = ' '.join((self.BUILD_SKILL.parent / name).read_text(encoding='utf-8').split())
+                self.assertIn(self.NEVER_CUT_LINE, text)
+                self.assertIn(self.NEVER_CUT_ASK, text)
 
     def test_the_build_skill_carries_the_light_path_call_and_the_resume_check(self):
         """AC-39 (the `ticket adhoc` call) and AC-31 (the first-parent log check)."""
@@ -393,6 +436,12 @@ class SkillFileTest(unittest.TestCase):
         section = text.split('## The review skill', 1)[1].split('\n## ', 1)[0].lower()
         self.assertIn('rule trace', section)
         self.assertIn('rules', section)
+
+    def test_the_build_review_step_follows_any_fix_round_with_a_delta_round(self):
+        """Calibrate-fixes-1 ticket 05, AC-30 and its Amended line (the cap test above takes the byte rise)."""
+        step = ' '.join(next(line for line in self.build_text().splitlines() if line.startswith('**Review**')).split())
+        self.assertIn('any fix round', step)
+        self.assertIn('delta round', step)
 
     def test_the_build_start_section_stops_and_asks_on_an_unresolved_command_verify(self):
         """Build-unresolved-verify ticket 01, AC-1: the rule sits in Start, before the red step."""
@@ -452,6 +501,18 @@ class ReadmeTest(unittest.TestCase):
         self.assertNotIn('measure', missing)
         self.assertNotIn('observe list', missing)
         self.assertNotIn('assess record', missing)
+
+    def test_the_readme_delta_line_states_the_any_fix_round_rule_and_the_blocker_and_high_only_rule(self):
+        """Calibrate-fixes-1 ticket 05, AC-19: the same rule as the review skill's AC-16 and AC-17."""
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = self.README.read_text(encoding='utf-8')
+        item = ' '.join(text.split('- **delta**', 1)[1].split('\n- **', 1)[0].split())
+        self.assertIn('any fix round', item)
+        self.assertIn('whose finding was fixed', item)
+        self.assertIn('only Blocker and High', item)
+        self.assertIn('Open:', item)
+        self.assertIn('no further round', item)
 
 
 class ErrorContractTest(unittest.TestCase):
@@ -852,6 +913,20 @@ class PlanReviewerTest(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, item)
         self.assertRegex(item, r'`implement`(?!_)')
+
+    def test_both_plan_modes_flag_an_unsettled_rule_pair_as_a_blocker_only_with_a_concrete_case(self):
+        """Calibrate-fixes-1 ticket 04 (AC-13, AC-14, AC-15): one numbered check item per mode doc carries the
+        unsettled-pair rule, the Blocker severity, the one concrete case, and the no-case-no-Blocker line."""
+        pairs = {self.SPEC: ('two rules', 'brief', 'stories', 'decisions'),
+                 self.TICKETS: ('two tickets', 'its brief')}
+        for path, subjects in pairs.items():
+            items = [line for line in self.text(path).splitlines() if re.match(r'\d+\. ', line) and 'unsettled' in line]
+            with self.subTest(doc=path.name):
+                self.assertEqual(len(items), 1, items)
+            item = items[0] if items else ''
+            for phrase in ('are a Blocker only when', 'concrete case', 'different actions', 'not a Blocker') + subjects:
+                with self.subTest(doc=path.name, phrase=phrase):
+                    self.assertIn(phrase, item)
 
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
@@ -1675,6 +1750,20 @@ class ConductSkillTest(unittest.TestCase):
         self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
         self.assertLessEqual(self.PARALLEL.stat().st_size, self.PARALLEL_MAX_BYTES)
 
+    def test_the_finish_fix_branch_step_calls_a_warm_review_delta_round_on_the_merge_before_its_trace_tags(self):
+        """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge, a call of
+        the review skill's delta mode (so its tally, worklog and sum run), placed before the step's trace tags. As the
+        review skill's step 9 says, the delta is the last round of step 17's review: each agent tallies once, after
+        it, over all its rounds."""
+        step = ' '.join(next(line for line in self.text().splitlines() if 'One fix branch off the tip' in line).split())
+        self.assertTrue(step.endswith(']'), 'the step does not end with its trace tags')
+        after_merge = step.split('Merge `--no-ff`', 1)[-1].split('[O38', 1)[0]
+        for token in ('`anomaly:review` delta', '`<pre-merge tip>..<merge>`', 'warm', '"last review: yes"',
+                      "last round of step 17's review", 'tallies once', 'over all its rounds'):
+            with self.subTest(token=token):
+                self.assertIn(token, after_merge)
+        self.assertNotIn('only this round', after_merge)
+
     def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
         """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
         heading above it says "chip". The check is on the text of the line, so the skill's step layout stays free."""
@@ -1794,6 +1883,92 @@ class ModelPickSkillTest(unittest.TestCase):
         names = re.search(r'fixed names[^)]*\([^)]*\)', text)
         self.assertIsNotNone(names, 'observe no longer lists the fixed lens names')
         self.assertIn('`model_pick`', names.group(0))
+
+
+class LensReplaceDocsTest(unittest.TestCase):
+    """Calibrate-fixes-1 ticket 02 (AC-6): the README and review step 10 no longer say that a later lens line of
+    the session is skipped or lost. The docstrings of observe.py and lens.py are checked by the ticket review."""
+    README = PLUGIN.parent.parent / 'README.md'
+    REVIEW = PLUGIN / 'skills' / 'review' / 'SKILL.md'
+
+    def test_the_readme_no_longer_says_observe_apply_skips_a_lens_or_puts_each_lens_in_once(self):
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = ' '.join(self.README.read_text(encoding='utf-8').split())
+        for old in ('skips a lens it already logged', 'home gets each lens once', 'put each lens into home once'):
+            with self.subTest(old=old):
+                self.assertFalse(old in text, f'README.md still says: {old}')
+
+    def test_review_step_10_no_longer_says_an_applied_lens_is_skipped_and_a_later_run_lost(self):
+        step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
+        for old in ('a lens already applied in the session is skipped', 'a later run is lost'):
+            with self.subTest(old=old):
+                self.assertFalse(old in step, f'review step 10 still says: {old}')
+
+    def test_the_readme_and_review_step_10_state_that_a_later_apply_replaces_the_line(self):
+        """AC-6, the new contract (review round 1): the `lens tally sum` bullet and the review section line of the
+        README, and step 10."""
+        step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
+        phrase = "a later apply replaces the session's line of each lens"
+        self.assertTrue(phrase in ' '.join(step.split()), f'review step 10 lacks: {phrase}')
+        if not self.README.is_file():
+            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+        text = ' '.join(self.README.read_text(encoding='utf-8').split())
+        for phrase in ("replaces the session's line with larger ones", "replacing the session's earlier line"):
+            with self.subTest(phrase=phrase):
+                self.assertTrue(phrase in text, f'README.md lacks: {phrase}')
+
+    def test_observe_says_a_capture_adds_no_entry_for_the_names_lens_tally_holds(self):
+        """Review round 1 (user decision): the capture would add a second, smaller line for a name `lens tally`
+        already counts; a later apply replaces or refuses it (ADR-0021)."""
+        text = ' '.join((PLUGIN / 'skills' / 'observe' / 'SKILL.md').read_text(encoding='utf-8').split())
+        clause = 'A capture adds no entry for those names'
+        self.assertTrue(clause in text, f'observe SKILL.md lacks: {clause}')
+
+
+class AmendedLinesDocsTest(unittest.TestCase):
+    """Calibrate-fixes-1 ticket 03 (AC-9 .. AC-12, D-15): the feature reviewer names the file and the AC-n or D-n of
+    each proposed Amended line; review's main window asks one yes at the end and writes them with `ticket amend`.
+    Short phrases only: the review BRIEFS.md has a byte cap."""
+    FEATURE = PLUGIN / 'agents' / 'feature.md'
+    BRIEFS = PLUGIN / 'skills' / 'review' / 'BRIEFS.md'
+
+    def main_window_text(self):
+        """The text from the first `## ` heading that names the main window to the end of BRIEFS.md, whitespace folded."""
+        lines = self.BRIEFS.read_text(encoding='utf-8').splitlines()
+        start = next((i for i, line in enumerate(lines) if line.startswith('## ') and 'main window' in line.lower()), None)
+        self.assertIsNotNone(start, 'review BRIEFS.md has no main-window section')
+        return ' '.join(' '.join(lines[start:]).split())
+
+    def test_the_feature_agent_item_11_asks_for_the_target_file_and_the_ac_n_or_d_n_of_each_proposed_amended_line(self):
+        """AC-9."""
+        item = next(line for line in self.FEATURE.read_text(encoding='utf-8').splitlines() if line.startswith('11. '))
+        item = ' '.join(item.split())
+        self.assertIn('Amended', item)
+        self.assertRegex(item, r'\bfile\b')
+        self.assertIn('AC-n or D-n', item)
+
+    def test_the_main_window_shows_one_list_of_all_rounds_asks_one_yes_and_runs_ticket_amend_with_after_for_each(self):
+        """AC-10."""
+        text = self.main_window_text()
+        for phrase in ('end of the review', 'one list', 'all rounds', 'one yes',
+                       "`ticket amend <file> --after <AC-n|D-n> '<text>'`"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_a_proposed_line_that_names_no_ac_n_or_d_n_is_written_with_ticket_amend_and_no_after(self):
+        """AC-11."""
+        text = self.main_window_text()
+        self.assertRegex(text, r'no `?AC-n`? or `?D-n`?')
+        self.assertIn("`ticket amend <file> '<text>'`", text)
+        self.assertIn('without `--after`', text)
+
+    def test_the_main_window_writes_the_lines_also_when_build_is_the_caller_and_a_no_writes_none_and_lists_them(self):
+        """AC-12."""
+        text = self.main_window_text()
+        self.assertRegex(text, r'also when `?build`? is the caller')
+        self.assertIn('a no writes none', text)
+        self.assertRegex(text, r'lists? them in the handoff')
 
 
 if __name__ == '__main__':

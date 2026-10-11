@@ -65,7 +65,7 @@ Dispatch the `implementer` port for the stack with [BRIEFS.md](BRIEFS.md) filled
 
 Review → verify → CI check → merge → close. `conduct`'s parallel path enters here with a branch. [P7]
 
-**Review** [I20, I21]. `anomaly:review` in ticket mode (combined if docs-only) on `<integration>...<ticket tip>`, with its inputs, the open tickets calling this code, and "last review: no". The same implementer fixes Blocker and High, then a delta round, until none open.
+**Review** [I20, I21]. `anomaly:review` in ticket mode (combined if docs-only) on `<integration>...<ticket tip>`, with its inputs, the open tickets calling this code, and "last review: no". The same implementer fixes Blocker and High until none open; any fix round gets a delta round.
 
 **Verify**, after the last review fix (pending verdict, I15). Each step that applies:
 1. The agent's touched tests.

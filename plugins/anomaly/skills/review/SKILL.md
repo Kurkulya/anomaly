@@ -30,7 +30,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" observe apply --home '${user_c
 | Mode | Range | Agents | Security joins |
 |---|---|---|---|
 | ticket | `<integration>...<ticket tip>` | `anomaly:code` + `anomaly:feature` | when `risk` matches |
-| delta | `<last reviewed sha>..HEAD`, tip merges ignored | only the agent whose Blocker or High was fixed, warm by SendMessage | only if its own High was fixed |
+| delta | `<last reviewed sha>..HEAD`, tip merges ignored | any fix round: every agent whose finding was fixed, warm by SendMessage | if its finding was fixed |
 | cumulative | `<target>...<integration>`: always, whole branch, before the MR [N3] | code + feature + security | always |
 | combined | ticket range, or light path `<start branch>...<ticket tip>` | one `anomaly:code` in combined mode | when `risk` matches |
 | rules | brief + new SKILL.md | `anomaly:feature` in rules mode; it loads [rules-mode.md](rules-mode.md) itself [N7] | never |
@@ -49,12 +49,12 @@ A docs-only diff (no source, config, script or test file) uses combined mode. [I
 6. After each round run `git status --short` on the reviewed checkout and report files a reviewer left [X6]; show the user each command a reviewer proposes; run it only after a yes ([BRIEFS.md](BRIEFS.md), last section). Re-read a reviewer's `file:line` before it goes into a ticket line. [X7]
 7. Only when no Blocker or High is open (in the rules pass too), `ticket reviewed` writes `Reviewed: <head sha>` (on the light path, in the adhoc ticket); spec and tickets skip it. [N12]
 8. `worklog add` with the mode, once per round.
-9. Once per agent, when done (after its last delta round, or its first if it had no Blocker or High; spec and tickets: no Blocker): `lens tally add` under its lens (`code`, `feature`, `security`, `plan`, or an org reviewer's adapter name), counts over all its rounds, 0/0 included. Accepted = fixed or kept as an `Open:` item; rejected = judged wrong, with one reason; revised = accepted, but fixed differently than proposed. [N5, N14]
-10. Once, at the end of the session's last review (the caller says "last review: yes": the user, `specify`, `slice`, or `conduct` in its cumulative review; `build` says "no" and sums itself when its caller said "yes", or when it asks the user at its close and the user says yes): `lens tally sum`, then `observe apply --file <printed path>`; a lens already applied in the session is skipped, so a later run is lost.
+9. Once per agent, when done (after its last delta round, or its first if none of its findings was fixed; spec and tickets: no Blocker): `lens tally add` under its lens (`code`, `feature`, `security`, `plan`, or an org reviewer's adapter name), counts over all its rounds, 0/0 included. Accepted = fixed or kept as an `Open:` item; rejected = judged wrong, with one reason; revised = accepted, but fixed differently than proposed. [N5, N14]
+10. Once, at the end of the session's last review (the caller says "last review: yes": the user, `specify`, `slice`, or `conduct` in its cumulative review; `build` says "no" and sums itself when its caller said "yes", or when it asks the user at its close and the user says yes): `lens tally sum`, then `observe apply --file <printed path>`; a later apply replaces the session's line of each lens.
 
 ## Delta rounds [R8, R9]
 
-On the caller's request, after every fix round that touches source or a rule trace's SKILL.md (delta row). A clean agent is done. The fix loop belongs to `build`. On a rule trace ticket, the delta round also reruns the rules pass on the fixed SKILL.md (rules mode has no diff range) while it has an open High. Spec and tickets: the same `anomaly:plan` agent re-checks the lines of `stories.md`, `decisions.md` or the tickets that changed since its report; the caller passes the work-unit folder, not a range. Only a Blocker opens it.
+On the caller's request, after every fix round, docs-only included (delta row). After only Medium, Low or Nit fixes the main window keeps only Blocker and High; a new lower finding is `Open:`, no further round. A clean agent is done. The fix loop belongs to `build`. On a rule trace ticket, the delta round also reruns the rules pass on the fixed SKILL.md (rules mode has no diff range) while it has an open High. Spec and tickets: the same `anomaly:plan` agent re-checks the lines of `stories.md`, `decisions.md` or the tickets that changed since its report; the caller passes the work-unit folder, not a range. Only a Blocker opens it.
 
 A conflict-merge round (the caller merged the integration tip into the ticket branch): `anomaly:code` warm by SendMessage on `<old tip>..<new tip>`, naming the conflicted files, whose merge resolution it reviews; the tip-merge rule does not apply.
 

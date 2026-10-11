@@ -4,6 +4,7 @@ unchanged since its red commit (or the ticket holds a `Red-changed:` line). Each
 one line on stdout and the exit code is 1; an error is one `anomaly:` line and exit 2."""
 import contextlib
 import io
+import json
 import os
 import re
 import tempfile
@@ -11,8 +12,9 @@ import time
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
-from anomaly_loop import cli
+from anomaly_loop import check, cli
 from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 
 TEST_PATH = 'tests/test_a.py'
@@ -84,7 +86,7 @@ class RegistryTest(CheckTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.main(['check', '--help'], environ={})
-        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'pre-push', 'stories', 'slice'])
+        self.assertEqual(re.findall(r'^    ([a-z-]+)\s{2,}\S', out.getvalue(), re.M), ['pre-merge', 'pre-push', 'stories', 'slice', 'subagent-bash'])
 
     def test_a_failure_prints_one_anomaly_line_and_exits_2(self):
         assert_cli_error(self, self.check(ticket=self.repo.root / '.anomaly' / '99-none.md'), '99-none.md')
@@ -949,3 +951,177 @@ class CheckSliceTest(unittest.TestCase):
     def test_ready_for_human_without_a_reason_is_an_error_quoting_the_value(self):
         self.put('03-third', slice_ticket('03', covers='none', status='ready-for-human'))
         self.assert_error('03-third.md:5:', '"ready-for-human"', '(<why>)')
+
+
+def hook_input(command, **fields):
+    """The PreToolUse hook JSON of a Bash call made by a subagent; `fields` add or replace top-level keys."""
+    data = {'agent_id': 'a1', 'agent_type': 'anomaly:code', 'tool_name': 'Bash', 'tool_input': {'command': command}}
+    data.update(fields)
+    return data
+
+
+class SubagentBashVerdictTest(unittest.TestCase):
+    def assert_denied(self, command, **fields):
+        verdict = check.subagent_bash(hook_input(command, **fields))
+        self.assertIsNotNone(verdict, command)
+        output = verdict['hookSpecificOutput']
+        self.assertEqual(output['hookEventName'], 'PreToolUse')
+        self.assertEqual(output['permissionDecision'], 'deny')
+        self.assertIn('Write', output['permissionDecisionReason'])
+        self.assertIn('Edit', output['permissionDecisionReason'])
+
+    def assert_allowed(self, command, **fields):
+        self.assertIsNone(check.subagent_bash(hook_input(command, **fields)), command)
+
+    def test_a_file_write_in_a_subagent_is_denied_naming_write_and_edit(self):
+        """AC-21."""
+        for command in ('cat <<EOF\nx\nEOF', 'cat <<-EOF\nx\nEOF', "python3 - <<'EOF'\nprint(1)\nEOF",
+                        "sed -i 's/a/b/' f", 'echo x | tee f', 'echo x > f', 'echo x >> f', 'echo x &> f',
+                        'echo x >| f', 'curl -o f http://host', 'wget -O f http://host'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
+    def test_a_stream_copy_or_a_redirect_to_dev_null_is_allowed(self):
+        """AC-22 and its Amended line."""
+        for command in ('ls 2>&1', 'ls >/dev/null', 'ls 2>/dev/null', 'echo e >&2'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_redirect_or_heredoc_sign_inside_a_quoted_argument_is_allowed(self):
+        """AC-23."""
+        for command in ("grep '->' file", 'echo "a > b"'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_pipe_chain_and_inline_code_are_allowed_also_when_the_code_writes_a_file(self):
+        """AC-24."""
+        for command in ('git log | head', "python3 -c 'print(1)'", """python3 -c 'open("f", "w").write("x")'"""):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_here_string_is_allowed(self):
+        """AC-29."""
+        self.assert_allowed('grep x <<< "$v"')
+
+    def test_input_without_agent_id_is_allowed_whatever_the_command(self):
+        """AC-25: the main window, also a session started with `--agent` (it has an `agent_type`)."""
+        data = hook_input('echo x > f')
+        del data['agent_id']
+        self.assertIsNone(check.subagent_bash(data))
+        del data['agent_type']
+        self.assertIsNone(check.subagent_bash(data))
+
+    def test_the_survey_agent_is_allowed_to_write_through_the_shell(self):
+        """AC-26."""
+        self.assert_allowed('echo x > f', agent_type='anomaly:survey')
+
+    def test_a_command_it_cannot_parse_or_a_missing_command_is_allowed(self):
+        """AC-27, the verdict half; input that is not JSON is a CLI test."""
+        self.assert_allowed('echo "a > b')
+        self.assertIsNone(check.subagent_bash(hook_input('', tool_input={})))
+        data = hook_input('echo x > f')
+        del data['tool_input']
+        self.assertIsNone(check.subagent_bash(data))
+
+    def test_a_write_command_after_a_shell_keyword_or_a_wrapper_with_options_is_denied(self):
+        """AC-21: the command name is found past `do`, `then`, `!`, `{`, `sudo -u root` and the like."""
+        for command in ("for f in *.py; do sed -i 's/a/b/' \"$f\"; done", 'if [ -f x ]; then tee x; fi', '{ tee f; }',
+                        '! tee f', 'sudo -u root tee f', 'nice -n 10 tee f', 'xargs -n 1 sed -i s/a/b/',
+                        'timeout 5 tee f', 'sudo tee f', 'FOO=1 sed -i s/a/b/ f', "xargs -i sed -i 's/a/b/' {}",
+                        'command tee f', 'command -p tee f'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
+    def test_a_wrapper_long_option_with_a_separate_value_is_skipped_and_one_without_is_not_a_value(self):
+        """AC-21: `sudo --user root tee f` finds `tee`; `sudo --preserve-env tee f` has no value to skip."""
+        for command in ('sudo --user root tee f', 'sudo --preserve-env tee f', 'sudo --user=root tee f',
+                        'sudo --host h tee f', 'sudo --chroot /r tee f', 'sudo --close-from 5 tee f',
+                        'sudo --command-timeout 5 tee f',
+                        'nice --adjustment 5 tee f', 'timeout --signal KILL 5 tee f',
+                        'xargs --max-args 1 sed -i s/a/b/', 'env --unset X tee f', 'env --ignore-signal tee f'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        for command in ('sudo --user root grep tee f', 'sudo --preserve-env grep tee f'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_both_streams_redirect_to_dev_null_is_allowed_and_to_a_file_is_denied(self):
+        """AC-22: `>&` takes /dev/null like `>`; `>&f` writes a file."""
+        for command in ('cmd >& /dev/null', 'cmd >&/dev/null'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        self.assert_denied('cmd >&f')
+
+    def test_curl_and_wget_output_to_stdout_or_dev_null_is_allowed_and_to_a_file_is_denied(self):
+        """AC-21 Amended: the target `-` or /dev/null, attached or the next argument, writes no file."""
+        for command in ('wget -qO- http://host', 'wget -O - http://host', 'wget -O/dev/null http://host',
+                        "curl -s -o /dev/null -w '%{http_code}' http://host", 'curl -o- http://host',
+                        'curl --output - http://host', 'curl --output=/dev/null http://host'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        for command in ('curl -o f http://host', 'wget -O f http://host', 'wget -qOf http://host',
+                        'curl -sSLo f http://host', 'curl --output f http://host', 'curl --output=f http://host',
+                        'curl -ovideo http://host', 'curl http://host -ovideo', 'curl -o"a\nb" http://host'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
+    def test_a_write_before_an_unclosed_quote_is_denied_and_an_unclosed_quote_alone_is_allowed(self):
+        """AC-27 Amended: the scan stops at the unclosed quote, a write before it still counts."""
+        for command in ("echo x > f 'oops", "echo x > f'oops", "cat <<EOF\ndon't\nEOF", "sed -i 's/a/b/ f"):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        for command in ('echo "a > b', "echo 'a > b", 'echo "$(tee f', 'echo "$((1', 'echo "`tee f'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_command_substitution_and_a_newline_start_a_new_command(self):
+        """AC-21: `$(` and a newline end the simple command before them."""
+        for command in ('echo $(tee f)', 'ls\ntee f'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
+    def test_a_comment_an_escaped_sign_and_a_chain_without_a_write_are_allowed(self):
+        """AC-23, AC-24: a `#` comment and a backslash-escaped `>` are text."""
+        for command in ('ls # > f', 'echo \\> f', 'git status && git log'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_substitution_inside_double_quotes_and_an_ansi_c_string_are_read(self):
+        """AC-21, AC-23: `$(...)` and backticks run inside double quotes; `$'...'` has backslash escapes."""
+        for command in ('echo "$(cat x > f)"', 'echo "`tee f`"', "echo $'a\\'b' > f", 'echo "$(echo "a" > f)"',
+                        'x="$(cat a > "f")"', 'out="$(curl -o "f" url)"', 'echo "$(echo ")" > f)"'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        for command in ('echo "$(date)"', 'echo "\\$(tee f)"', "echo $'a>b'", 'echo "a > $(date)"',
+                        'echo "$(echo "a > b")"', 'echo "$(echo ")")"'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_write_command_name_as_an_argument_is_allowed(self):
+        """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
+        for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f', 'command -v tee', 'command -V tee',
+                        'command -pv tee'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+
+class SubagentBashCliTest(unittest.TestCase):
+    def run_check(self, stdin_text):
+        with mock.patch('sys.stdin', io.StringIO(stdin_text)):
+            return run_cli('check', 'subagent-bash')
+
+    def test_a_denied_write_prints_the_deny_json_and_exits_0(self):
+        """AC-21, the wiring."""
+        code, out, err = self.run_check(json.dumps(hook_input('echo x > f')))
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(json.loads(out)['hookSpecificOutput']['permissionDecision'], 'deny')
+
+    def test_input_without_agent_id_prints_nothing_and_exits_0(self):
+        """AC-25, the wiring."""
+        data = hook_input('echo x > f')
+        del data['agent_id']
+        self.assertEqual(self.run_check(json.dumps(data)), (0, '', ''))
+
+    def test_input_that_is_not_json_prints_nothing_and_exits_0(self):
+        """AC-27, the input-parse path."""
+        self.assertEqual(self.run_check('not json {'), (0, '', ''))

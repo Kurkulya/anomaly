@@ -10,6 +10,9 @@
               a missing line, a bad Status:, a bad Model:, a blocker with no file or in a cycle, a path:NN
               anchor); a ticket over 5 KB only warns. Prints as `stories` does
               (`slice check passed`).
+  subagent-bash  the PreToolUse hook check (ADR-0022): reads the hook JSON on standard input and
+              prints a deny when a subagent's Bash command writes a file through the shell; exit 0
+              always, and no output for anything else (it fails open)
 
 `stories` prints each error as one line, `<file>:<line>: <problem> (<allowed shape>)`, then each
 warning as `warning: <file>: ...`; it exits 1 on any error, 0 otherwise (clean prints one
@@ -33,7 +36,9 @@ only the edits after the red commit it was written for.
 """
 import argparse
 import glob
+import json
 import re
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import files, gitrepo, paths, ports, ticket
@@ -606,6 +611,272 @@ def slice(folder, key_line=KEY_LINE_CORE):
     return errors, warnings
 
 
+# ---------- subagent-bash ----------
+
+SUBAGENT_BASH_EXEMPT = 'anomaly:survey'   # its brief allows shell writes (ADR-0022)
+SHELL_OPERATOR_CHARS = ';&|<>()`'
+SHELL_OPERATOR = re.compile(r'&>>|&>|>>|>\||>&|<<<|<<|<&|&&|\|\||\|&|.')
+FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
+INPUT_REDIRECTS = frozenset({'<', '<&', '<<<'})
+SHELL_KEYWORDS = frozenset({'!', '{', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'})
+# wrapper -> (its short options, its long options) that take the next word as their value. The long ones are
+# those shown with a required `--name=VALUE` or `--name <VALUE>` (getopt and clap accept the value as the next
+# word); an optional `--name[=VALUE]` takes it attached only and is left out. Sources, as read on one machine:
+# `env`, `nice` and `timeout` from `--help` of uutils coreutils 0.8.0; `xargs` from `--help` of GNU findutils
+# 4.10.0; `time` from `/usr/bin/time --help` (GNU Time); `sudo` from the sudo(8) man page of sudo 1.9 (the local
+# `sudo --help` is sudo-rs and lists fewer options). `command`, `exec` and `nohup` have no long options.
+SHELL_WRAPPERS = {
+    'command': ('', ()), 'exec': ('a', ()), 'nohup': ('', ()),
+    'env': ('uCSfa', ('chdir', 'file', 'unset', 'split-string', 'argv0')),
+    'nice': ('n', ('adjustment',)),
+    'sudo': ('ughpCDRTU', ('chdir', 'chroot', 'close-from', 'command-timeout', 'group', 'host', 'other-user',
+                           'prompt', 'user')),
+    'time': ('fo', ('format', 'output')),
+    'timeout': ('sk', ('signal', 'kill-after')),
+    'xargs': ('nILPsdEaJ', ('arg-file', 'delimiter', 'max-args', 'max-chars', 'max-lines', 'max-procs',
+                            'process-slot-var')),
+}
+COMMAND_LOOKUP = re.compile(r'-p*[vV][pvV]*')   # the options of `command` that look a name up
+ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
+SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
+NO_FILE_TARGETS = ('-', '/dev/null')
+SUBAGENT_BASH_REASON = ('A subagent writes files with the Write and Edit tools, not through the shell ({what}). '
+                        'Use Write to create or replace a file and Edit to change one.')
+
+
+def backtick_end(text, index):
+    """The index of the backtick that closes a backtick body starting at `index`, or len(text)."""
+    while index < len(text) and text[index] != '`':
+        index += 2 if text[index] == '\\' else 1
+    return min(index, len(text))
+
+
+def substitution_end(text, index):
+    """The index of the `)` that closes a `$(` whose body starts at `index`, or len(text). A quoted `)`
+    does not count, and a `"` inside the body opens a double-quoted string of its own."""
+    depth = 1
+    while index < len(text):
+        char = text[index]
+        if char == '\\':
+            index += 1
+        elif char == "'":
+            index = text.find("'", index + 1)
+            if index < 0:
+                return len(text)
+        elif char == '"':
+            index = double_quote_end(text, index + 1)
+        elif char in '()':
+            depth += 1 if char == '(' else -1
+            if depth == 0:
+                return index
+        index += 1
+    return len(text)
+
+
+def double_quote_end(text, index):
+    """The index of the `"` that closes a double-quoted string whose text starts at `index`, or len(text).
+    A `"` inside a `$(...)` or backticks of the string does not close it."""
+    while index < len(text) and text[index] != '"':
+        if text[index] == '\\':
+            index += 2
+        elif text.startswith('$(', index):
+            index = substitution_end(text, index + 2) + 1
+        elif text[index] == '`':
+            index = backtick_end(text, index + 1) + 1
+        else:
+            index += 1
+    return min(index, len(text))
+
+
+def command_substitutions(text):
+    """The bodies of the `$(...)` and backtick substitutions in the text of a double-quoted string: they run
+    even inside the quotes. An unclosed one runs to the end of the text."""
+    bodies, index = [], 0
+    while index < len(text):
+        if text[index] == '\\':
+            index += 2
+        elif text.startswith('$(', index):
+            end = substitution_end(text, index + 2)
+            bodies.append(text[index + 2:end])
+            index = end + 1
+        elif text[index] == '`':
+            end = backtick_end(text, index + 1)
+            bodies.append(text[index + 1:end])
+            index = end + 1
+        else:
+            index += 1
+    return bodies
+
+
+def shell_tokens(command):
+    """The `(kind, text)` tokens of a shell line: `('word', text)` with its quotes resolved, `('op', text)`
+    for an unquoted operator (`;`, `|`, `>>`, `<<`, ...) or a newline, and `('sub', text)` after a word for
+    the body of a command substitution inside its double quotes. A `>` or `<<` inside quotes stays
+    part of a word. `$'...'` takes backslash escapes. An unclosed quote ends the stream: what came before
+    it still counts, so a heredoc whose body holds an apostrophe is still seen. A `#` that starts a word
+    is a comment."""
+    tokens, word, index = [], [], 0   # `word` holds the parts of the word being read; it is empty between words
+    started = False                   # a word is open (it may still be empty: `""`)
+    substitutions = []                # the command substitutions found in the double quotes of that word
+
+    def end_word():
+        nonlocal started
+        if started:
+            tokens.append(('word', ''.join(word)))
+            tokens.extend(('sub', body) for body in substitutions)
+            word.clear()
+            substitutions.clear()
+            started = False
+
+    while index < len(command):
+        char = command[index]
+        ansi = command.startswith("$'", index)
+        if char in '\'"' or ansi:
+            quote, start = command[index + ansi], index + 1 + ansi
+            escapes = quote == '"' or ansi   # a backslash escapes the next character
+            end = double_quote_end(command, start) if quote == '"' else start
+            while end < len(command) and command[end] != quote:
+                end += 2 if escapes and command[end] == '\\' else 1
+            if end >= len(command):
+                end_word()
+                return tokens
+            body = command[start:end]
+            word.append(re.sub(r'\\(.)', r'\1', body) if escapes else body)
+            if quote == '"':
+                substitutions.extend(command_substitutions(body))
+            started = True
+            index = end + 1
+            continue
+        index += 1
+        if char == '\\':
+            word.append('' if command[index:index + 1] == '\n' else command[index:index + 1])
+            started = True
+            index += 1
+        elif char == '#' and not started:
+            end = command.find('\n', index)
+            index = len(command) if end < 0 else end
+        elif char in ' \t\r\n' or char in SHELL_OPERATOR_CHARS:
+            end_word()
+            if char == '\n':
+                tokens.append(('op', char))
+            elif char in SHELL_OPERATOR_CHARS:
+                end = index - 1
+                while end < len(command) and command[end] in SHELL_OPERATOR_CHARS:
+                    end += 1
+                tokens.extend(('op', op) for op in SHELL_OPERATOR.findall(command[index - 1:end]))
+                index = end
+        else:
+            word.append(char)
+            started = True
+    end_word()
+    return tokens
+
+
+def command_words(words):
+    """The words of a simple command from its name on: the leading shell keywords (`do`, `then`, `!`, `{`),
+    assignments and wrapper commands (`sudo -u root`, `nice -n 10`, `timeout 5`) are dropped, a wrapper
+    with its options and the option values listed in SHELL_WRAPPERS."""
+    index = 0
+    while index < len(words):
+        word = words[index]
+        index += 1
+        if word in SHELL_WRAPPERS:
+            if word == 'command' and index < len(words) and COMMAND_LOOKUP.fullmatch(words[index]):
+                return []   # `command -v tee` looks the name up and runs nothing
+            short, long = SHELL_WRAPPERS[word]
+            while index < len(words) and words[index].startswith('-'):
+                option = words[index]
+                takes_next = option[2:] in long if option.startswith('--') else len(option) == 2 and option[1] in short
+                index += 2 if takes_next else 1
+            index += word == 'timeout'   # its duration
+        elif not (word in SHELL_KEYWORDS or ENV_ASSIGNMENT.match(word)):
+            return words[index - 1:]
+    return []
+
+
+def writes_output(args, flag, long_option):
+    """True when `args` of curl or wget name an output file: `-<flag>` (also in a bundle such as `-qO`;
+    the first `flag` letter is the option, what follows it is its value) or `long_option`, with a target other than `-` or /dev/null, attached (`-ofile`, `--output=file`)
+    or the next argument."""
+    for index, arg in enumerate(args):
+        found = (re.fullmatch(rf'-[A-Za-z]*?{flag}(.*)', arg, re.DOTALL)
+                 or re.fullmatch(rf'{long_option}(?:=(.*))?', arg, re.DOTALL))
+        if found:
+            target = found.group(1) or (args[index + 1] if index + 1 < len(args) else '-')
+            if target not in NO_FILE_TARGETS:
+                return True
+    return False
+
+
+def segment_write(words):
+    """What one simple command (its words) writes through the shell, as a short name, or None."""
+    words = command_words(words)
+    if not words:
+        return None
+    name, args = PurePosixPath(words[0]).name, words[1:]
+    if name == 'tee':
+        return 'tee'
+    if name == 'sed' and any(SED_IN_PLACE.match(arg) for arg in args):
+        return 'sed -i'
+    if name == 'curl' and writes_output(args, 'o', '--output'):
+        return 'curl -o'
+    if name == 'wget' and writes_output(args, 'O', '--output-document'):
+        return 'wget -O'
+    return None
+
+
+def shell_write(command):
+    """What in `command` writes a file through the shell, as a short name, or None: a heredoc `<<`, a `>`,
+    `>>`, `>|`, `&>` or `>&` to anything but /dev/null (or, for `>&`, a file descriptor), `tee`, `sed -i`,
+    `curl -o`, `wget -O`. Only unquoted text counts; a `<<<` here-string and inline code are not looked into."""
+    tokens, segment, skip = shell_tokens(command), [], False
+    for index, (kind, text) in enumerate(tokens):
+        if kind == 'word':
+            if not skip:
+                segment.append(text)
+            skip = False
+            continue
+        if kind == 'sub':
+            found = shell_write(text)
+            if found:
+                return found
+            continue
+        skip = False
+        following = tokens[index + 1] if index + 1 < len(tokens) and tokens[index + 1][0] == 'word' else None
+        if text == '<<':
+            return 'a heredoc'
+        if text in FILE_REDIRECTS:
+            if following and following[1] != '/dev/null':
+                return f'a {text} redirect to a file'
+            skip = True
+        elif text == '>&':
+            if following and not re.fullmatch(r'\d+|-|/dev/null', following[1]):
+                return 'a >& redirect to a file'
+            skip = True
+        elif text in INPUT_REDIRECTS:
+            skip = True
+        else:   # ;  &  |  (  )  newline ...: the simple command ends here
+            found = segment_write(segment)
+            if found:
+                return found
+            segment = []
+    return segment_write(segment)
+
+
+def subagent_bash(data):
+    """The deny for a subagent's Bash call (the parsed PreToolUse hook input) that writes a file through the
+    shell, or None to allow it. The main window has no `agent_id` and returns before the command is read."""
+    if not isinstance(data, dict) or not data.get('agent_id') or data.get('agent_type') == SUBAGENT_BASH_EXEMPT:
+        return None
+    tool_input = data.get('tool_input')
+    command = tool_input.get('command') if isinstance(tool_input, dict) else None
+    found = shell_write(command) if isinstance(command, str) else None
+    if not found:
+        return None
+    return {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny',
+                                   'permissionDecisionReason': SUBAGENT_BASH_REASON.format(what=found)}}
+
+
 # ---------- the command line ----------
 
 def register(commands, common):
@@ -672,6 +943,18 @@ def register(commands, common):
                      'not there) is one anomaly: line and exit 2.'))
     check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
     check_slice.set_defaults(handler=run_slice)
+    actions.add_parser(
+        'subagent-bash', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help='the PreToolUse hook: deny a subagent\'s Bash command that writes a file (reads the hook JSON on stdin)',
+        description=('Read the PreToolUse hook JSON on standard input. For a subagent (the input has agent_id) other\n'
+                     'than anomaly:survey, print a deny that names Write and Edit when tool_input.command holds a\n'
+                     'heredoc, sed -i, tee, a >, >>, >| or &> redirect to a file, curl -o or wget -O; 2>&1,\n'
+                     '>/dev/null, a stream copy such as >&2, a here-string, quoted text, inline code, pipes, and\n'
+                     'curl -o or wget -O with the target - or /dev/null are allowed. Anything else prints nothing.\n'
+                     'Always exit 0: input that is not JSON, no tool_input.command and any error are an allow. An\n'
+                     'unclosed quote ends the scan but a write before it still counts (echo x > f \'oops is denied,\n'
+                     'echo "a > b is allowed).'
+                     )).set_defaults(handler=run_subagent_bash)
 
 
 def print_check(word, errors, warnings, folder):
@@ -695,6 +978,16 @@ def run_stories(args, environ):
 def run_slice(args, environ):
     key_line = ports.key_line(paths.resolve_home(args.home, environ))
     return print_check('slice', *slice(args.folder, key_line), args.folder)
+
+
+def run_subagent_bash(args, environ):
+    try:
+        verdict = subagent_bash(json.loads(sys.stdin.read()))
+    except Exception:   # fail open on any error: the check never blocks a session on its own failure (ADR-0022)
+        return 0
+    if verdict:
+        print(json.dumps(verdict))
+    return 0
 
 
 def run_pre_merge(args, environ):
