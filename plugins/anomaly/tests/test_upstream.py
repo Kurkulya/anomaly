@@ -221,6 +221,17 @@ class SecondRunTest(UpstreamCase):
         self.assertEqual(self.gh.calls('comment'), [])
         self.assert_logged(ISSUE_NUMBER)
 
+    def test_a_report_already_logged_upstream_refuses_a_second_comment_or_create_and_sends_and_writes_nothing(self):
+        """L1: an `upstream ` line in the Addenda log means the report went once."""
+        self.run_ok('--comment', '12')
+        sent = len(self.gh.records)
+        before = self.tree()
+        for flags in (('--comment', '12'), ('--create',)):
+            with self.subTest(flags=flags):
+                assert_cli_error(self, self.run_defect(*flags), 'already sent upstream')
+                self.assertEqual(len(self.gh.records), sent)
+                self.assertEqual(self.tree(), before)
+
 
 class RefusalTest(UpstreamCase):
     def test_text_that_fails_check_text_or_holds_a_profile_marker_or_a_repo_layer_name_is_refused_and_no_file_is_written(self):

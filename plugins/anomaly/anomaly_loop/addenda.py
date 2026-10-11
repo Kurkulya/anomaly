@@ -109,6 +109,14 @@ def log_line(anomaly, line):
     anomaly.sections.append((LOG_HEADING, f'- {line}'))
 
 
+def log_lines(anomaly):
+    """The lines of the anomaly's `## Addenda log` without their `- `; [] when it has none."""
+    for name, content in anomaly.sections:
+        if name.lower() == LOG_HEADING.lower():
+            return [line[2:].strip() for line in content.splitlines() if line.startswith('- ')]
+    return []
+
+
 def has_verdict(experiment):
     """True when the experiment has a verdict. A blank or `inconclusive` result is none: the experiment is still
     in flight (ADR-0002), so its line is not dropped yet."""

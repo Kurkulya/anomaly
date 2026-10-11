@@ -24,7 +24,9 @@ prints the search link of the repository's GitHub issues and calls nothing. With
 title names the same target and offers an exact title hit as the +1. A second run acts, each after the user's yes:
 `--comment <number>` adds a +1 comment to that issue, `--create` opens the issue from the file this run writes; either
 appends `upstream <date> · <number>` under the anomaly's `## Addenda log` (addenda.log_line) and commits the anomaly.
-Without either flag nothing is written to GitHub. A failed `gh` call is one `anomaly:` line (exit 2).
+Without either flag nothing is written to GitHub. When the Addenda log already holds an `upstream ` line, `--comment`
+and `--create` are refused (exit 2) with nothing sent or written: a report goes once. A failed `gh` call is one
+`anomaly:` line (exit 2).
 """
 import argparse
 import json
@@ -52,6 +54,7 @@ NO_REPOSITORY = ('no target repository is known: the marketplace record of this 
                  'the profile has no upstream_repo')
 ISSUE_LINK = re.compile(r'.*/issues/(\d+)/?')
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): upstream '
+LOG_WORD = 'upstream '                   # the start of the Addenda log line of a sent report
 
 
 def part_word(context, target):
@@ -193,6 +196,9 @@ def run_defect(args, environ):
                           '(set upstream_tool in the profile)')
     anomalies = addenda.writable(context)
     anomaly = addenda.find(anomalies, args.signature)
+    sent = [line for line in addenda.log_lines(anomaly) if line.startswith(LOG_WORD)]
+    if sent and (args.comment is not None or args.create):
+        raise RecordError(f'{LABEL}: {anomaly.signature} was already sent upstream ({sent[-1]}); a report goes once')
     word = part_word(context, anomaly.target.strip())
     fields = defect_fields(context, anomaly, word)
     check_report(context, fields, environ)
@@ -221,7 +227,7 @@ def run_defect(args, environ):
         issues = ports.call_tool(ADAPTER_ERRORS, tool.list_issues, repo, prefix, environ=environ)
         print('\n'.join(search_lines(repo, issues, title, prefix)))
         return 0
-    addenda.log_line(anomaly, f'upstream {args.today.isoformat()} · {number}')
+    addenda.log_line(anomaly, f'{LOG_WORD}{args.today.isoformat()} · {number}')
     print(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
                                  COMMIT_PREFIX + f'#{number} for {anomaly.signature}'))
     return 0
