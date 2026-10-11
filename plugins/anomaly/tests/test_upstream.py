@@ -18,8 +18,10 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import addenda, records, upstream
-from tests.fixtures import NOW, GitFixture, assert_cli_error, run_cli, write_anomaly_with, write_text
+from anomaly_loop import addenda, records, upstream, verdict
+from tests.fixtures import (NOW, GitFixture, assert_cli_error, context, metrics_row, run_cli, write_anomaly_with,
+                            write_experiment_anomaly, write_metrics_rows, write_text)
+from tests.test_calibrate import spread
 from tests.test_mr import TOOL_FAILURE, FakeGh, PutSetup, finished, record
 
 SIGNATURE = 'slow-check'
@@ -35,6 +37,9 @@ ISSUE_LINK = f'{SEARCH_LINK}/{ISSUE_NUMBER}'
 LOGGED_DAY = NOW.date().isoformat()
 NO_REPO = 'no target repository is known'
 CHECKOUT_LINE = 'a plugin checkout is set: fix it through an MR'
+TUNING_RULE = 'Ask which repo before logging.'
+TUNING_TARGET = 'anomaly:observe'
+FIX_REF = '2026-09-20 · addenda/observe.md'   # fixed_by of the kept addendum: the fix day, then its addenda file
 
 
 class FakeIssueGh(FakeGh):
@@ -379,6 +384,184 @@ class GhFailureTest(UpstreamCase):
             with self.subTest(flags=flags):
                 assert_cli_error(self, self.run_defect(*flags), TOOL_FAILURE)
                 self.assertEqual(self.anomaly_path.read_bytes(), before)
+
+
+class TuningCase(UpstreamCase):
+    """`upstream tuning <signature>` (ticket 06): the anomaly's experiment is fixed by a tagged line in the addenda
+    file of `observe`, with six sessions before the fix and five since in the metrics, so its verdict can be read.
+    The title and the file name of a tuning report are not fixed by the ticket: the tests read the one printed path."""
+
+    def setUp(self):
+        super().setUp()
+        self.addenda_path = addenda.addendum_path(self.home, 'observe')
+        self.stamp = addenda.stamp(self.plugin / 'skills' / 'observe')
+        addenda.append_line(self.addenda_path, TUNING_RULE, SIGNATURE, self.stamp)
+        before = [metrics_row(f'b-{n}', f'2026-09-{10 + n}', active_min=value) for n, value in enumerate(spread(20, 6))]
+        after = [metrics_row(f'a-{n}', f'2026-09-{22 + n}', active_min=value) for n, value in enumerate(spread(10, 5))]
+        write_metrics_rows(self.home, before + after)
+        write_anomaly_with(self.home, 'backlog-start', kind='win', proposed_fix='', category='automated-checks',
+                           sightings=['2026-08-01 · demo · seed · the backlog began'])
+        self.write_experiment()
+
+    def write_experiment(self, result='keep', metric='active minutes'):
+        write_experiment_anomaly(self.home, SIGNATURE, target=TUNING_TARGET, metric=metric, guard='rework sightings',
+                                 fixed_by=FIX_REF, check_by='2026-10-01', result=result, status='fixed',
+                                 summary=SUMMARY)
+
+    def run_tuning(self, *flags, signature=SIGNATURE):
+        return run_cli('upstream', 'tuning', signature, '--home', str(self.home), '--plugin-root', str(self.plugin),
+                       '--user-config', str(self.config), *flags)
+
+    def run_ok_tuning(self, *flags):
+        code, out, err = self.run_tuning(*flags)
+        self.assertEqual(code, 0, (out, err))
+        return out
+
+    def report_text(self, output):
+        """The text of the one file whose path the output prints."""
+        paths = {Path(word) for word in output.split() if Path(word).is_file()}
+        self.assertEqual(len(paths), 1, output)
+        return paths.pop().read_text(encoding='utf-8')
+
+    def reading_lines(self):
+        """The primary and the guard reading as `calibrate verify` prints them (verdict.reading_line)."""
+        found = verdict.verdict(context(self.home), records.read_anomaly(self.anomaly_path))
+        return [verdict.reading_line(reading, role) for reading, role in zip(found.readings, ('primary', 'guard'))]
+
+    def assert_refused(self, *fragments):
+        """The refusal contract of a report that must not go: exit 2, one `anomaly:` line, nothing sent or written."""
+        before = self.tree()
+        assert_cli_error(self, self.run_tuning(), *fragments)
+        self.assertEqual(self.tree(), before)
+        self.assertEqual(self.gh.records, [])
+
+
+class TuningRefusalTest(TuningCase):
+    def test_a_plugin_checkout_refuses_upstream_tuning_with_the_mr_line_and_exits_1(self):
+        """AC-24, the `upstream tuning` half (D-35)."""
+        checkout = GitFixture(self.root / 'checkout')
+        checkout.write('README.md', 'a plugin checkout\n')
+        checkout.commit(['README.md'], 'chore: base', date(2026, 10, 1))
+        self.write_profile('upstream_tool: gh', f'plugin_repo: {checkout.root}')
+        before = self.tree()
+        code, out, err = self.run_tuning()
+        self.assertEqual(code, 1, (out, err))
+        self.assertIn(CHECKOUT_LINE, out + err)
+        self.assertEqual(self.tree(), before)
+        self.assertEqual(self.gh.records, [])
+
+    def test_a_signature_with_no_line_in_an_addenda_file_is_refused(self):
+        """AC-26: a line of another experiment stays, the line of this signature is gone."""
+        addenda.append_line(self.addenda_path, 'Name the file first.', 'earlier-one', self.stamp)
+        addenda.remove_line(self.addenda_path, SIGNATURE)
+        self.assert_refused(SIGNATURE)
+
+    def test_an_experiment_without_the_verdict_keep_or_unproven_is_refused(self):
+        """AC-26 (D-11): a revert, a result still `inconclusive` and no result yet are not kept."""
+        for result in ('revert', 'inconclusive', ''):
+            with self.subTest(result=result):
+                self.write_experiment(result=result)
+                self.assert_refused(SIGNATURE)
+
+    def test_a_reopened_anomaly_is_refused_with_its_signature_and_why(self):
+        """Ticket 06 Amended (review): a status other than fixed means the fix did not hold."""
+        write_experiment_anomaly(self.home, SIGNATURE, target=TUNING_TARGET, metric='active minutes',
+                                 guard='rework sightings', fixed_by=FIX_REF, check_by='2026-10-01', result='keep',
+                                 status='reopened', summary=SUMMARY)
+        self.assert_refused(SIGNATURE, 'reopened')
+
+    def test_a_rule_that_names_a_profile_marker_is_refused(self):
+        """D-3: the rule is text from outside the CLI, checked as the symptom of a defect report is."""
+        self.write_profile('mr_tool: acme-kit:open-mr')
+        addenda.remove_line(self.addenda_path, SIGNATURE)
+        addenda.append_line(self.addenda_path, 'Run acme-kit before logging.', SIGNATURE, self.stamp)
+        self.assert_refused('Rule', 'acme-kit')
+
+    def test_a_reading_that_names_a_profile_marker_is_refused(self):
+        """A per-dispatch metric carries an agent name into the readings, so they get the outside-text check."""
+        self.write_profile('mr_tool: acme-kit:open-mr')
+        self.write_experiment(metric='model-weighted tokens per dispatch acme-kit')
+        self.assert_refused(upstream.READING_FIELD, 'acme-kit')
+
+
+class TuningTextTest(TuningCase):
+    def test_keep_and_unproven_are_accepted_and_the_text_names_the_verdict_word(self):
+        """AC-26, AC-27 (D-11): unproven is kept, not proven, and the report says which."""
+        for result, metric in (('keep', 'active minutes'), ('unproven', 'sightings since the fix')):
+            with self.subTest(result=result):
+                self.write_experiment(result=result, metric=metric)
+                self.assertIn(result, self.report_text(self.run_ok_tuning()))
+
+    def test_the_text_holds_the_line_its_target_the_metric_before_and_after_the_guard_and_the_sessions_on_each_side(self):
+        """AC-27 (D-26): the readings are those of `calibrate verify` (n= is the sessions on each side), titled with
+        the day they were read, after the recorded reason (Amended 2026-10-11, ticket 06 review)."""
+        anomaly = records.read_anomaly(self.anomaly_path)
+        anomaly.experiment.reason = 'active minutes fell and the guard held'
+        records.write_anomaly(self.home, anomaly)
+        text = self.report_text(self.run_ok_tuning())
+        for fact in (TUNING_RULE, TUNING_TARGET, SIGNATURE, 'keep', '- Reason: active minutes fell and the guard held',
+                     f'- Readings as of {LOGGED_DAY}', *self.reading_lines()):
+            self.assertIn(fact, text)
+
+    def test_a_repo_layer_name_that_a_reading_line_holds_does_not_refuse_the_report(self):
+        """Amended 2026-10-11 (code delta review): only the agent of a per-dispatch reading is outside text, so a
+        repo named like a word of every reading line (`since`) refuses nothing; calibrate plan asks the same
+        checked_report, so its offer stands too."""
+        write_text(self.home / 'repos' / 'since.md', '---\nverify: run-all\n---\n')
+        lines = self.reading_lines()
+        self.assertTrue(lines and all('since' in line for line in lines), lines)
+        self.assertIn(lines[0], self.report_text(self.run_ok_tuning()))
+
+
+class TuningGhTest(TuningCase):
+    """AC-28: search, +1 and create are the tail that `upstream defect` runs (AC-19 to AC-25), so one case each."""
+
+    def setUp(self):
+        super().setUp()
+        self.use_gh()
+        self.before = records.read_anomaly(self.anomaly_path)
+
+    def assert_logged(self, number):
+        addenda.log_line(self.before, f'upstream {LOGGED_DAY} · {number}')
+        self.assertEqual(records.read_anomaly(self.anomaly_path).sections, self.before.sections)
+
+    def test_without_a_flag_the_open_issues_are_listed_and_nothing_is_sent_or_logged(self):
+        before = self.anomaly_path.read_bytes()
+        self.gh.issues = [(12, title_of('observe', 'another-signature'))]
+        self.run_ok_tuning()
+        self.assertEqual(len(self.gh.records), 1, self.gh.records)
+        self.assertIn(REPO, self.gh.records[0].text)
+        self.assertEqual(self.anomaly_path.read_bytes(), before)
+
+    def test_comment_adds_a_plus_one_comment_to_that_issue_and_logs_the_number(self):
+        self.run_ok_tuning('--comment', '12')
+        comments = self.gh.calls('comment')
+        self.assertEqual(len(comments), 1, self.gh.records)
+        self.assertIn('12', comments[0].args)
+        self.assertIn(REPO, comments[0].text)
+        self.assertIn('+1', comments[0].text)
+        self.assertEqual(self.gh.calls('create'), [])
+        self.assert_logged(12)
+
+    def test_create_opens_the_issue_from_the_report_and_logs_the_number_of_the_new_issue(self):
+        self.run_ok_tuning('--create')
+        creates = self.gh.calls('create')
+        self.assertEqual(len(creates), 1, self.gh.records)
+        self.assertIn(REPO, creates[0].text)
+        self.assertIn(SIGNATURE, creates[0].text)
+        self.assertIn(TUNING_RULE, creates[0].text)
+        self.assertEqual(self.gh.calls('comment'), [])
+        self.assert_logged(ISSUE_NUMBER)
+
+    def test_a_report_already_logged_upstream_refuses_a_second_comment_or_create_and_sends_and_writes_nothing(self):
+        self.run_ok_tuning('--comment', '12')
+        sent = len(self.gh.records)
+        before = self.tree()
+        for flags in (('--comment', '12'), ('--create',)):
+            with self.subTest(flags=flags):
+                assert_cli_error(self, self.run_tuning(*flags), 'already sent upstream')
+                self.assertEqual(len(self.gh.records), sent)
+                self.assertEqual(self.tree(), before)
 
 
 class SearchLinesTest(unittest.TestCase):

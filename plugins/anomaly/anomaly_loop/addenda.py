@@ -6,7 +6,8 @@ the text the line adds to: the sorted relative paths and bytes of every file in 
 bytes of the one agent file, so it changes only when that skill or agent changes.
 
 Which part of the plugin a target is (plugin_part) lives here too, with the anomaly copies a writer
-changes (writable, find): calibrate and upstream both read them, and upstream does not import calibrate.
+changes (writable, find) and the addenda file an anomaly's fix names (addendum_file): calibrate and
+upstream both read them, and upstream does not import calibrate.
 """
 import copy
 import hashlib
@@ -15,7 +16,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from . import files, flags, privacy
-from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, PLUGIN_AGENTS_DIR, SKILL_AGENTS
+from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, FIXED_BY_SEPARATOR, PLUGIN_AGENTS_DIR, SKILL_AGENTS
 from .files import RecordError
 from .records import SLUG
 
@@ -24,8 +25,9 @@ NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
 TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
 TAG_SHAPE = f'{TAG_OPEN}<signature>{TAG_SEPARATOR}<stamp>{TAG_CLOSE}'
-TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?P<signature>{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
-                    rf'(?P<stamp>[0-9a-f]{{{STAMP_CHARS}}}){re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
+TAGGED = re.compile(   # a rule, then its tag, as one line
+    rf'(?P<rule>.*\S) {re.escape(TAG_OPEN)}(?P<signature>{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
+    rf'(?P<stamp>[0-9a-f]{{{STAMP_CHARS}}}){re.escape(TAG_CLOSE)}')
 HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
 HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
 LOG_HEADING = 'Addenda log'   # the anomaly section that records what happened to its addenda line
@@ -128,6 +130,17 @@ def addenda_files(home):
     folder = Path(home) / ADDENDA_DIR
     return ([(path, path.stem, False) for path in sorted(folder.glob('*.md'))]
             + [(path, path.stem, True) for path in sorted((folder / AGENTS).glob('*.md'))])
+
+
+def home_relative(home, path):
+    """A path inside home as the plan's fix-home mark and a `fixed_by` ref name it: relative, with `/`."""
+    return Path(path).relative_to(Path(home)).as_posix()
+
+
+def addendum_file(home, anomaly):
+    """The addenda file in home that the anomaly's fix names (`fixed_by` = `<date> · addenda/...`), or None."""
+    ref = anomaly.fixed_by.partition(FIXED_BY_SEPARATOR)[2].strip()
+    return next((path for path, _, _ in addenda_files(home) if home_relative(home, path) == ref), None)
 
 
 def not_read(path, error):

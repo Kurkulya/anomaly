@@ -1848,7 +1848,7 @@ python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit
 python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py pkg-facts <ecosystem>:<name>|<name>... [--json] [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py terms-grep --terms '<words>' <url>... [--context <n>] [--word]
-python plugins/anomaly/scripts/anomaly.py upstream  defect <signature> [--comment <number> | --create] [--user-config <dir>] [--plugin-root <dir>]
+python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> [--comment <number> | --create] [--user-config <dir>] [--plugin-root <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
