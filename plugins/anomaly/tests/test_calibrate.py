@@ -717,11 +717,14 @@ class AddendumRemovalTest(CalibrateCase):
         self.assertEqual((code, err), (0, ''))
         self.assertEqual(self.anomaly('slow-check').experiment.declared_on, TODAY.isoformat())
         with self.subTest('inconclusive'):   # no verdict, so drop would refuse too: the error points to verify
-            seed_addenda_file(self.home, self.plugin, 'research', 'unjudged')
+            path, _ = seed_addenda_file(self.home, self.plugin, 'research', 'unjudged')
             self.experiment('unjudged', 'research', result='inconclusive', status='reopened')
+            file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'unjudged').read_bytes()
             result = self.cli('declare', '--signature', 'unjudged', *declare[3:])
             assert_cli_error(self, result, 'calibrate verify')
             self.assertNotIn('calibrate drop', result[2])
+            self.assertEqual(path.read_bytes(), file_before)
+            self.assertEqual(records.anomaly_path(self.home, 'unjudged').read_bytes(), record_before)
 
     def test_without_git_a_revert_and_a_drop_say_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
         seed_addenda_file(self.home, self.plugin, 'observe', 'reverted-one')
