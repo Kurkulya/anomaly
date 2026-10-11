@@ -1741,11 +1741,13 @@ class ConductSkillTest(unittest.TestCase):
         self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
         self.assertLessEqual(self.PARALLEL.stat().st_size, self.PARALLEL_MAX_BYTES)
 
-    def test_the_finish_fix_branch_step_sends_a_warm_delta_round_to_every_reviewer_whose_finding_was_fixed(self):
-        """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge."""
+    def test_the_finish_fix_branch_step_calls_a_warm_review_delta_round_on_the_merge_before_its_trace_tags(self):
+        """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge, a call of
+        the review skill's delta mode (so its tally, worklog and sum run), placed before the step's trace tags."""
         step = ' '.join(next(line for line in self.text().splitlines() if 'One fix branch off the tip' in line).split())
-        after_merge = step.split('Merge `--no-ff`', 1)[-1]
-        for token in ('delta round', 'whose finding was fixed', 'warm'):
+        self.assertTrue(step.endswith(']'), 'the step does not end with its trace tags')
+        after_merge = step.split('Merge `--no-ff`', 1)[-1].split('[O38', 1)[0]
+        for token in ('`anomaly:review` delta', '`<pre-merge tip>..<merge>`', 'warm', '"last review: yes"'):
             with self.subTest(token=token):
                 self.assertIn(token, after_merge)
 
