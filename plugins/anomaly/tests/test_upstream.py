@@ -481,7 +481,7 @@ class TuningRefusalTest(TuningCase):
         """A per-dispatch metric carries an agent name into the readings, so they get the outside-text check."""
         self.write_profile('mr_tool: acme-kit:open-mr')
         self.write_experiment(metric='model-weighted tokens per dispatch acme-kit')
-        self.assert_refused('acme-kit')
+        self.assert_refused(upstream.READING_FIELD, 'acme-kit')
 
 
 class TuningTextTest(TuningCase):
