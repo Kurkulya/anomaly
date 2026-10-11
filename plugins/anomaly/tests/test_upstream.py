@@ -304,7 +304,7 @@ class RefusalTest(UpstreamCase):
         user = {'USER': 'jdoe'}
         for summary in ('the check fails for owner/name and/or its forks', 'it runs after /compact twice',
                         'it runs /anomaly:review twice',
-                        'see https://x.org/a'):   # a slash inside a word, a slash command or a link is no path
+                        'see https://example.org/a'):   # a slash inside a word, a slash command or a link is no path
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 self.report(self.run_ok(), title_of('observe'))
