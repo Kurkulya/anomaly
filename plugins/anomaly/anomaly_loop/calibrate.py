@@ -140,7 +140,7 @@ def upstream_offer(context, anomaly, action, environ):
     """The offer line `upstream: <action> <signature>` when `upstream <action>` would take the anomaly's report
     (upstream.checked_report, its outside-text check included) and it was not sent yet (upstream.sent_lines); None
     when it is refused or sent. A file the report needs that cannot be read gives a `warning:` line instead, so the
-    plan still prints."""
+    plan still prints; an error that names no file is named by the anomaly's addenda file (addenda.addendum_file)."""
     if upstream.sent_lines(anomaly):
         return None
     try:
@@ -148,8 +148,8 @@ def upstream_offer(context, anomaly, action, environ):
     except RecordError:
         return None
     except OSError as error:
-        return (f'warning: {error.filename}: {addenda.not_read(error.filename, error)}; no {action} offer for '
-                f'{anomaly.signature}')
+        path = error.filename or addenda.addendum_file(context.home, anomaly) or 'a file'
+        return f'warning: {path}: {addenda.not_read(path, error)}; no {action} offer for {anomaly.signature}'
     return f'upstream: {action} {anomaly.signature}'
 
 

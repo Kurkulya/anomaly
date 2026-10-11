@@ -1,3 +1,4 @@
+import contextlib
 import json
 import re
 import tempfile
@@ -948,20 +949,24 @@ class BatchTest(CalibrateCase):
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
 
     def test_an_addenda_file_that_cannot_be_read_prints_a_warning_and_no_offer(self):
-        """A folder where the addenda file should be cannot be read: the plan says so and still prints."""
+        """A folder where the addenda file should be cannot be read: the plan says so and still prints. An error that
+        names no file still names the anomaly's addenda file."""
         self.lay_out_plugin()
         folder = addenda.addendum_path(self.home, 'observe')
         folder.mkdir(parents=True)
         write_experiment_anomaly(self.home, 'unread-one', target='anomaly:observe', metric='active minutes',
                                  guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
                                  check_by='2026-10-25', result='keep', status='fixed')
-        code, out, err = self.cli('plan')
-        self.assertEqual((code, err), (0, ''))
-        self.assertEqual(self.offers(out), [])
-        warnings = [line for line in out.splitlines() if line.startswith('warning: ') and 'unread-one' in line]
-        self.assertEqual(len(warnings), 1, out)
-        self.assertIn(str(folder), warnings[0])
-        self.assertIn('not read', warnings[0])
+        unnamed = mock.patch('anomaly_loop.addenda.read_lines', side_effect=OSError(13, 'Permission denied'))
+        for case, patcher in (('a folder', contextlib.nullcontext()), ('an error that names no file', unnamed)):
+            with self.subTest(case=case), patcher:
+                code, out, err = self.cli('plan')
+                self.assertEqual((code, err), (0, ''))
+                self.assertEqual(self.offers(out), [])
+                warnings = [line for line in out.splitlines() if line.startswith('warning: ') and 'unread-one' in line]
+                self.assertEqual(len(warnings), 1, out)
+                self.assertIn(str(folder), warnings[0])
+                self.assertIn('not read', warnings[0])
 
     def test_with_a_checkout_the_plan_is_what_it_was_before_addenda(self):
         self.checkout()
