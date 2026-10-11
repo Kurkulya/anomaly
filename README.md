@@ -1385,10 +1385,11 @@ The modes, in one line each (the full dispatch table is in
 [SKILL.md](plugins/anomaly/skills/review/SKILL.md)):
 
 - **ticket**: one ticket's diff, code and feature reviewers, security when `risk` matches.
-- **delta**: after a fix round, only the reviewer whose Blocker or High was fixed. After a
-  conflict merge of the integration tip into the ticket branch, one round of `anomaly:code` on
-  `<old tip>..<new tip>`, with the conflicted files named. Each delta or conflict-merge round runs
-  `worklog start` before its dispatch, so its `worklog add --mode delta` line has a start time.
+- **delta**: after any fix round, every reviewer whose finding was fixed; after only Medium, Low or
+  Nit fixes the main window keeps only Blocker and High, a new lower finding is `Open:`, no further
+  round. After a conflict merge of the integration tip into the ticket branch, one `anomaly:code`
+  round on `<old tip>..<new tip>`, with the conflicted files named. Each delta or conflict-merge
+  round runs `worklog start` before its dispatch, so `worklog add --mode delta` has a start time.
 - **cumulative**: the whole branch before the MR, all three reviewers.
 - **combined**: a docs-only diff or the light path, one code reviewer with the feature checklist.
 - **rules**: a rewritten skill checked against its rule ledger by the feature reviewer.
@@ -1411,7 +1412,7 @@ The modes, in one line each (the full dispatch table is in
   read-only.
 - Only when no Blocker or High is open does `ticket reviewed` write `Reviewed: <head sha>`. Each
   round leaves its work-unit line with `worklog add --mode`. Each reviewer, when it is done (after
-  its last delta round, or after its first round when it had no Blocker or High), stores its
+  its last delta round, or after its first round when none of its findings was fixed), stores its
   counts over all its rounds with `lens tally add`, `--revised` always passed; when the caller
   says "last review: yes" (you, `specify`, `slice`, or `conduct` in its cumulative review; `build`
   says "no" and sums itself when its caller said "yes", or when it asks you at its close and you
@@ -1441,7 +1442,7 @@ and keeps the same limits.
 |---|---|---|
 | `anomaly:code` | defects against the repo's written rules and sound design: correctness, resources, performance, contracts, tests, second copies of ledger-owned seams, design smells, new dependencies, suppressed linter or type errors | ticket, delta, cumulative, combined (adds the feature checklist, read at run time from `agents/feature.md`) |
 | `anomaly:feature` | the diff does what its ticket or spec asks and no more: the AC coverage table, scope, visible changes, docs drift, deferral targets, claims against their sources, known items; in cumulative mode a keep, rewrite or delete verdict per characterization test file | ticket, delta, cumulative, rules (loads `skills/review/rules-mode.md`, 2 KB or less, in that mode only) |
-| `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own High was fixed; always in cumulative |
+| `anomaly:security` | exploitable weaknesses and missing controls by OWASP Top 10 2021 category; secrets and database safety in every run | ticket and combined when `risk` matches; delta only when its own finding was fixed; always in cumulative |
 | `anomaly:plan` | a planning artifact before work starts: in `spec` mode every code or tool claim against its `file:line`, commit or probe, every AC testable, every out-of-scope line owned, no open question left; in `tickets` mode ordering, invented paths, hidden dependencies between parallel tickets, sizing, `Restates:` overlap, AC coverage, a `Tests:` level for every AC and the `Model:` line | `spec` (loads `skills/review/plan-spec.md`), `tickets` (loads `skills/review/plan-tickets.md`), each 3 KB or less, in that mode only |
 | `anomaly:docs` | check 4 of the docs audit: commits in the range whose message holds a decision word that no ADR records; check 5: ADR claims (files, functions, flags, behaviours) the code no longer matches | one mode over a range; dispatched by `ship` only when the user asks |
 | `anomaly:facts` | questions about a repository that need inference across lines (a call chain, whether a claim still holds, which callers can pass a value); tools Read, Grep and Glob; model role `explore`; answers in `- <path>:<line> — <fact>` lines (see Facts bench) | one mode: the questions the dispatcher passes |
