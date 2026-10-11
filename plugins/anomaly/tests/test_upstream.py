@@ -731,6 +731,12 @@ class SearchLinesTest(unittest.TestCase):
         self.assertEqual(len([line for line in lines if '+1 offer' in line]), 1)
         self.assertIn(self.other_line(13, long[:120] + '…'), lines)
 
+    def test_the_prefix_test_uses_the_full_printable_title_when_the_prefix_is_over_120_characters(self):
+        """D-4: the prefix test reads the full printable title, not the title cut to 120."""
+        prefix = '[anomaly:' + 'a/' * 60 + 'x.md]'
+        lines = upstream.search_lines(REPO, [(13, prefix + ' other')], prefix + ' sig', prefix)
+        self.assertIn(self.other_line(13, (prefix + ' other')[:120] + '…'), lines)
+
 
 if __name__ == '__main__':
     unittest.main()
