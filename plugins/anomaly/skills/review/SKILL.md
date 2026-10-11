@@ -54,7 +54,7 @@ A docs-only diff (no source, config, script or test file) uses combined mode. [I
 
 ## Delta rounds [R8, R9]
 
-On the caller's request, after every fix round that touches source or a rule trace's SKILL.md (delta row). After only Medium, Low or Nit fixes it reports only Blocker and High; a new lower finding is `Open:`, no further round. A clean agent is done. The fix loop belongs to `build`. On a rule trace ticket, the delta round also reruns the rules pass on the fixed SKILL.md (rules mode has no diff range) while it has an open High. Spec and tickets: the same `anomaly:plan` agent re-checks the lines of `stories.md`, `decisions.md` or the tickets that changed since its report; the caller passes the work-unit folder, not a range. Only a Blocker opens it.
+On the caller's request, after every fix round, docs-only included (delta row). After only Medium, Low or Nit fixes the main window keeps only Blocker and High; a new lower finding is `Open:`, no further round. A clean agent is done. The fix loop belongs to `build`. On a rule trace ticket, the delta round also reruns the rules pass on the fixed SKILL.md (rules mode has no diff range) while it has an open High. Spec and tickets: the same `anomaly:plan` agent re-checks the lines of `stories.md`, `decisions.md` or the tickets that changed since its report; the caller passes the work-unit folder, not a range. Only a Blocker opens it.
 
 A conflict-merge round (the caller merged the integration tip into the ticket branch): `anomaly:code` warm by SendMessage on `<old tip>..<new tip>`, naming the conflicted files, whose merge resolution it reviews; the tip-merge rule does not apply.
 

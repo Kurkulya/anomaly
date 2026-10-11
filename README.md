@@ -1386,10 +1386,10 @@ The modes, in one line each (the full dispatch table is in
 
 - **ticket**: one ticket's diff, code and feature reviewers, security when `risk` matches.
 - **delta**: after any fix round, every reviewer whose finding was fixed; after only Medium, Low or
-  Nit fixes it reports only Blocker and High, a new lower finding is `Open:`, no further round. After a
-  conflict merge of the integration tip into the ticket branch, one round of `anomaly:code` on
-  `<old tip>..<new tip>`, with the conflicted files named. Each delta or conflict-merge round runs
-  `worklog start` before its dispatch, so its `worklog add --mode delta` line has a start time.
+  Nit fixes the main window keeps only Blocker and High, a new lower finding is `Open:`, no further
+  round. After a conflict merge of the integration tip into the ticket branch, one `anomaly:code`
+  round on `<old tip>..<new tip>`, with the conflicted files named. Each delta or conflict-merge
+  round runs `worklog start` before its dispatch, so `worklog add --mode delta` has a start time.
 - **cumulative**: the whole branch before the MR, all three reviewers.
 - **combined**: a docs-only diff or the light path, one code reviewer with the feature checklist.
 - **rules**: a rewritten skill checked against its rule ledger by the feature reviewer.
