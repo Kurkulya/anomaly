@@ -1,4 +1,4 @@
-"""upstream: a report from an installed copy to the plugin's owner, as a GitHub issue (ADR-0022).
+"""upstream: a report from an installed copy to the plugin's owner, as a GitHub issue (ADR-0024).
 
   upstream defect <signature> [--comment <number> | --create] [--plugin-root <dir>] [--user-config <dir>]
 
@@ -23,10 +23,10 @@ check_report: each field, and the agent name of a per-dispatch reading, passes p
 profile marker, scans.profile_markers, and no repo-layer name, scans.repo_layer_names; a hit refuses with no file
 written and nothing redacted), writes it to `<home>/upstream/<signature>.defect.md` or
 `<home>/upstream/<signature>.tuning.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
-repo-layer check reads only the text from outside the CLI (the symptom, the rule, the reason, the agent name of a
-per-dispatch reading, verdict.per_dispatch_agent, the installed version folder and the signature), not the title,
-target, verdict word, readings heading and the rest of each readings line, which the CLI composes; that text is also
-refused when it holds a local path or the OS user name.
+repo-layer check (in any case) reads only the text from outside the CLI (the symptom, the rule, the reason, the
+agent name of a per-dispatch reading, verdict.per_dispatch_agent, the installed version folder and the signature),
+not the title, target, verdict word, readings heading and the rest of each readings line, which the CLI composes;
+that text is also refused when it holds a local path or the OS user name.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
@@ -66,8 +66,13 @@ KEPT = ('keep', 'unproven')              # the experiment results a tuning repor
 VERSION_FIELD = 'Installed version'
 READING_FIELD = 'Reading'                # the agent name of a per-dispatch reading, as check_report reads it
 OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', READING_FIELD, VERSION_FIELD, 'Signature')   # see check_report
-LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
+LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]'
+                        r'|(?i:\b(?:file|smb|nfs|afp|cifs)://)|(?<![\w\\])\\\\[^\s\\]+\\[^\s\\]'
+                        r'|(?<![\w:/])//[^\s/]+/[^\s/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
+GENERIC_USERS = frozenset({'root', 'user', 'admin', 'ubuntu', 'runner', 'vscode', 'codespace', 'node', 'docker',
+                           'ec2-user', 'vagrant'})   # account names that name no person; see user_names
+USER_NAME_MIN = 3                        # a shorter user name is not checked; see user_names
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
 NO_REPOSITORY = ('no target repository is known: the marketplace record of this copy names no GitHub source and '
                  'the profile has no upstream_repo')
@@ -91,8 +96,11 @@ def part_word(context, target, label=LABEL):
 
 
 def user_names(environ):
-    """Patterns of the OS user name (USER_NAME_KEYS in `environ`) as a whole word in any case; none when unset."""
-    names = {environ.get(key, '').strip() for key in USER_NAME_KEYS} - {''}
+    """Patterns of the OS user name (USER_NAME_KEYS in `environ`) as a whole word in any case; none when unset.
+    A generic account name (GENERIC_USERS, in any case) or a name under USER_NAME_MIN characters gives none: it
+    names no person, and as a common word (`root cause`) it would refuse plain text."""
+    names = {environ.get(key, '').strip() for key in USER_NAME_KEYS}
+    names = {name for name in names if len(name) >= USER_NAME_MIN and name.lower() not in GENERIC_USERS}
     return [re.compile(rf'(?<!\w){re.escape(name)}(?!\w)', re.I) for name in sorted(names)]
 
 
@@ -102,17 +110,21 @@ def check_report(context, fields, environ, label=LABEL):
     agent name of a per-dispatch reading, the installed version folder and the signature, not the title and target
     the CLI composes; an installed version that is a commit id, privacy.COMMIT_ID, holds no name and is skipped, so
     a short repo-layer name such as `add` cannot match its hex) holds a profile marker (scans.profile_markers) or a
-    repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path (LOCAL_PATH: `/x/y` or `~/` not
-    right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, or a drive `X:\\` or
-    `X:/`; a slash inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash
+    repo-layer name (scans.repo_layer_names) in any case, by scans.marker_hits on the text and the names case-folded
+    (marker_hits itself and the neutrality test stay case-sensitive: plugin files are text the plugin's own
+    author writes, a report holds the user's words), a local path (LOCAL_PATH: `/x/y` or `~/` not right after a
+    letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, a drive `X:\\` or `X:/`, a `file://`,
+    `smb://`, `nfs://`, `afp://` or `cifs://` link in any case, or a UNC path `\\\\host\\share\\...` or `//host/share/...` with no `scheme:` right before it;
+    a slash inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash
     command such as `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
+    folded = {name.casefold(): name for name in names}
     users = user_names(environ)
     for key, value in fields:
         privacy.check_text(label, key, value)
         if key not in OUTSIDE_FIELDS or (key == VERSION_FIELD and privacy.COMMIT_ID.fullmatch(value)):
             continue
-        found = scans.marker_hits(value, names)
+        found = sorted(folded[hit] for hit in scans.marker_hits(value.casefold(), folded))
         if found:
             raise RecordError(f'{label}: {key} names {", ".join(found)}, from the profile or the repo layer in home; '
                               'describe it in your own words')
@@ -240,7 +252,7 @@ def search_link(repo, prefix):
 
 def printable(text):
     """`text` without its non-printable characters (control and escape codes), so a title from GitHub cannot steer
-    the terminal."""
+    the terminal; calibrate refuses an addendum that this would change."""
     return ''.join(character for character in text if character.isprintable())
 
 

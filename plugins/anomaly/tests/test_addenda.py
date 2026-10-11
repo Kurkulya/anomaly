@@ -112,6 +112,10 @@ class AppendTest(AddendaCase):
         self.assertEqual(self.path.read_bytes(), before)
         addenda.append_line(self.path, 'Name the skill in the note.', 'slow', '0a1b2c3d')   # a prefix is another experiment
         self.assertEqual(len(addenda.read_lines(self.path)), 2)
+        quoted = addenda.addendum_path(self.home, 'review')   # the tag start in a line's text, with no valid tag
+        write_text(quoted, 'Quote [exp: slow-check · as written.\n')
+        addenda.append_line(quoted, 'Name the skill in the note.', 'slow-check', '0a1b2c3d')
+        self.assertEqual(len(addenda.read_lines(quoted)), 2)
 
     def test_a_sixth_line_is_refused_naming_the_file_and_the_cap_and_the_file_is_unchanged(self):
         self.assertEqual(constants.ADDENDA_MAX_LINES, 5)

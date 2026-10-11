@@ -268,11 +268,13 @@ class SecondRunTest(UpstreamCase):
 
 class RefusalTest(UpstreamCase):
     def test_text_that_fails_check_text_or_holds_a_profile_marker_or_a_repo_layer_name_is_refused_and_no_file_is_written(self):
-        """AC-22 (D-12): an email address, a marker from the profile, a file name from `<home>/repos`."""
+        """AC-22 (D-12): an email address, a marker from the profile, a file name from `<home>/repos`; a marker or
+        a repo-layer name in any case (D-12 Amended, cumulative review)."""
         write_text(self.home / 'repos' / 'acme-shop.md', '---\nverify: run-all\n---\n')
-        self.write_profile('mr_tool: acme-kit:open-mr')
+        self.write_profile('mr_tool: acme-kit:open-mr', 'reviewers: acme-bot')
         self.report(self.run_ok(), title_of('observe'))   # a clean text passes the same check and is written
-        for summary in ('write to jane.doe@example.com', 'the acme-kit:open-mr call fails', 'it fails in acme-shop.md'):
+        for summary in ('write to jane.doe@example.com', 'the acme-kit:open-mr call fails', 'it fails in acme-shop.md',
+                        'Acme-Bot skips the check', 'it fails in ACME-SHOP.md'):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 before = self.tree()
@@ -313,9 +315,14 @@ class RefusalTest(UpstreamCase):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 self.report(self.run_ok(), title_of('observe'))
+        self.write_anomaly(summary='the root cause is a stale cache, as jo says')
+        code, out, err = self.run_defect(environ={'USER': 'Root', 'USERNAME': 'jo'})   # generic, and under 3 characters
+        self.assertEqual(code, 0, (out, err))
         for summary in ('the check reads /home/jdoe/notes.txt twice', 'it reads ~/notes.txt twice',
                         r'it reads C:\Users\notes.txt twice', 'JDoe sees the check run twice',
-                        'it reads "/srv/x/app" twice', 'it sets dir=/opt/x twice'):
+                        'it reads "/srv/x/app" twice', 'it sets dir=/opt/x twice',
+                        'it reads file:///srv/x/notes.txt twice', r'it reads \\host\share\notes.txt twice',
+                        'it reads //host/share/notes.txt twice', 'it reads smb://fileserver/team/x twice'):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 before = self.tree()

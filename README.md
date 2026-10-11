@@ -426,7 +426,7 @@ digest of it, see assess).
 
 An installed copy of the plugin has no checkout to change. An **addenda file** lets you tune one
 of its skills or agents from home instead
-([ADR-0021](docs/adr/0021-user-addenda-in-home-load-through-cli-output.md)):
+([ADR-0023](docs/adr/0023-user-addenda-in-home-load-through-cli-output.md)):
 `addenda/<skill>.md` for a skill, `addenda/agents/<agent>.md` for an agent. It is plain text,
 one rule per line, at most 5 lines, and each line is one experiment:
 
@@ -738,10 +738,11 @@ checkout of its own, and `plugin_repo` names none), a section
 `## Upstream reports not yet sent (offer each; send one only after the user's yes)` follows when
 there is a report to offer: one
 `upstream: tuning <signature>` line for each kept addenda line that `upstream tuning` would take,
-then one `upstream: defect <signature>` line for each problem marked `upstream defect` that
-`upstream defect` would take, each only until its report was sent (see Upstream reports). A file
-such a report needs that cannot be read gives a `warning:` line in its place. The plan ends with
-the metric names, the allowed guards and the number of sessions per kind in the last 28 days.
+then one `upstream: defect <signature>` line for each problem marked `upstream defect` or
+`fix home: none, measure takes no addenda` that `upstream defect` would take, each only until
+its report was sent (see Upstream reports). A file such a report needs that cannot be read
+gives a `warning:` line in its place. The plan ends with the metric names, the allowed guards
+and the number of sessions per kind in the last 28 days.
 Marks on a problem:
 
 - `waits`: a problem in a workflow category (`rework`, `late-catch`, `handoff-loss`,
@@ -755,12 +756,13 @@ Marks on a problem:
 - `fix home: addenda/<skill>.md` (or `addenda/agents/<agent>.md`): only with no plugin checkout,
   for a target that is one skill or agent of this plugin. The fix is one line in that addenda
   file, written with `fix --addendum`. `fix home: none, measure takes no addenda` means that skill
-  takes none.
+  takes none; the upstream section offers it as a defect when `upstream defect` takes it.
+  `fix home: none, names no skill or agent of the plugin` marks an `anomaly:<name>` target whose
+  name is no skill or agent: there is no addenda file to fix and no upstream offer, since
+  `upstream defect` refuses it.
 - `upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream`:
-  only with no plugin checkout, for a target in the plugin's other code or docs, or an
-  `anomaly:<name>` that names no skill or agent. It cannot be fixed here; the upstream section
-  offers it when `upstream defect` takes it (a file of the plugin; a name of no skill or agent is
-  refused).
+  only with no plugin checkout, for a target in the plugin's other code or docs. It cannot be
+  fixed here; the upstream section offers it when `upstream defect` takes it.
 
 **Declare, then change, then record.** `declare` writes the experiment before the change: the
 expected effect, exactly one primary metric, exactly one guard, the session kind, `declared_on`
@@ -783,9 +785,11 @@ status to `fixed`. It refuses an experiment that `declare` did not write, and a 
 **An addenda fix.** `fix --addendum '<rule>'`, given in place of `--ref`, makes the change
 itself: it appends the rule with its tag to the target's addenda file (see Addenda files), commits
 that file alone, prints `addendum: <tagged line>`, and the file (`addenda/<skill>.md` or
-`addenda/agents/<agent>.md`) becomes the ref. It refuses a target that is not one skill or agent
-of this plugin, a skill that takes no addenda, an empty rule, a rule that is not one clean line of
-at most 300 characters (the privacy checks of `observe`), a rule that is a whole command a live
+`addenda/agents/<agent>.md`) becomes the ref. It refuses when a plugin checkout is set (`a plugin
+checkout is set: change the skill there`), a target that is not one skill or agent of this
+plugin, a skill that takes no addenda, an empty rule, a rule that is not one clean line of at
+most 300 characters (the privacy checks of `observe`), a rule with a character that is not
+printable (a control character or a line separator), a rule that is a whole command a live
 deny rule of your settings denies, a file that already holds 5 lines, and a second line of the
 same experiment. A new `declare` on an anomaly whose last line is still in its addenda file is
 refused. While that experiment has no verdict yet, `drop` refuses too: judge it with `verify`
@@ -933,7 +937,7 @@ holds, or to make room in a full file. It logs `dropped <date> · <reason>` unde
 and refuses an anomaly with no tagged line in the file its fix names.
 
 **Upstream reports.** With no plugin checkout, you can send the plugin's owner what you found, as
-a GitHub issue ([ADR-0022](docs/adr/0022-upstream-reports-through-an-upstream-port.md)). Each
+a GitHub issue ([ADR-0024](docs/adr/0024-upstream-reports-through-an-upstream-port.md)). Each
 report goes once, and nothing reaches GitHub without your yes.
 
 ```
@@ -952,8 +956,10 @@ python plugins/anomaly/scripts/anomaly.py upstream tuning <signature> --home <di
 - Both titles are `[anomaly:<skill or agent>] <signature>`, or `[anomaly:<path from the plugin
   root>] <signature>` for plugin code. Every field passes the privacy checks; the text that does
   not come from the CLI (the symptom, rule, reason, an agent name in a reading, the version folder
-  and the signature) also may not name a profile value, a repo-layer name, a local path or your
-  OS user name. A hit refuses the report: nothing is redacted and no file is written.
+  and the signature) also may not name a profile value or a repo-layer name (in any case), a
+  local path or your OS user name (a generic account name such as `root`, `runner` or `ubuntu`,
+  or a name under 3 characters, is not checked). A hit refuses the report: nothing is redacted
+  and no file is written.
 - The command writes `upstream/<signature>.defect.md` or `upstream/<signature>.tuning.md` in
   home (a `Title:` line, a blank line, the body) and prints `report: <path>`. The target
   repository is the GitHub source of the installed copy's marketplace record, else the profile
@@ -2051,7 +2057,7 @@ python plugins/anomaly/scripts/anomaly.py mr        reviewed|verified <work unit
 python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] [--home <dir>]
 python plugins/anomaly/scripts/anomaly.py pkg-facts <ecosystem>:<name>|<name>... [--json] [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py terms-grep --terms '<words>' <url>... [--context <n>] [--word]
-python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> [--comment <number> | --create] [--user-config <dir>] [--plugin-root <dir>]
+python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> --home <dir> [--comment <number> | --create] [--user-config <dir>] [--plugin-root <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).

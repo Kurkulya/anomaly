@@ -1,4 +1,4 @@
-"""A user's addenda files in home (ADR-0021): one file per plugin skill (`addenda/<skill>.md`) or agent
+"""A user's addenda files in home (ADR-0023): one file per plugin skill (`addenda/<skill>.md`) or agent
 (`addenda/agents/<agent>.md`), each line one rule tied to one experiment, at most ADDENDA_MAX_LINES lines.
 
 A line is written as `<rule> [exp: <signature> · <stamp>]`. The stamp is 8 hex characters of sha256 over
@@ -20,7 +20,7 @@ from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, FIXED_BY_SEPARATOR, PLUGI
 from .files import RecordError
 from .records import SLUG
 
-AGENTS = 'agents'          # the agent files of the plugin, and their addenda files in home
+AGENTS = 'agents'          # the addenda files of the agents in home (the plugin's agent files: unit_of)
 NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
 TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
@@ -38,6 +38,13 @@ def addendum_path(home, name, agent=False):
     """The addenda file of the skill or agent `name` in home."""
     folder = Path(home) / ADDENDA_DIR
     return (folder / AGENTS if agent else folder) / f'{name}.md'
+
+
+def unit_of(plugin_root, name, agent):
+    """The skill folder (`<plugin_root>/skills/<name>`) or agent file (`<plugin_root>/agents/<name>.md`) that
+    `name` would be in the plugin, whether or not it exists."""
+    root = Path(plugin_root)
+    return root / PLUGIN_AGENTS_DIR / f'{name}.md' if agent else root / 'skills' / name
 
 
 def stamp(target):
@@ -69,7 +76,7 @@ def append_line(path, line, signature, stamp):
     A file that already holds ADDENDA_MAX_LINES lines, or a line of this experiment, raises RecordError and
     is not changed: one line is one experiment."""
     lines = read_lines(path)
-    if any(f'{TAG_OPEN}{signature}{TAG_SEPARATOR}' in old for old in lines):
+    if any(is_tagged_with(old, signature) for old in lines):
         raise RecordError(f'{path}: already holds a line of the experiment {signature}, and one line is one '
                           'experiment; remove the old line from this file first, then run the fix again')
     if len(lines) >= ADDENDA_MAX_LINES:
@@ -188,7 +195,7 @@ def scan_rechecks(home, plugin_root):
     differs from the target's stamp now, with those lines. A file or target that cannot be read is listed with why."""
     found = []
     for path, name, agent in addenda_files(home):
-        target = Path(plugin_root) / AGENTS / f'{name}.md' if agent else Path(plugin_root) / 'skills' / name
+        target = unit_of(plugin_root, name, agent)
         part = f'the {"agent" if agent else "skill"} {name}'
         try:
             tagged = tuple(match for match in map(TAGGED.fullmatch, read_lines(path)) if match)
@@ -251,10 +258,11 @@ def plugin_part(context, target, plugin):
         name = (rest.split() or [''])[0]
         if not privacy.is_identifier(name) or ':' in name:
             return PluginPart(None, False, None)
-        if (root / 'skills' / name / flags.SKILL_FILE).is_file():
-            return PluginPart(name, False, root / 'skills' / name)
-        if (root / PLUGIN_AGENTS_DIR / f'{name}.md').is_file():
-            return PluginPart(name, True, root / PLUGIN_AGENTS_DIR / f'{name}.md')
+        skill, agent = unit_of(root, name, False), unit_of(root, name, True)
+        if (skill / flags.SKILL_FILE).is_file():
+            return PluginPart(name, False, skill)
+        if agent.is_file():
+            return PluginPart(name, True, agent)
         return PluginPart(None, False, None)
     if flags.is_path(target):
         found = flags.target_path(context, target, plugin)

@@ -7,7 +7,8 @@ module ranks, records and judges, so the numbers never depend on the conversatio
   declare  write the experiment BEFORE the change: expect, one metric, one guard, check_by, kind,
            and for a switch-over the new skill (ADR-0013)
   fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed; with
-           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0021)
+           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0023); refused
+           when a plugin checkout is set (ADDENDUM_CHECKOUT_SET)
   verify   judge a due experiment from the numbers and write its result
   decide   the user's result for an experiment the numbers could not judge
   close    mark anomalies wontfix (stale ones)
@@ -24,9 +25,10 @@ as waiting and adds nothing to the sum. A problem whose target already had a rev
 says so, and a target that a win with 2 or more sightings is about is marked as protected
 from removal (flags.protected_by_win). With no plugin checkout (gitrepo.plugin_repo is None), a problem
 whose target is a skill or agent of this plugin names its addenda file as the fix home (fix_home); a
-skill in addenda.NO_ADDENDA has none, and any other part of the plugin is an upstream defect. The plan
+skill in addenda.NO_ADDENDA has none, a `<plugin>:...` that names no skill or agent has none (NO_PART), and
+the plugin's other code and docs are an upstream defect. The plan
 then lists one offer line per upstream report not yet sent (upstream_offers): a kept addenda line, and
-a plugin-code problem that `upstream defect` takes.
+a problem on plugin code or docs, or on a skill that takes no addenda, that `upstream defect` takes.
 
 Declaring (ADR-0002). An experiment is declared before the change: one metric, one guard from
 QUALITY_GUARDS, and `declared_on` = today; `fix` refuses a fix dated before it, and sets a blank
@@ -50,7 +52,9 @@ MERGED_HEADING = 'Merged'
 WHOLE_SCOPES = ('repo:', 'plugin:')   # scopes that are one batch each; any other scope is split by target
 UNTARGETED = 'untargeted'
 UPSTREAM_DEFECT = 'upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream'
+NO_PART = 'fix home: none, names no skill or agent of the plugin'
 UPSTREAM_HEADING = "## Upstream reports not yet sent (offer each; send one only after the user's yes)"
+ADDENDUM_CHECKOUT_SET = 'a plugin checkout is set: change the skill there'
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): calibrate '
 
 
@@ -156,11 +160,14 @@ def upstream_offer(context, anomaly, action, environ):
 def upstream_offers(context, found, plugin, environ):
     """The plan's offer lines with no plugin checkout (`plugin` is gitrepo.plugin_repo's answer; with one there are
     none): upstream_offer of `tuning` for each anomaly, then of `defect` for each problem of the batches `found`
-    whose fix home is UPSTREAM_DEFECT."""
+    whose target is a part of the plugin with no addenda file to fix it in: plugin code or docs (UPSTREAM_DEFECT), or
+    a skill that takes no addenda (takes_no_addenda), which keeps its fix-home mark too."""
     if plugin is not None:
         return []
-    problems = [problem for batch in found for problem in batch.problems
-                if fix_home(context, problem.target.strip(), plugin) == UPSTREAM_DEFECT]
+    parts = ((problem, addenda.plugin_part(context, problem.target.strip(), plugin))
+             for batch in found for problem in batch.problems)
+    problems = [problem for problem, part in parts
+                if part is not None and (part.unit is None or takes_no_addenda(part))]
     offers = [upstream_offer(context, anomaly, 'tuning', environ) for anomaly in context.anomalies]
     offers += [upstream_offer(context, anomaly, 'defect', environ) for anomaly in problems]
     return [offer for offer in offers if offer is not None]
@@ -229,12 +236,18 @@ def takes_no_addenda(part):
 
 
 def fix_home(context, target, plugin):
-    """The plan's fix-home mark of a target with no plugin checkout (ADR-0021), or None: the addenda file
-    (relative to home), or why there is none. With a checkout (`plugin` set) there is no mark."""
+    """The plan's fix-home mark of a target with no plugin checkout (ADR-0023), or None: the addenda file
+    (relative to home), or why there is none: UPSTREAM_DEFECT for plugin code or docs, NO_PART for a
+    `<plugin>:...` that names no skill or agent (upstream.part_word refuses it, so no report has a title for it).
+    With a checkout (`plugin` set) there is no mark."""
     part = None if plugin is not None else addenda.plugin_part(context, target, plugin)
     if part is None:
         return None
     if part.unit is None:
+        try:
+            upstream.part_word(context, target)
+        except RecordError:
+            return NO_PART
         return UPSTREAM_DEFECT
     if takes_no_addenda(part):
         return f'fix home: none, {part.name} takes no addenda'
@@ -254,11 +267,15 @@ Addendum = namedtuple('Addendum', 'path unit line')   # the addenda file, the sk
 
 
 def checked_addendum(context, anomaly, label, line, environ):
-    """The addendum `fix --addendum` writes for this anomaly, after its checks: the target is one skill
-    (not one in addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text)
-    that no live deny rule fully matches (scans.deny_regex)."""
+    """The addendum `fix --addendum` writes for this anomaly, after its checks: no plugin checkout is set
+    (gitrepo.plugin_repo; with one the skill itself is changed there), the target is one skill (not one in
+    addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text) of printable
+    characters only (upstream.printable) that no live deny rule fully matches (scans.deny_regex)."""
     target = anomaly.target.strip()
-    part = addenda.plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile))
+    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
+    if plugin is not None:
+        raise RecordError(f'{label}: {ADDENDUM_CHECKOUT_SET}')
+    part = addenda.plugin_part(context, target, plugin)
     if part is None or part.unit is None:
         raise RecordError(f'{label}: an addendum adds to one skill or agent of this plugin; the target '
                           f'{target or "(none)"} is not `<plugin>:<skill>`, `<plugin>:<agent>` or a path inside one '
@@ -268,6 +285,9 @@ def checked_addendum(context, anomaly, label, line, environ):
     if not line.strip():
         raise RecordError(f'{label}: --addendum is empty; give the rule in one line')
     privacy.check_text(label, 'addendum', line, SIGHTING_MAX_CHARS)
+    if upstream.printable(line) != line:
+        raise RecordError(f'{label}: the addendum holds a character that is not printable (a control character or '
+                          'a line or paragraph separator); write the rule as one plain line')
     line = line.strip()
     for rule in scans.deny_rules(scans.settings_files(environ, sys.platform, Path.home())):
         regex = scans.deny_regex(rule)
@@ -324,7 +344,7 @@ def run_effort(args, environ):
         signature, equals, effort = pair.partition('=')
         if not equals or effort not in EFFORTS:
             raise RecordError(f'--set {pair!r}: write signature=effort, the effort one of {", ".join(EFFORTS)}')
-        addenda.find(anomalies,signature).effort = effort
+        addenda.find(anomalies, signature).effort = effort
         changed.append(signature)
     print('\n'.join(f'effort: {s} is {anomalies[s].effort}' for s in dict.fromkeys(changed)))
     print(observe.save_anomalies(home, args.today, anomalies, changed, COMMIT_PREFIX + 'set effort'))
@@ -335,7 +355,7 @@ def run_declare(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today = context.home, args.today
     anomalies = addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'experiment for {anomaly.signature}'
     if anomaly.kind != 'problem':
         raise RecordError(f'{label}: only a problem gets a fix; {anomaly.signature} is a {anomaly.kind}')
@@ -427,7 +447,7 @@ def run_declare(args, environ):
 def run_fix(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today, anomalies = context.home, args.today, addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'fix for {anomaly.signature}'
     experiment = anomaly.experiment
     if experiment is None or experiment.result:
@@ -539,7 +559,7 @@ def measurable(anomaly):
 def run_decide(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     anomalies = addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     reason = trends.experiment_due(context, anomaly)
     if reason is None:
         raise RecordError(f'the experiment of {anomaly.signature} is not due')
@@ -557,7 +577,7 @@ def run_close(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, anomalies = context.home, addenda.writable(context)
     for signature in args.signature:
-        anomaly = addenda.find(anomalies,signature)
+        anomaly = addenda.find(anomalies, signature)
         if not anomaly.active:
             raise RecordError(f'anomaly {signature} is already {anomaly.status}')
         anomaly.status = 'wontfix'
@@ -570,7 +590,7 @@ def run_close(args, environ):
 def run_merge(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, anomalies = context.home, addenda.writable(context)
-    kept, folded = addenda.find(anomalies,args.into), addenda.find(anomalies,args.source)
+    kept, folded = addenda.find(anomalies, args.into), addenda.find(anomalies, args.source)
     if kept.signature == folded.signature or kept.kind != folded.kind or not (kept.active and folded.active):
         raise RecordError('merge needs two different open or reopened anomalies of the same kind')
     merged = records.merge_anomalies(kept, folded)
@@ -587,7 +607,7 @@ def run_merge(args, environ):
 def run_drop(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today, anomalies = context.home, args.today, addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'drop for {anomaly.signature}'
     path = addenda.addendum_file(home, anomaly)
     if path is None or addenda.tagged_line(path, anomaly.signature) is None:

@@ -1,4 +1,4 @@
-# ADR-0022: Upstream reports go through a new `upstream` port, and a checkout never reports
+# ADR-0024: Upstream reports go through a new `upstream` port, and a checkout never reports
 
 Status: Proposed · Date: 2026-10-11 · Owner: VK · Revisit-by: 2027-01-11
 
@@ -12,8 +12,8 @@ The `mr` port already wraps `gh` and `glab` with a core default that prints a bo
 
 ## Decision
 
-- Lanes: `upstream defect <signature>` (target, one symptom line, installed version = plugin root folder name) and `upstream tuning <signature>` (line, target, metric before and after, guard, sessions, verdict word).
-- Checks: `check_text`, the profile's org markers, the repo-layer names, a local path (absolute, `~/` or a drive path) and the OS user name refuse the text, and nothing is redacted (ADR-0003). Markers, names, paths and the user name are matched only on the text from outside the CLI (the symptom, the installed version folder and the signature), not on the title and target the CLI composes, because the report goes into a public GitHub issue: what the user or the disk supplies can name a person or an org, and the CLI's own words cannot.
+- Lanes: `upstream defect <signature>` (target, one symptom line, installed version = plugin root folder name) and `upstream tuning <signature>` (line, target, verdict word, recorded reason, metric before and after, guard, sessions), refused unless the anomaly is `fixed` (a reopened one: the fix did not hold) and its result is `keep` or `unproven`.
+- Checks: `check_text`, the profile's org markers and the repo-layer names (both in any case), a local path (absolute, `~/`, a drive path, a `file://` link or a UNC path) and the OS user name refuse the text, and nothing is redacted (ADR-0003). A generic account name (such as `root`, `runner` or `ubuntu`) or a user name under 3 characters is not checked: it names no person, and as a plain word (`root cause`) it would refuse ordinary text. Markers, names, paths and the user name are matched only on the text from outside the CLI (the symptom, the rule, the reason, the agent name of a per-dispatch reading, the installed version folder and the signature), not on the title, target, verdict word and readings the CLI composes, because the report goes into a public GitHub issue: what the user or the disk supplies can name a person or an org, and the CLI's own words cannot. The neutrality test of the plugin files keeps a case-sensitive marker match: that text is the plugin author's own.
 - Target repository: the installed copy's marketplace record when its source is GitHub, else the profile key `upstream_repo`, else exit 1 with the file written. The adapter key is `upstream_tool`.
 - Match: an exact signature hit is offered as a +1. Otherwise the model proposes a match from the titles, and the user picks +1 or a new GitHub issue.
 - Trigger: `calibrate plan` prints one `upstream: tuning|defect <signature>` line per report not yet sent, and the calibrate close offers each one. A comment or create appends `upstream <date> · <number>` to the anomaly, so an offer is never repeated. A checkout gets no offer, and the commands exit 1.
