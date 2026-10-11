@@ -344,7 +344,7 @@ def run_effort(args, environ):
         signature, equals, effort = pair.partition('=')
         if not equals or effort not in EFFORTS:
             raise RecordError(f'--set {pair!r}: write signature=effort, the effort one of {", ".join(EFFORTS)}')
-        addenda.find(anomalies,signature).effort = effort
+        addenda.find(anomalies, signature).effort = effort
         changed.append(signature)
     print('\n'.join(f'effort: {s} is {anomalies[s].effort}' for s in dict.fromkeys(changed)))
     print(observe.save_anomalies(home, args.today, anomalies, changed, COMMIT_PREFIX + 'set effort'))
@@ -355,7 +355,7 @@ def run_declare(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today = context.home, args.today
     anomalies = addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'experiment for {anomaly.signature}'
     if anomaly.kind != 'problem':
         raise RecordError(f'{label}: only a problem gets a fix; {anomaly.signature} is a {anomaly.kind}')
@@ -447,7 +447,7 @@ def run_declare(args, environ):
 def run_fix(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today, anomalies = context.home, args.today, addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'fix for {anomaly.signature}'
     experiment = anomaly.experiment
     if experiment is None or experiment.result:
@@ -559,7 +559,7 @@ def measurable(anomaly):
 def run_decide(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     anomalies = addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     reason = trends.experiment_due(context, anomaly)
     if reason is None:
         raise RecordError(f'the experiment of {anomaly.signature} is not due')
@@ -577,7 +577,7 @@ def run_close(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, anomalies = context.home, addenda.writable(context)
     for signature in args.signature:
-        anomaly = addenda.find(anomalies,signature)
+        anomaly = addenda.find(anomalies, signature)
         if not anomaly.active:
             raise RecordError(f'anomaly {signature} is already {anomaly.status}')
         anomaly.status = 'wontfix'
@@ -590,7 +590,7 @@ def run_close(args, environ):
 def run_merge(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, anomalies = context.home, addenda.writable(context)
-    kept, folded = addenda.find(anomalies,args.into), addenda.find(anomalies,args.source)
+    kept, folded = addenda.find(anomalies, args.into), addenda.find(anomalies, args.source)
     if kept.signature == folded.signature or kept.kind != folded.kind or not (kept.active and folded.active):
         raise RecordError('merge needs two different open or reopened anomalies of the same kind')
     merged = records.merge_anomalies(kept, folded)
@@ -607,7 +607,7 @@ def run_merge(args, environ):
 def run_drop(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today, anomalies = context.home, args.today, addenda.writable(context)
-    anomaly = addenda.find(anomalies,args.signature)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'drop for {anomaly.signature}'
     path = addenda.addendum_file(home, anomaly)
     if path is None or addenda.tagged_line(path, anomaly.signature) is None:
