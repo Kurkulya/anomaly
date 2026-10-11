@@ -219,7 +219,7 @@ def run_defect(args, environ):
         number = issue_number(link)
         print(link)
     else:
-        print('\n'.join(search_lines(repo, call(tool.list_issues, repo, environ=environ), title, prefix)))
+        print('\n'.join(search_lines(repo, call(tool.list_issues, repo, prefix, environ=environ), title, prefix)))
         return 0
     addenda.log_line(anomaly, f'upstream {args.today.isoformat()} · {number}')
     print(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],

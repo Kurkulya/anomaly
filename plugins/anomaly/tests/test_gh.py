@@ -61,18 +61,19 @@ ISSUE_LINK = 'https://example.com/owner/repo/issues/42'
 
 
 class GhIssueTest(unittest.TestCase):
-    """The issue calls of the `upstream` port (ticket 05). Names this file chooses: `list_issues(project)` answers
-    a list of (number, title); `comment_issue(project, number, body)`; `create_issue(project, title, body)` answers
-    the link of the new issue."""
+    """The issue calls of the `upstream` port (ticket 05). Names this file chooses: `list_issues(project, prefix)`
+    answers a list of (number, title); `comment_issue(project, number, body)`; `create_issue(project, title, body)`
+    answers the link of the new issue."""
 
     def test_open_issues_are_listed_with_an_argument_list_and_read_as_number_and_title(self):
         answer = '[{"number": 3, "title": "[anomaly:observe] a"}, {"number": 5, "title": "[anomaly:facts] b"}]'
         with mock.patch('subprocess.run', return_value=done(answer)) as run:
-            found = gh.list_issues('owner/repo')
+            found = gh.list_issues('owner/repo', '[anomaly:observe]')
         self.assertEqual(found, [(3, '[anomaly:observe] a'), (5, '[anomaly:facts] b')])
         command = run.call_args.args[0]
         self.assertEqual(command[:3], ['gh', 'issue', 'list'])
         self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
+        self.assertEqual(command[command.index('--search') + 1], 'in:title "[anomaly:observe]"')   # M3: narrowed
         if '--state' in command:
             self.assertEqual(command[command.index('--state') + 1], 'open')
         self.assertFalse(run.call_args.kwargs.get('shell'))
@@ -82,7 +83,7 @@ class GhIssueTest(unittest.TestCase):
             with self.subTest(answer=answer):
                 with mock.patch('subprocess.run', return_value=done(answer)):
                     with self.assertRaises(gh.GhError):
-                        gh.list_issues('owner/repo')
+                        gh.list_issues('owner/repo', '[anomaly:observe]')
 
     def test_a_comment_names_the_issue_and_the_project_and_carries_the_body_without_a_shell(self):
         with mock.patch('subprocess.run', return_value=done()) as run:
@@ -113,7 +114,7 @@ class GhIssueTest(unittest.TestCase):
                 gh.create_issue('owner/repo', 'a title', 'a body')
 
     def test_a_failed_issue_call_is_one_error_with_the_message_of_the_tool_and_is_not_repeated(self):
-        calls = (lambda: gh.list_issues('owner/repo'), lambda: gh.comment_issue('owner/repo', 12, '+1'),
+        calls = (lambda: gh.list_issues('owner/repo', '[anomaly:observe]'),lambda: gh.comment_issue('owner/repo', 12, '+1'),
                  lambda: gh.create_issue('owner/repo', 'a title', 'a body'))
         for call in calls:
             with self.subTest(call=call):

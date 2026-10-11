@@ -92,11 +92,12 @@ def view_mr(project, number, environ=None):
         raise GhError(f'gh answered pull request {number} in an unknown shape') from None
 
 
-def list_issues(project, environ=None):
-    """(number, title) of each open issue of `project`, at most ISSUE_LIST_LIMIT."""
+def list_issues(project, prefix, environ=None):
+    """(number, title) of each open issue of `project` whose title the GitHub search finds `prefix` in, at most
+    ISSUE_LIST_LIMIT. The search is loose (words, not the exact text): the caller checks the titles itself."""
     check_project(project)
-    out = call('issue', 'list', '--repo', project, '--state', 'open', '--limit', str(ISSUE_LIST_LIMIT),
-               '--json', 'number,title', environ=environ)
+    out = call('issue', 'list', '--repo', project, '--state', 'open', '--search', f'in:title "{prefix}"',
+               '--limit', str(ISSUE_LIST_LIMIT), '--json', 'number,title', environ=environ)
     try:
         answer = json.loads(out)
     except ValueError:
