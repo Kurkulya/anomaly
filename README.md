@@ -1611,6 +1611,9 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `until`, `!` and `{`, assignments such as `FOO=1`, and the wrappers `sudo`, `env`, `nice`, `nohup`,
   `time`, `timeout`, `xargs`, `command` and `exec` with their options and the values of the options
   that take one (`sudo -u root`, `nice -n 10`, `xargs -n 1`; `timeout` also its duration).
+  The scan is not a shell parser, so some commands that write no file are denied, and the subagent
+  writes them another way: the arithmetic shift `$((1<<2))`, the arithmetic test `(( i > 0 ))` and the
+  string test `[[ $a > $b ]]` read as a heredoc or a redirect.
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner> · <rest>`). The owner is
   one or more owner paths, each followed by its names in parentheses; a non-file part after a path
