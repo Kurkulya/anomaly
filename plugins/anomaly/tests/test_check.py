@@ -981,7 +981,7 @@ class SubagentBashVerdictTest(unittest.TestCase):
         """AC-21."""
         for command in ('cat <<EOF\nx\nEOF', 'cat <<-EOF\nx\nEOF', "python3 - <<'EOF'\nprint(1)\nEOF",
                         "sed -i 's/a/b/' f", 'echo x | tee f', 'echo x > f', 'echo x >> f', 'echo x &> f',
-                        'echo x >| f', 'curl -o f http://h', 'wget -O f http://h'):
+                        'echo x >| f', 'curl -o f http://host', 'wget -O f http://host'):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
