@@ -935,6 +935,34 @@ class BatchTest(CalibrateCase):
                                  check_by='2026-10-25', result='keep', status='reopened')
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
 
+    def test_a_kept_rule_that_names_a_profile_marker_gets_no_offer(self):
+        """An offer appears only when upstream tuning would take the report, its outside-text check included
+        (`run-tickets` is a build skill of the profile)."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Run run-tickets first.', 'marked-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'marked-one', target='anomaly:research', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/research.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_an_addenda_file_that_cannot_be_read_prints_a_warning_and_no_offer(self):
+        """A folder where the addenda file should be cannot be read: the plan says so and still prints."""
+        self.lay_out_plugin()
+        folder = addenda.addendum_path(self.home, 'observe')
+        folder.mkdir(parents=True)
+        write_experiment_anomaly(self.home, 'unread-one', target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        code, out, err = self.cli('plan')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.offers(out), [])
+        warnings = [line for line in out.splitlines() if line.startswith('warning: ') and 'unread-one' in line]
+        self.assertEqual(len(warnings), 1, out)
+        self.assertIn(str(folder), warnings[0])
+        self.assertIn('not read', warnings[0])
+
     def test_with_a_checkout_the_plan_is_what_it_was_before_addenda(self):
         self.checkout()
         write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')

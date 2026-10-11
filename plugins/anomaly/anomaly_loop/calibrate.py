@@ -136,31 +136,34 @@ def problem_line(context, anomaly, plugin):
     return ' · '.join([head] + marks)
 
 
-def upstream_accepts(check, *args):
-    """True when `check(*args)`, an upstream check that raises RecordError on a report it refuses, takes it; a file
-    it cannot read counts as a refusal, so the plan still prints."""
+def upstream_offer(context, anomaly, action, environ):
+    """The offer line `upstream: <action> <signature>` when `upstream <action>` would take the anomaly's report
+    (upstream.checked_report, its outside-text check included) and it was not sent yet (upstream.sent_lines); None
+    when it is refused or sent. A file the report needs that cannot be read gives a `warning:` line instead, so the
+    plan still prints."""
+    if upstream.sent_lines(anomaly):
+        return None
     try:
-        check(*args)
-    except (RecordError, OSError):
-        return False
-    return True
+        upstream.checked_report(context, anomaly, action, environ)
+    except RecordError:
+        return None
+    except OSError as error:
+        return (f'warning: {error.filename}: {addenda.not_read(error.filename, error)}; no {action} offer for '
+                f'{anomaly.signature}')
+    return f'upstream: {action} {anomaly.signature}'
 
 
-def upstream_offers(context, found, plugin):
+def upstream_offers(context, found, plugin, environ):
     """The plan's offer lines with no plugin checkout (`plugin` is gitrepo.plugin_repo's answer; with one there are
-    none): `upstream: tuning <signature>` for each anomaly that upstream tuning takes (upstream.tuning_source), then
-    `upstream: defect <signature>` for each problem of the batches `found` whose fix home is UPSTREAM_DEFECT and
-    whose target upstream defect takes (upstream.part_word). An anomaly already sent (upstream.sent_lines) has none."""
+    none): upstream_offer of `tuning` for each anomaly, then of `defect` for each problem of the batches `found`
+    whose fix home is UPSTREAM_DEFECT."""
     if plugin is not None:
         return []
-    offers = [f'upstream: tuning {anomaly.signature}' for anomaly in context.anomalies
-              if not upstream.sent_lines(anomaly) and upstream_accepts(upstream.tuning_source, context, anomaly)]
-    for anomaly in (problem for batch in found for problem in batch.problems):
-        target = anomaly.target.strip()
-        if (fix_home(context, target, plugin) == UPSTREAM_DEFECT and not upstream.sent_lines(anomaly)
-                and upstream_accepts(upstream.part_word, context, target)):
-            offers.append(f'upstream: defect {anomaly.signature}')
-    return offers
+    problems = [problem for batch in found for problem in batch.problems
+                if fix_home(context, problem.target.strip(), plugin) == UPSTREAM_DEFECT]
+    offers = [upstream_offer(context, anomaly, 'tuning', environ) for anomaly in context.anomalies]
+    offers += [upstream_offer(context, anomaly, 'defect', environ) for anomaly in problems]
+    return [offer for offer in offers if offer is not None]
 
 
 HOUSEKEEPING = (flags.near_duplicates, flags.stale, trends.experiments_due_section, flags.unused_skills)
@@ -172,7 +175,9 @@ def recent_sessions_by_kind(context):
     return Counter(trends.context_session_kind(context, row) for _, row in trends.rows_in_window(context, since))
 
 
-def plan_lines(context):
+def plan_lines(context, environ=None):
+    """The plan's lines; `environ` is the environment the upstream offers check the OS user name in (none: no
+    user name)."""
     lines = ['## Housekeeping']
     tidy = digest.render(context, HOUSEKEEPING)
     lines += [f'#{line}' if line.startswith('## ') else line for line in tidy] or ['- nothing to tidy']
@@ -185,7 +190,7 @@ def plan_lines(context):
         lines += [problem_line(context, a, plugin) for a in batch.problems]
     if not found:
         lines.append('- no open problems')
-    offers = upstream_offers(context, found, plugin)
+    offers = upstream_offers(context, found, plugin, environ or {})
     if offers:
         lines += ['', UPSTREAM_HEADING] + offers
     counts = recent_sessions_by_kind(context)
@@ -305,7 +310,8 @@ def remove_addendum(home, anomaly, path):
 def run_plan(args, environ):
     context = digest.context_from_args(args, environ)
     message = profile.missing_message(context.profile)
-    lines = ([message] if message else []) + [f'profile file: {context.profile.path}', ''] + plan_lines(context)
+    lines = (([message] if message else []) + [f'profile file: {context.profile.path}', '']
+             + plan_lines(context, environ))
     print('\n'.join(lines))
     return 0
 
