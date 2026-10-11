@@ -1063,6 +1063,18 @@ class SubagentBashVerdictTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
+    def test_a_command_substitution_and_a_newline_start_a_new_command(self):
+        """AC-21: `$(` and a newline end the simple command before them."""
+        for command in ('echo $(tee f)', 'ls\ntee f'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
+    def test_a_comment_an_escaped_sign_and_a_chain_without_a_write_are_allowed(self):
+        """AC-23, AC-24: a `#` comment and a backslash-escaped `>` are text."""
+        for command in ('ls # > f', 'echo \\> f', 'git status && git log'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_a_write_command_name_as_an_argument_is_allowed(self):
         """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
         for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f'):
