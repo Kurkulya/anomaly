@@ -14,7 +14,7 @@ A ticket is a markdown file `.anomaly/<work-unit>/tickets/NN-<slug>.md` (or one 
   red         write `Red: <sha> · <test path>` (the first one, or a different sha, removes the earlier
               `Red-changed:` lines), or add `Red-changed: <reason>`  (additive lines)
   adhoc       write `.anomaly/adhoc/<date>-<slug>.md` under the main checkout from a task text or --from a checked draft
-  amend       add `Amended <date>: <text>` at the end of a file, or --after an AC-n / D-n line of stories.md / decisions.md
+  amend       add `Amended <date>: <text>` at the end of a file, or --after an AC-n / D-n line of a ticket / stories.md / decisions.md
 
 Writing is a text edit: only the named lines change, every other byte (line endings, a missing
 final newline) stays. A new line goes after the nearest line that comes before it in LINE_ORDER
@@ -58,7 +58,8 @@ STATUS_WORD = re.compile(r'[\w-]+')
 AC_ID = re.compile(r'AC-\d+')
 AMEND_TARGET = re.compile(r'(?:AC|D)-\d+')
 AMENDED_LINE = re.compile(r'(\s*)Amended \d{4}-\d{2}-\d{2}\b')
-CHECKBOX = re.compile(r'(\s*[-*+]\s+\[)([ xX])(\]\s*\**AC-(\d+)(?!\d))')
+CHECKBOX_MARK = r'[ xX]'   # the mark inside an AC checkbox `[ ]`: open, or ticked in either case
+CHECKBOX = re.compile(rf'(\s*[-*+]\s+\[)({CHECKBOX_MARK})(\]\s*\**AC-(\d+)(?!\d))')
 STARTED = re.compile(r'\bstarted\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)')
 UNKNOWN_START = re.compile(rf'\bstarted\s+{re.escape(TICKET_START_UNKNOWN)}\b')
 OPEN_ITEMS = re.compile(r'\bOpen(?:\s*\([^)]*\))?:\s*(.+)$')
@@ -470,7 +471,7 @@ def amend(text, today, note, after=None):
         return join_lines(lines)
     if not AMEND_TARGET.fullmatch(after):
         raise RecordError(f'--after names an AC or a decision like AC-12 or D-3, got: {after}')
-    item, skip = re.compile(rf'\s*[-*+]\s+\**{re.escape(after)}(?!\d)'), fenced(lines)
+    item, skip = re.compile(rf'\s*[-*+]\s+(?:\[{CHECKBOX_MARK}\]\s*)?\**{re.escape(after)}(?!\d)'), fenced(lines)
     target = next((index for index, (body, _) in enumerate(lines) if index not in skip and item.match(body)), None)
     if target is None:
         raise RecordError(f'no {after} line in the file')
@@ -563,8 +564,8 @@ def register(commands, common):
     amended = action('amend', run_amend, 'add Amended <date>: <text> at the end of the file, or below an AC-n / D-n line',
                      'path of the ticket, stories.md or decisions.md')
     amended.add_argument('text', help='the note, one line (checked for private content)')
-    amended.add_argument('--after', metavar='ID', help='an AC-n of stories.md or a D-n of decisions.md; the line goes '
-                                                       'below it and below the Amended lines already under it')
+    amended.add_argument('--after', metavar='ID', help='an AC-n of a ticket or stories.md, or a D-n of decisions.md; '
+                                                       'the line goes below it and below the Amended lines already under it')
     adhoc = actions.add_parser('adhoc', parents=[common],
                                help='write .anomaly/adhoc/<date>-<slug>.md under the main checkout from a task text '
                                     'or --from a checked draft')

@@ -1,6 +1,6 @@
 # Reviewer briefs
 
-Loaded at dispatch; the last section is for the main window after each round. Fill one brief per agent; leave out a line that has no value. Never paste an org name or path into core text: it comes from the ports line.
+Loaded at dispatch; the last section is for the main window. Fill one brief per agent; leave out a line that has no value. Never paste an org name or path into core text: it comes from the ports line.
 
 ## Every agent
 
@@ -42,6 +42,8 @@ Loaded at dispatch; the last section is for the main window after each round. Fi
 
 - Range <last reviewed sha>..HEAD, tip merges ignored (plan: the work-unit folder, no range). (a) Is each earlier finding fixed? (b) The new code: <names>. (c) New problems. [R8]
 
-## Commands a reviewer proposes (main window, after a round) [X2, N15]
+## Commands a reviewer proposes (main window) [X2, N15]
 
 A reviewer proposes a mutation probe, or byte-diff commands when it has no base copy, as plain commands and never runs them. Show each to the user and run it only after a yes, on a scratchpad copy (of the tip; for a byte diff, of the base and of the tip), never in the worktree; send the result back to that reviewer's finding.
+
+Proposed Amended lines for other tickets [X1]: keep them from all rounds. At the end of the review show one list, ask one yes, run `ticket amend <file> --after <AC-n|D-n> '<text>'` for each; a line with no AC-n or D-n gets `ticket amend <file> '<text>'`, without `--after`. Review's main window writes them, also when build is the caller; a no writes none; list them in the handoff.

@@ -1,8 +1,10 @@
 import io
 import json
+import shutil
 import sys
 import tempfile
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -236,12 +238,94 @@ class LensTest(ObserveCase):
         self.assertIn('lens: reviewer-a logged (accepted 3, rejected 1, revised 1)', out.splitlines())
         self.assertIn('lens: reviewer-b logged (accepted 0, rejected 2)', out.splitlines())
 
-    def test_a_lens_already_logged_for_the_session_is_skipped(self):
-        lens = dict(session=SID, lens='reviewer-a', accepted=3, rejected=1)
-        self.apply(lenses=[lens])
-        _, out, _ = self.apply(lenses=[dict(lens, accepted=9)])
-        self.assertEqual(len(self.lenses()), 1)
-        self.assertIn('skipped: lens reviewer-a already logged for this session', out.splitlines())
+    def test_a_larger_total_for_a_logged_lens_replaces_the_session_line_in_place(self):
+        """AC-1, AC-2: the new values and the apply date; the other lines and their order stay."""
+        before = NOW - timedelta(days=3)
+        self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=3, rejected=1, revised=1),
+                           dict(session=SID, lens='reviewer-b', accepted=1, rejected=1),
+                           dict(session=OTHER_SID, lens='reviewer-a', accepted=2, rejected=0)], now=before)
+        code, out, err = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=5, rejected=1, revised=2),
+                                            dict(session=OTHER_SID, lens='reviewer-c', accepted=1, rejected=0)])
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertEqual(self.lenses(), [
+            dict(session_id=SID, date=TODAY, lens='reviewer-a', accepted=5, rejected=1, revised=2),
+            dict(session_id=SID, date=before.date().isoformat(), lens='reviewer-b', accepted=1, rejected=1),
+            dict(session_id=OTHER_SID, date=before.date().isoformat(), lens='reviewer-a', accepted=2, rejected=0),
+            dict(session_id=OTHER_SID, date=TODAY, lens='reviewer-c', accepted=1, rejected=0)])
+        self.assertIn('lens: reviewer-a replaced (accepted 5, rejected 1, revised 2)', out.splitlines())
+        self.assertIn('lens: reviewer-c logged (accepted 1, rejected 0)', out.splitlines())
+
+    def test_a_replaced_key_missing_from_the_file_is_appended_and_the_other_lines_stay_byte_for_byte(self):
+        """Review round 2: `rewrite_lenses` meets a replaced key whose line vanished since the batch was read."""
+        damaged = 'not json'
+        spaced = (f'{{"lens": "reviewer-b",  "session_id": "{SID}", "date": "2026-09-01", '
+                  f'"rejected": 1, "accepted": 1}}')
+        write_text(self.home / 'lenses.jsonl', damaged + '\n' + spaced + '\n')
+        record = dict(session_id=SID, date=TODAY, lens='reviewer-a', accepted=4, rejected=1)
+        observe.rewrite_lenses(self.home, {(SID, 'reviewer-a'): record}, [])
+        lines = (self.home / 'lenses.jsonl').read_bytes().decode('utf-8').split('\n')
+        self.assertEqual(lines[:2], [damaged, spaced])
+        self.assertEqual(json.loads(lines[2]), record)
+        self.assertEqual(lines[3:], [''])
+
+    def test_a_replace_keeps_every_other_line_byte_for_byte_a_damaged_one_included(self):
+        """AC-1 (review round 1): only the matched line changes; a line that is not JSON and a hand-written line
+        with its own spacing and key order stay exactly as they were, in place."""
+        damaged = 'not json'
+        spaced = (f'{{"lens": "reviewer-b",  "session_id": "{SID}", "date": "2026-09-01", '
+                  f'"rejected": 1, "accepted": 1}}')
+        stored = f'{{"session_id":"{SID}","date":"2026-09-01","lens":"reviewer-a","accepted":3,"rejected":1}}'
+        write_text(self.home / 'lenses.jsonl', '\n'.join([stored, damaged, spaced]) + '\n')
+        code, out, err = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=4, rejected=1)])
+        self.assertEqual((code, err), (0, ''), out)
+        lines = (self.home / 'lenses.jsonl').read_bytes().decode('utf-8').split('\n')
+        self.assertEqual(lines[1:], [damaged, spaced, ''])
+        self.assertEqual(json.loads(lines[0]), dict(session_id=SID, date=TODAY, lens='reviewer-a',
+                                                    accepted=4, rejected=1))
+
+    def test_a_larger_accepted_rejected_or_revised_alone_replaces_the_line(self):
+        """AC-1: one larger value is enough when none is smaller; a missing stored `revised` counts as 0."""
+        for number, change in enumerate((dict(accepted=4), dict(rejected=2), dict(revised=1))):
+            lens = f'reviewer-{number}'
+            with self.subTest(change=change):
+                self.apply(lenses=[dict(session=SID, lens=lens, accepted=3, rejected=1)])
+                counts = {**dict(accepted=3, rejected=1), **change}
+                code, out, _ = self.apply(lenses=[dict(session=SID, lens=lens, **counts)])
+                self.assertEqual(code, 0)
+                lines = [row for row in self.lenses() if row['lens'] == lens]
+                self.assertEqual(lines, [dict(session_id=SID, date=TODAY, lens=lens, **counts)])
+                self.assertTrue(any(line.startswith(f'lens: {lens} replaced') for line in out.splitlines()), out)
+
+    def test_a_smaller_value_refuses_the_whole_batch_and_names_the_session_and_the_lens(self):
+        """AC-4, with the Amended line: any smaller value refuses, also beside a larger one."""
+        stored = dict(session=SID, lens='reviewer-a', accepted=3, rejected=2, revised=1)
+        for change in (dict(accepted=2), dict(rejected=1), dict(revised=0), dict(revised=None),
+                       dict(accepted=5, rejected=1), dict(accepted=5, revised=0)):
+            with self.subTest(change=change):
+                shutil.rmtree(self.home, ignore_errors=True)
+                self.apply(lenses=[stored])
+                lenses_before = (self.home / 'lenses.jsonl').read_bytes()
+                index_before = (self.home / 'INDEX.md').read_bytes()
+                smaller = {key: value for key, value in {**stored, **change}.items() if value is not None}
+                code, out, err = self.apply(observed('slow-check'), lenses=[
+                    dict(session=SID, lens='reviewer-b', accepted=1, rejected=0), smaller])
+                self.assertEqual(code, 2, out)
+                self.assertTrue(err.startswith('anomaly: '), err)
+                self.assertIn(SID, err)
+                self.assertIn('reviewer-a', err)
+                self.assertEqual((self.home / 'lenses.jsonl').read_bytes(), lenses_before)
+                self.assertEqual((self.home / 'INDEX.md').read_bytes(), index_before)
+                self.assertFalse(records.anomaly_path(self.home, 'slow-check').exists())
+
+    def test_a_logged_lens_with_no_decisions_is_still_skipped_not_refused_as_smaller(self):
+        """AC-5: the zero-count skip comes first, so 0 and 0 under a stored 3 and 1 is a skip."""
+        stored = dict(session=SID, lens='reviewer-a', accepted=3, rejected=1, revised=1)
+        self.apply(lenses=[stored])
+        before = (self.home / 'lenses.jsonl').read_bytes()
+        code, out, err = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=0, rejected=0)])
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertIn('skipped: lens reviewer-a has no accepted or rejected findings', out.splitlines())
+        self.assertEqual((self.home / 'lenses.jsonl').read_bytes(), before)
 
     def test_a_lens_with_no_decisions_is_skipped_and_bad_counts_are_refused(self):
         _, out, _ = self.apply(lenses=[dict(session=SID, lens='reviewer-a', accepted=0, rejected=0)])

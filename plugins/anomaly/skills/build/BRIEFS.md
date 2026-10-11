@@ -10,6 +10,7 @@ Loaded at dispatch of the `implementer` port. Fill each `<…>`; leave out a lin
 - When the ticket reads or writes real files: one probe on a copy of real data; report what it showed. [N2]
 - Run final gates in the foreground. Never end your turn with a background command still running. [N3]
 - Before you write what a tool checks or enforces, read its config or script and cite it. [X4]
+- A file at its byte cap: never cut existing rule text to fit; stop and report the file, its cap and the bytes needed. The main window then asks the user to raise the cap or move detail into a doc loaded only when used.
 - Edit files only with Edit or Write, never with a shell edit or a heredoc. Each command is one plain command: no chains, no inline code, no pipe into an interpreter. [X5, N12]
 - Commits: <commit port format>, atomic, no AI trailers. Write the message to <scratchpad>/msg-<NN>-<n>.txt with the Write tool, then commit with `-F <file>`. Never `--no-verify`. Never push. [I28, P14, P16]
 - Inside a worktree: <the WORKTREE.md recipe>.
