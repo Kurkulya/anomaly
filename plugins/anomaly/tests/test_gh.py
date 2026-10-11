@@ -116,7 +116,8 @@ class GhIssueTest(unittest.TestCase):
                 gh.create_issue('owner/repo', 'a title', 'a body')
 
     def test_a_failed_issue_call_is_one_error_with_the_message_of_the_tool_and_is_not_repeated(self):
-        calls = (lambda: gh.list_issues('owner/repo', '[anomaly:observe]'),lambda: gh.comment_issue('owner/repo', 12, '+1'),
+        calls = (lambda: gh.list_issues('owner/repo', '[anomaly:observe]'),
+                 lambda: gh.comment_issue('owner/repo', 12, '+1'),
                  lambda: gh.create_issue('owner/repo', 'a title', 'a body'))
         for call in calls:
             with self.subTest(call=call):
