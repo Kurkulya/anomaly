@@ -549,11 +549,10 @@ def run_verify(args, environ):
 
 def measurable(anomaly):
     try:
-        verdict.resolve_metric(anomaly.experiment.metric)
-        verdict.resolve_metric(anomaly.experiment.guard)
+        verdict.verdict_inputs(anomaly)
     except RecordError:
         return False
-    return records.fix_date(anomaly) is not None
+    return True
 
 
 def run_decide(args, environ):
