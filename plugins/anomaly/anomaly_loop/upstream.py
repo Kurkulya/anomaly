@@ -11,7 +11,8 @@ When `plugin_repo` resolves to a checkout (gitrepo.plugin_repo), the command pri
 nothing written: a checkout fixes the plugin through an MR. Else every run checks the report (check_report: each line
 passes privacy.check_text and names no profile marker, scans.profile_markers, and no repo-layer name,
 scans.repo_layer_names; a hit refuses with no file written and nothing redacted), writes it to
-`<home>/upstream/<signature>.defect.md` (a `Title:` line, a blank line, the body) and prints the path.
+`<home>/upstream/<signature>.defect.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
+repo-layer check reads only the user's text (the symptom and the signature), not the title and target the CLI writes.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
@@ -41,6 +42,7 @@ DEFECT_SUFFIX = '.defect.md'
 MARKETPLACES = Path('plugins') / 'known_marketplaces.json'   # in the Claude Code user folder
 PREFIX = '[anomaly:{part}]'              # the start of a title: `<prefix> <signature>`
 LABEL = 'upstream defect'
+USER_FIELDS = ('Symptom', 'Signature')   # the report fields the user wrote; the CLI writes the others
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
 NO_REPOSITORY = ('no target repository is known: the marketplace record of this copy names no GitHub source and '
                  'the profile has no upstream_repo')
@@ -82,18 +84,14 @@ def part_word(context, target):
     raise RecordError(f'{LABEL}: the target {target or "(none)"} is not a skill, an agent or a file of this plugin')
 
 
-def name_pattern(name):
-    """A name as a whole word: no letter, digit, `_` or `-` right before or after it, in any case."""
-    return re.compile(rf'(?<![\w-]){re.escape(name)}(?![\w-])', re.I)
-
-
 def check_report(context, fields):
-    """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text or names a profile
-    marker (scans.profile_markers) or a repo-layer name (scans.repo_layer_names)."""
+    """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text, or when a field of
+    the user's text (USER_FIELDS: the symptom and the signature, not the lines the CLI writes) holds a profile marker
+    (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
     for key, value in fields:
         privacy.check_text(LABEL, key, value)
-        found = sorted(name for name in names if name_pattern(name).search(value))
+        found = scans.marker_hits(value, names) if key in USER_FIELDS else []
         if found:
             raise RecordError(f'{LABEL}: {key} names {", ".join(found)}, from the profile or the repo layer in home; '
                               'describe it in your own words')

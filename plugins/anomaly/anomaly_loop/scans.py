@@ -1,5 +1,5 @@
-"""Scans of the environment that tests and runtime checks share: the deny-shape matcher, the profile's org markers
-and the repo-layer names."""
+"""Scans of the environment that tests and runtime checks share: the deny-shape matcher, the profile's org markers,
+their match rule and the repo-layer names."""
 import json
 import re
 from pathlib import Path
@@ -89,6 +89,12 @@ def profile_markers(values, plugin_root):
         found += IDENTIFIER.findall(line)[:1]
     found = [identifier for identifier in found if not is_this_plugins(identifier, plugin_root)]
     return set(found) | {part for identifier in found for part in identifier.split(':') if '-' in part}
+
+
+def marker_hits(text, markers):
+    """The markers that `text` holds, sorted: a case-sensitive substring match, the one rule for the
+    neutrality test and the upstream report check."""
+    return [marker for marker in sorted(markers) if marker in text]
 
 
 def repo_layer_names(home):

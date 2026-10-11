@@ -230,6 +230,11 @@ class RefusalTest(UpstreamCase):
                 self.assertEqual(self.tree(), before)
                 self.assertEqual(self.gh.records, [])
 
+    def test_a_repo_layer_file_named_like_the_plugin_does_not_refuse_the_title_the_cli_writes(self):
+        """D-12 Amended: the marker and repo-layer check reads only the symptom and the signature."""
+        write_text(self.home / 'repos' / 'anomaly.md', '---\nverify: run-all\n---\n')
+        self.report(self.run_ok(), title_of('observe'))
+
 
 class TargetRepositoryTest(UpstreamCase):
     def test_with_no_marketplace_source_and_no_upstream_repo_the_file_is_written_and_the_command_exits_1(self):

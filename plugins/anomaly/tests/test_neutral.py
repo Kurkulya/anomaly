@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from anomaly_loop import flags, paths, profile
-from anomaly_loop.scans import profile_markers
+from anomaly_loop.scans import marker_hits, profile_markers
 from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli, write_anomaly_with, write_text
 
 HOST = re.compile(r'https?://([A-Za-z0-9.-]+)')
@@ -25,7 +25,7 @@ def files_with(root, markers):
     hits = []
     for path in plugin_files(root):
         text = path.read_text(encoding='utf-8', errors='ignore')
-        hits += [f'{path.relative_to(root)}: {m}' for m in sorted(markers) if m in text]
+        hits += [f'{path.relative_to(root)}: {m}' for m in marker_hits(text, markers)]
     return hits
 
 
