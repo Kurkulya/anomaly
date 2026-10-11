@@ -12,8 +12,9 @@ nothing written: a checkout fixes the plugin through an MR. Else every run check
 passes privacy.check_text and names no profile marker, scans.profile_markers, and no repo-layer name,
 scans.repo_layer_names; a hit refuses with no file written and nothing redacted), writes it to
 `<home>/upstream/<signature>.defect.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
-repo-layer check reads only the user's text (the symptom and the signature), not the title and target the CLI writes;
-that text is also refused when it holds a local path or the OS user name.
+repo-layer check reads only the text from outside the CLI (the symptom, the installed version folder and the
+signature), not the title and target the CLI composes; that text is also refused when it holds a local path or the OS
+user name.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
@@ -46,7 +47,7 @@ DEFECT_SUFFIX = '.defect.md'
 MARKETPLACES = Path('plugins') / 'known_marketplaces.json'   # in the Claude Code user folder
 PREFIX = '[anomaly:{part}]'              # the start of a title: `<prefix> <signature>`
 LABEL = 'upstream defect'
-USER_FIELDS = ('Symptom', 'Signature')   # the report fields the user wrote; the CLI writes the others
+OUTSIDE_FIELDS = ('Symptom', 'Installed version', 'Signature')   # from outside the CLI: the user, a folder name
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
@@ -78,8 +79,9 @@ def user_names(environ):
 
 
 def check_report(context, fields, environ):
-    """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text, or when a field of
-    the user's text (USER_FIELDS: the symptom and the signature, not the lines the CLI writes) holds a profile marker
+    """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text, or when a field from
+    outside the CLI (OUTSIDE_FIELDS: the symptom, the installed version folder and the signature, not the title and
+    target lines the CLI composes) holds a profile marker
     (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path
     (LOCAL_PATH: `/x/y` or `~/` not right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or
     `=`, or a drive `X:\\` or `X:/`; a slash inside a word such as `and/or`, a one-segment slash command such as
@@ -88,7 +90,7 @@ def check_report(context, fields, environ):
     users = user_names(environ)
     for key, value in fields:
         privacy.check_text(LABEL, key, value)
-        if key not in USER_FIELDS:
+        if key not in OUTSIDE_FIELDS:
             continue
         found = scans.marker_hits(value, names)
         if found:

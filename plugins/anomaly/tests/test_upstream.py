@@ -281,6 +281,16 @@ class RefusalTest(UpstreamCase):
         write_text(self.home / 'repos' / 'anomaly.md', '---\nverify: run-all\n---\n')
         self.report(self.run_ok(), title_of('observe'))
 
+    def test_an_installed_version_folder_that_holds_a_profile_marker_is_refused(self):
+        """The version is a folder name on disk, not text the CLI composes, so it gets the marker check too."""
+        self.write_profile('mr_tool: acme-kit:open-mr')
+        self.plugin = self.plugin.parent / 'acme-kit-build'
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}\n')
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        before = self.tree()
+        assert_cli_error(self, self.run_defect(), 'Installed version', 'acme-kit')
+        self.assertEqual(self.tree(), before)
+
     def test_a_local_path_or_the_user_name_in_the_symptom_is_refused_and_no_file_is_written(self):
         """D-12 Amended: an absolute path, a `~/` start or the OS user name; a slash inside a word is no path."""
         user = {'USER': 'jdoe'}
