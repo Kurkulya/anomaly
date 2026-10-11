@@ -1385,7 +1385,8 @@ The modes, in one line each (the full dispatch table is in
 [SKILL.md](plugins/anomaly/skills/review/SKILL.md)):
 
 - **ticket**: one ticket's diff, code and feature reviewers, security when `risk` matches.
-- **delta**: after a fix round, only the reviewer whose Blocker or High was fixed. After a
+- **delta**: after any fix round, every reviewer whose finding was fixed; after only Medium, Low or
+  Nit fixes it reports only Blocker and High, a new lower finding is `Open:`, no further round. After a
   conflict merge of the integration tip into the ticket branch, one round of `anomaly:code` on
   `<old tip>..<new tip>`, with the conflicted files named. Each delta or conflict-merge round runs
   `worklog start` before its dispatch, so its `worklog add --mode delta` line has a start time.
@@ -1411,7 +1412,7 @@ The modes, in one line each (the full dispatch table is in
   read-only.
 - Only when no Blocker or High is open does `ticket reviewed` write `Reviewed: <head sha>`. Each
   round leaves its work-unit line with `worklog add --mode`. Each reviewer, when it is done (after
-  its last delta round, or after its first round when it had no Blocker or High), stores its
+  its last delta round, or after its first round when none of its findings was fixed), stores its
   counts over all its rounds with `lens tally add`, `--revised` always passed; when the caller
   says "last review: yes" (you, `specify`, `slice`, or `conduct` in its cumulative review; `build`
   says "no" and sums itself when its caller said "yes", or when it asks you at its close and you
