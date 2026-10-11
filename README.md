@@ -772,12 +772,12 @@ expected effect, exactly one primary metric, exactly one guard, the session kind
 (today) and, only when given, `check_by`. The guard must be a quality signal: `rework sightings`,
 `late-catch sightings` or `interrupts`. `declare` refuses a second `--metric` or `--guard`, a
 missing guard, any other guard, an unknown metric name, a guard equal to the metric, a win, a
-closed anomaly, and an anomaly whose experiment is still running. It says how many sessions of
-the chosen kind ran in the last 28 days, and warns below 20, the number an experiment waits for
-(then leave the kind out). When the metric or the guard counts sightings and the backlog does
-not yet cover the 28 days before today, it names the first fix day that can be judged on them
-and suggests the `interrupts` guard; it says nothing of the kind when the metric is
-`sightings since the fix`, which needs no baseline. A finished
+closed anomaly, and an anomaly whose experiment is still running (a blank or `inconclusive`
+result). It says how many sessions of the chosen kind ran in the last 28 days, and warns below
+20, the number an experiment waits for (then leave the kind out). When the metric or the guard
+counts sightings and the backlog does not yet cover the 28 days before today, it names the first
+fix day that can be judged on them and suggests the `interrupts` guard; it says nothing of the
+kind when the metric is `sightings since the fix`, which needs no baseline. A finished
 experiment is moved to `## Earlier experiments` and the new one takes its place. A target that is
 part of this plugin (`anomaly:<skill>` in any case, or a path inside the plugin folder or its
 checkout) needs `--approved`: the loop proposes changes to itself and applies them only after
