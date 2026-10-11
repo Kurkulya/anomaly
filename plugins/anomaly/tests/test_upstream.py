@@ -303,7 +303,8 @@ class RefusalTest(UpstreamCase):
         """D-12 Amended: an absolute path, a `~/` start or the OS user name; a slash inside a word is no path."""
         user = {'USER': 'jdoe'}
         for summary in ('the check fails for owner/name and/or its forks', 'it runs after /compact twice',
-                        'it runs /anomaly:review twice'):   # a slash inside a word or a slash command is no path
+                        'it runs /anomaly:review twice',
+                        'see https://x.org/a'):   # a slash inside a word, a slash command or a link is no path
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 self.report(self.run_ok(), title_of('observe'))

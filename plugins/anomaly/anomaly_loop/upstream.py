@@ -86,8 +86,9 @@ def check_report(context, fields, environ):
     skipped, so a short repo-layer name such as `add` cannot match its hex) holds a profile marker
     (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path
     (LOCAL_PATH: `/x/y` or `~/` not right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or
-    `=`, or a drive `X:\\` or `X:/`; a slash inside a word such as `and/or`, a one-segment slash command such as
-    `/compact` and the `//` of a link are none) or the OS user name (user_names)."""
+    `=`, or a drive `X:\\` or `X:/`; a slash inside a word such as `and/or`, the `//` of a link and any one-segment
+    path are none, so a slash command such as `/compact` and a path such as `/etc` are allowed) or the OS user name
+    (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
     users = user_names(environ)
     for key, value in fields:
