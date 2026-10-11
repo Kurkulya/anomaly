@@ -463,6 +463,13 @@ class TuningRefusalTest(TuningCase):
                 self.write_experiment(result=result)
                 self.assert_refused(SIGNATURE)
 
+    def test_a_reopened_anomaly_is_refused_with_its_signature_and_why(self):
+        """Ticket 06 Amended (review): a status other than fixed means the fix did not hold."""
+        write_experiment_anomaly(self.home, SIGNATURE, target=TUNING_TARGET, metric='active minutes',
+                                 guard='rework sightings', fixed_by=FIX_REF, check_by='2026-10-01', result='keep',
+                                 status='reopened', summary=SUMMARY)
+        self.assert_refused(SIGNATURE, 'reopened')
+
 
 class TuningTextTest(TuningCase):
     def test_keep_and_unproven_are_accepted_and_the_text_names_the_verdict_word(self):

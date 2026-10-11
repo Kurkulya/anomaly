@@ -924,6 +924,17 @@ class BatchTest(CalibrateCase):
         write_text(self.plugin / 'anomaly_loop' / 'calibrate.py', '# code\n')
         self.assertEqual(self.plan_offers(), [])
 
+    def test_a_kept_line_of_a_reopened_anomaly_gets_no_offer(self):
+        """Ticket 06 Amended (review): the fix did not hold, so upstream tuning refuses it."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'observe'), 'Rule of reopened-one.', 'reopened-one',
+                            addenda.stamp(self.plugin / 'skills' / 'observe'))
+        write_experiment_anomaly(self.home, 'reopened-one', target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
+                                 check_by='2026-10-25', result='keep', status='reopened')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
     def test_with_a_checkout_the_plan_is_what_it_was_before_addenda(self):
         self.checkout()
         write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')

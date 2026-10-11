@@ -146,8 +146,12 @@ def defect_report(context, anomaly):
 def tuning_source(context, anomaly):
     """(word, rule) of the anomaly's tuning report: the title word (part_word) and the rule of the line tagged with
     its signature (addenda.tagged_line, the rule without its tag) in the addenda file its fix names
-    (addenda.addendum_file). RecordError when upstream tuning refuses it: the experiment's result is not in KEPT (a
-    revert, a result still `inconclusive` or none yet), no addenda file holds its line, or part_word refuses."""
+    (addenda.addendum_file). RecordError when upstream tuning refuses it: the anomaly's status is not `fixed` (a
+    reopened one: the fix did not hold), the experiment's result is not in KEPT (a revert, a result still
+    `inconclusive` or none yet), no addenda file holds its line, or part_word refuses."""
+    if anomaly.status != 'fixed':
+        raise RecordError(f'{TUNING_LABEL}: {anomaly.signature} is {anomaly.status}, not fixed: the fix did not hold, '
+                          'so its line is not sent')
     result = anomaly.experiment.result if anomaly.experiment is not None else ''
     if result not in KEPT:
         raise RecordError(f'{TUNING_LABEL}: the experiment of {anomaly.signature} has the result '
