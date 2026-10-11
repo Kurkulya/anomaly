@@ -1603,8 +1603,11 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   reads the command when `agent_id` is absent (the main window, also a session started with
   `--agent`), and it fails open: input that is not JSON, no `tool_input.command`, a command it cannot
   parse and any error are an allow with no output. The exit code is always 0. A `tee`, `sed`,
-  `curl` or `wget` counts only as the first word of a command (after `|`, `;`, `&&`, `$(` or a
-  wrapper such as `sudo` or `xargs`), not as an argument.
+  `curl` or `wget` counts only as the name of a command, not as an argument: the first word after
+  `|`, `;`, `&&`, `$(` or a newline, past the keywords `if`, `then`, `else`, `elif`, `do`, `while`,
+  `until`, `!` and `{`, assignments such as `FOO=1`, and the wrappers `sudo`, `env`, `nice`, `nohup`,
+  `time`, `timeout`, `xargs`, `command` and `exec` with their options and the values of the options
+  that take one (`sudo -u root`, `nice -n 10`, `xargs -n 1`; `timeout` also its duration).
 - `seams prune` reads the merge (`--merge`, default `HEAD`) as its changes against its first
   parent, and compares them with the ledger lines (`- <name> · <owner> · <rest>`). The owner is
   one or more owner paths, each followed by its names in parentheses; a non-file part after a path

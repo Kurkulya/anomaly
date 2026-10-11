@@ -618,7 +618,9 @@ SHELL_OPERATOR_CHARS = ';&|<>()`'
 SHELL_OPERATOR = re.compile(r'&>>|&>|>>|>\||>&|<<<|<<|<&|&&|\|\||\|&|.')
 FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
 INPUT_REDIRECTS = frozenset({'<', '<&', '<>', '<<<'})
-SHELL_WRAPPERS = frozenset({'command', 'env', 'exec', 'nice', 'nohup', 'sudo', 'time', 'xargs'})
+SHELL_KEYWORDS = frozenset({'!', '{', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'})
+SHELL_WRAPPERS = {'command': '', 'env': 'uCS', 'exec': 'a', 'nice': 'n', 'nohup': '', 'sudo': 'ughpCDRTU', 'time': 'fo',
+                  'timeout': 'sk', 'xargs': 'nIiLPsdEaJ'}   # wrapper -> its short options that take the next word
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
 CURL_OUTPUT = re.compile(r'-[A-Za-z]*o|-o.+|--output(=.*)?')
@@ -671,13 +673,26 @@ def shell_tokens(command):
     return tokens
 
 
+def command_words(words):
+    """The words of a simple command from its name on: the leading shell keywords (`do`, `then`, `!`, `{`),
+    assignments and wrapper commands (`sudo -u root`, `nice -n 10`, `timeout 5`) are dropped, a wrapper
+    with its options and the option values listed in SHELL_WRAPPERS."""
+    index = 0
+    while index < len(words):
+        word = words[index]
+        index += 1
+        if word in SHELL_WRAPPERS:
+            while index < len(words) and words[index].startswith('-'):
+                index += 2 if len(words[index]) == 2 and words[index][1] in SHELL_WRAPPERS[word] else 1
+            index += word == 'timeout'   # its duration
+        elif not (word in SHELL_KEYWORDS or ENV_ASSIGNMENT.match(word)):
+            return words[index - 1:]
+    return []
+
+
 def segment_write(words):
     """What one simple command (its words) writes through the shell, as a short name, or None."""
-    words = list(words)
-    while words and (ENV_ASSIGNMENT.match(words[0]) or words[0] in SHELL_WRAPPERS):
-        wrapper = words.pop(0) in SHELL_WRAPPERS
-        while wrapper and words and words[0].startswith('-'):
-            words.pop(0)
+    words = command_words(words)
     if not words:
         return None
     name, args = PurePosixPath(words[0]).name, words[1:]
