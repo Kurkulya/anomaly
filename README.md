@@ -947,7 +947,7 @@ python plugins/anomaly/scripts/anomaly.py upstream tuning <signature> --home <di
   refused.
 - With a plugin checkout (the plugin folder is a git checkout of its own, or `plugin_repo`
   names one) both commands print `a plugin checkout is set: fix it through an MR` and exit 1
-  with nothing written.
+  with nothing written; see The fork lane.
 
 ### assess
 
@@ -1012,6 +1012,27 @@ python plugins/anomaly/scripts/anomaly.py assess record --home <dir> --slug <slu
   and the idea's slug in the session place. When `home` is in a git repository, only the
   files written (the idea, and for `adopt` the anomaly and `INDEX.md`) are committed, with
   `chore(anomaly): assess <slug> (<verdict>)`; the command prints one `commit:` line.
+
+## The fork lane
+
+The power-user lane: you change the plugin's own text, judge the change as an experiment, and send
+it upstream as a PR. It needs no code of its own: the `plugin_repo` profile key already lets an
+installed copy calibrate plugin text through a checkout.
+
+1. Fork the plugin's repository on GitHub, then clone your fork.
+2. Set `plugin_repo` in your profile to the plugin folder inside the clone,
+   `<clone>/plugins/anomaly`.
+3. Install the plugin from your fork: run the commands of Install with the clone's path as the
+   marketplace path.
+4. Calibrate as usual. A target that is part of this plugin needs `calibrate declare --approved`,
+   given only after your explicit yes. Make the change in the clone, commit it there, and record
+   it with `calibrate fix --ref <commit>`.
+5. Send the change upstream: push it to your fork and open a PR to the plugin's repository.
+
+With a checkout, `calibrate plan` marks no fix home and offers no upstream report, and
+`upstream defect` and `upstream tuning` refuse (see Upstream reports): a fork sends its fixes
+through a PR, not an issue. The digest checks of plugin skills (Needs rework, Unused plugin
+skills) read the clone's history.
 
 ## Tickets
 
