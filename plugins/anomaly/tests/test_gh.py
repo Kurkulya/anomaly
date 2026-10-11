@@ -111,6 +111,15 @@ class GhIssueTest(unittest.TestCase):
         self.assertEqual(command[command.index('--json') + 1], 'title,state,url')
         self.assertFalse(run.call_args.kwargs.get('shell'))
 
+    def test_an_answer_that_is_not_an_issue_view_is_an_error(self):
+        for answer in ('{}', '[1]', '{"title": null, "state": "OPEN", "url": "%s"}' % ISSUE_LINK,
+                       '{"title": "a", "state": 1, "url": "%s"}' % ISSUE_LINK, '{"title": "a", "state": "OPEN"}',
+                       '{"title": "a", "state": "OPEN", "url": 7}', 'not json'):
+            with self.subTest(answer=answer):
+                with mock.patch('subprocess.run', return_value=done(answer)):
+                    with self.assertRaises(gh.GhError):
+                        gh.view_issue('owner/repo', 12)
+
     def test_a_new_issue_is_created_from_a_body_file_and_answers_its_link(self):
         """D-18: `gh issue create --body-file`; the body is never an argument."""
         with mock.patch('subprocess.run', return_value=done(ISSUE_LINK + '\n')) as run:
