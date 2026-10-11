@@ -40,7 +40,7 @@ from pathlib import Path
 
 from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
-                        FIXED_BY_SEPARATOR, GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS,
+                        GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS,
                         SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
 from .files import RecordError
 
@@ -200,12 +200,8 @@ def fix_home(context, target, plugin):
         return UPSTREAM_DEFECT
     if takes_no_addenda(part):
         return f'fix home: none, {part.name} takes no addenda'
-    return f'fix home: {home_relative(context.home, addenda.addendum_path(context.home, part.name, part.agent))}'
-
-
-def home_relative(home, path):
-    """A path inside home as the plan's fix-home mark and a `fixed_by` ref name it: relative, with `/`."""
-    return Path(path).relative_to(Path(home)).as_posix()
+    path = addenda.addendum_path(context.home, part.name, part.agent)
+    return f'fix home: {addenda.home_relative(context.home, path)}'
 
 
 def switch_over_text(kind, skill):
@@ -258,12 +254,6 @@ def write_addendum(home, anomaly, addendum):
     tagged = addenda.append_line(addendum.path, addendum.line, anomaly.signature, addenda.stamp(addendum.unit))
     return [f'addendum: {tagged}',
             observe.commit_home(home, [addendum.path], COMMIT_PREFIX + f'addendum for {anomaly.signature}')]
-
-
-def addendum_file(home, anomaly):
-    """The addenda file in home that the anomaly's fix names (`fixed_by` = `<date> · addenda/...`), or None."""
-    ref = anomaly.fixed_by.partition(FIXED_BY_SEPARATOR)[2].strip()
-    return next((path for path, _, _ in addenda.addenda_files(home) if home_relative(home, path) == ref), None)
 
 
 def remove_addendum(home, anomaly, path):
@@ -355,11 +345,12 @@ def run_declare(args, environ):
         anomaly.effort = args.effort
     earlier = tried_before(anomalies.values(), anomaly)
     if (current is not None and current.result) or anomaly.fixed_by.strip():
-        path = addendum_file(home, anomaly)
+        path = addenda.addendum_file(home, anomaly)
         if path is not None and addenda.tagged_line(path, anomaly.signature) is not None:
             if not addenda.has_verdict(current):
                 raise RecordError(in_flight)
-            raise RecordError(f'{label}: {home_relative(home, path)} still holds the line of the last experiment; '
+            held = addenda.home_relative(home, path)
+            raise RecordError(f'{label}: {held} still holds the line of the last experiment; '
                               f"remove it first with `calibrate drop {anomaly.signature} --reason '<text>'`")
         records.archive_experiment(anomaly)
     anomaly.experiment = records.Experiment(expect=expect, metric=metric, guard=guard, kind=kind, skill=skill,
@@ -419,7 +410,7 @@ def run_fix(args, environ):
         raise RecordError(f'{label}: --date {day} is before the experiment was declared '
                           f'({experiment.declared_on}); a fix is declared before the change')
     addendum = None if args.addendum is None else checked_addendum(context, anomaly, label, args.addendum, environ)
-    ref = args.ref if addendum is None else home_relative(home, addendum.path)
+    ref = args.ref if addendum is None else addenda.home_relative(home, addendum.path)
     privacy.check_text(label, 'ref', ref.strip(), SIGHTING_MAX_CHARS)
     anomaly.fixed_by = records.fixed_by_text(day, ref)
     anomaly.status = 'fixed'
@@ -447,7 +438,7 @@ def write_result(home, anomaly, result, reason):
     if result != 'revert':
         return []
     anomaly.status = 'reopened'
-    path = addendum_file(home, anomaly)
+    path = addenda.addendum_file(home, anomaly)
     return [] if path is None else remove_addendum(home, anomaly, path)
 
 
@@ -560,7 +551,7 @@ def run_drop(args, environ):
     home, today, anomalies = context.home, args.today, addenda.writable(context)
     anomaly = addenda.find(anomalies,args.signature)
     label = f'drop for {anomaly.signature}'
-    path = addendum_file(home, anomaly)
+    path = addenda.addendum_file(home, anomaly)
     if path is None or addenda.tagged_line(path, anomaly.signature) is None:
         raise RecordError(f'{label}: no addenda line is tagged with {anomaly.signature} in the file its fix names '
                           f'({anomaly.fixed_by or "none"})')

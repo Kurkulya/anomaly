@@ -6,7 +6,8 @@ the text the line adds to: the sorted relative paths and bytes of every file in 
 bytes of the one agent file, so it changes only when that skill or agent changes.
 
 Which part of the plugin a target is (plugin_part) lives here too, with the anomaly copies a writer
-changes (writable, find): calibrate and upstream both read them, and upstream does not import calibrate.
+changes (writable, find) and the addenda file an anomaly's fix names (addendum_file): calibrate and
+upstream both read them, and upstream does not import calibrate.
 """
 import copy
 import hashlib
@@ -15,7 +16,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from . import files, flags, privacy
-from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, PLUGIN_AGENTS_DIR, SKILL_AGENTS
+from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, FIXED_BY_SEPARATOR, PLUGIN_AGENTS_DIR, SKILL_AGENTS
 from .files import RecordError
 from .records import SLUG
 
@@ -128,6 +129,17 @@ def addenda_files(home):
     folder = Path(home) / ADDENDA_DIR
     return ([(path, path.stem, False) for path in sorted(folder.glob('*.md'))]
             + [(path, path.stem, True) for path in sorted((folder / AGENTS).glob('*.md'))])
+
+
+def home_relative(home, path):
+    """A path inside home as the plan's fix-home mark and a `fixed_by` ref name it: relative, with `/`."""
+    return Path(path).relative_to(Path(home)).as_posix()
+
+
+def addendum_file(home, anomaly):
+    """The addenda file in home that the anomaly's fix names (`fixed_by` = `<date> · addenda/...`), or None."""
+    ref = anomaly.fixed_by.partition(FIXED_BY_SEPARATOR)[2].strip()
+    return next((path for path, _, _ in addenda_files(home) if home_relative(home, path) == ref), None)
 
 
 def not_read(path, error):
