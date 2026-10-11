@@ -1612,8 +1612,16 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `curl` or `wget` counts only as the name of a command, not as an argument: the first word after
   `|`, `;`, `&&`, `$(` or a newline, past the keywords `if`, `then`, `else`, `elif`, `do`, `while`,
   `until`, `!` and `{`, assignments such as `FOO=1`, and the wrappers `sudo`, `env`, `nice`, `nohup`,
-  `time`, `timeout`, `xargs`, `command` and `exec` with their options and the values of the options
-  that take one (`sudo -u root`, `nice -n 10`, `xargs -n 1`; `timeout` also its duration).
+  `time`, `timeout`, `xargs`, `command` and `exec` with their options. An option is skipped alone,
+  and with the next word as its value only when it is in the table of that wrapper (the options
+  whose `--help` shows a required value; `--name=value` and `-nVALUE` are always one word, and an
+  option with an optional or no value, such as `sudo --preserve-env` or `xargs -i`, takes no next
+  word). Short: `sudo -u -g -h -p -C -D -R -T -U`, `env -u -C -S -f -a`, `nice -n`, `time -f -o`,
+  `timeout -s -k`, `xargs -n -I -L -P -s -d -E -a -J`, `exec -a`. Long: `sudo --chdir --group
+  --other-user --prompt --user`, `env --chdir --file --unset --split-string --argv0`,
+  `nice --adjustment`, `time --format --output`, `timeout --signal --kill-after`, `xargs --arg-file
+  --delimiter --max-args --max-chars --max-lines --max-procs --process-slot-var`. `timeout` also
+  skips its duration (`timeout 5 tee f`).
   The scan is not a shell parser, so some commands that write no file are denied, and the subagent
   writes them another way: the arithmetic shift `$((1<<2))`, the arithmetic test `(( i > 0 ))` and the
   string test `[[ $a > $b ]]` read as a heredoc or a redirect.

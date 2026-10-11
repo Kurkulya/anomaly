@@ -1031,6 +1031,17 @@ class SubagentBashVerdictTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
+    def test_a_wrapper_long_option_with_a_separate_value_is_skipped_and_one_without_is_not_a_value(self):
+        """AC-21: `sudo --user root tee f` finds `tee`; `sudo --preserve-env tee f` has no value to skip."""
+        for command in ('sudo --user root tee f', 'sudo --preserve-env tee f', 'sudo --user=root tee f',
+                        'nice --adjustment 5 tee f', 'timeout --signal KILL 5 tee f',
+                        'xargs --max-args 1 sed -i s/a/b/', 'env --unset X tee f', 'env --ignore-signal tee f'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        for command in ('sudo --user root grep tee f', 'sudo --preserve-env grep tee f'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_a_both_streams_redirect_to_dev_null_is_allowed_and_to_a_file_is_denied(self):
         """AC-22: `>&` takes /dev/null like `>`; `>&f` writes a file."""
         for command in ('cmd >& /dev/null', 'cmd >&/dev/null'):

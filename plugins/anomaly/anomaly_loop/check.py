@@ -619,8 +619,20 @@ SHELL_OPERATOR = re.compile(r'&>>|&>|>>|>\||>&|<<<|<<|<&|&&|\|\||\|&|.')
 FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
 INPUT_REDIRECTS = frozenset({'<', '<&', '<<<'})
 SHELL_KEYWORDS = frozenset({'!', '{', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'})
-SHELL_WRAPPERS = {'command': '', 'env': 'uCS', 'exec': 'a', 'nice': 'n', 'nohup': '', 'sudo': 'ughpCDRTU', 'time': 'fo',
-                  'timeout': 'sk', 'xargs': 'nILPsdEaJ'}   # wrapper -> its short options that take the next word
+# wrapper -> (its short options, its long options) that take the next word as their value. The long ones are
+# those whose `--help` shows a required `--name=VALUE` or `--name <VALUE>` (getopt and clap accept the value
+# as the next word); an optional `--name[=VALUE]` takes it attached only and is left out: `xargs --help`,
+# `env --help`, `nice --help`, `timeout --help`, `sudo --help` and `/usr/bin/time --help` (sudo 1.9, coreutils).
+SHELL_WRAPPERS = {
+    'command': ('', ()), 'exec': ('a', ()), 'nohup': ('', ()),
+    'env': ('uCSfa', ('chdir', 'file', 'unset', 'split-string', 'argv0')),
+    'nice': ('n', ('adjustment',)),
+    'sudo': ('ughpCDRTU', ('chdir', 'group', 'other-user', 'prompt', 'user')),
+    'time': ('fo', ('format', 'output')),
+    'timeout': ('sk', ('signal', 'kill-after')),
+    'xargs': ('nILPsdEaJ', ('arg-file', 'delimiter', 'max-args', 'max-chars', 'max-lines', 'max-procs',
+                            'process-slot-var')),
+}
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
 NO_FILE_TARGETS = ('-', '/dev/null')
@@ -765,8 +777,11 @@ def command_words(words):
         word = words[index]
         index += 1
         if word in SHELL_WRAPPERS:
+            short, long = SHELL_WRAPPERS[word]
             while index < len(words) and words[index].startswith('-'):
-                index += 2 if len(words[index]) == 2 and words[index][1] in SHELL_WRAPPERS[word] else 1
+                option = words[index]
+                takes_next = option[2:] in long if option.startswith('--') else len(option) == 2 and option[1] in short
+                index += 2 if takes_next else 1
             index += word == 'timeout'   # its duration
         elif not (word in SHELL_KEYWORDS or ENV_ASSIGNMENT.match(word)):
             return words[index - 1:]
