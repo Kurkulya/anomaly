@@ -152,6 +152,34 @@ class CoreDefaultTest(UpstreamCase):
         self.assertIn(SEARCH_LINK, out)
         self.assertEqual(self.gh.records, [])
 
+    def test_comment_or_create_on_the_core_default_is_an_error_and_writes_nothing(self):
+        """D-41: there is no tool to call."""
+        before = self.tree()
+        for flags in (('--comment', '12'), ('--create',)):
+            with self.subTest(flags=flags):
+                assert_cli_error(self, self.run_defect(*flags), 'core default')
+                self.assertEqual(self.tree(), before)
+
+
+class SetupErrorTest(UpstreamCase):
+    """The refusals before any call: an unknown adapter, a repository not owner/name, a target outside the plugin."""
+
+    def test_an_unknown_upstream_tool_is_an_error_naming_the_accepted_adapters(self):
+        self.write_profile('upstream_tool: hub')
+        assert_cli_error(self, self.run_defect(), 'upstream_tool', "'hub'", 'gh')
+        self.assertEqual(self.gh.records, [])
+
+    def test_a_target_repository_that_is_not_owner_name_is_an_error(self):
+        self.set_marketplace(None)
+        self.write_profile('upstream_repo: just-a-name')
+        assert_cli_error(self, self.run_defect(), 'just-a-name', 'owner/name')
+
+    def test_a_target_outside_the_plugin_is_refused_and_no_file_is_written(self):
+        self.write_anomaly(target='deploy-script')
+        before = self.tree()
+        assert_cli_error(self, self.run_defect(), 'deploy-script', 'not a skill, an agent or a file of this plugin')
+        self.assertEqual(self.tree(), before)
+
 
 class GhSearchTest(UpstreamCase):
     def setUp(self):
@@ -345,6 +373,13 @@ class SearchLinesTest(unittest.TestCase):
         self.assertIn(f'#13 {other}', out)
         self.assertNotIn('\x1b', out)
         self.assertNotIn('\x07', out)
+
+    def test_no_issue_of_the_target_says_to_create_one_and_no_exact_hit_asks_for_a_proposed_match(self):
+        self.assertEqual(self.lines([(5, '[anomaly:facts] other')]),
+                         [f'no open issue of {REPO} names {self.PREFIX}: run again with --create to open one'])
+        lines = self.lines([(13, title_of('observe', 'another-signature'))])
+        self.assertEqual([line for line in lines if '+1 offer' in line], [])
+        self.assertIn('no exact signature hit: propose a match from these titles', lines[-1])
 
 
 if __name__ == '__main__':
