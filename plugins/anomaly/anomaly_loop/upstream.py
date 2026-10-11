@@ -187,15 +187,11 @@ def tuning_source(context, anomaly):
 def tuning_checked(context, anomaly):
     """The checked part of the anomaly's tuning report, with no verdict run: tuning_source, its fields and the agent
     name of each per-dispatch reading (verdict.per_dispatch_agent of the experiment's metric and guard as
-    verdict.resolve_metric names them, the names of the readings tuning_report adds). RecordError when upstream
-    tuning refuses it, also when verdict.verdict would refuse it before its readings: a fixed_by with no fix date
-    or a metric resolve_metric refuses."""
+    verdict.verdict_inputs names them, the names of the readings tuning_report adds). RecordError when upstream
+    tuning refuses it, also when verdict.verdict would refuse it before its readings (verdict.verdict_inputs)."""
     word, rule = tuning_source(context, anomaly)
     experiment, version = anomaly.experiment, installed_version(context)
-    if records.fix_date(anomaly) is None:
-        raise RecordError(f'anomaly {anomaly.signature}: fixed_by {anomaly.fixed_by!r} has no fix date, so '
-                          'there is no before and after; the user decides')
-    names = (verdict.resolve_metric(experiment.metric).name, verdict.resolve_metric(experiment.guard).name)
+    names = tuple(metric.name for metric in verdict.verdict_inputs(anomaly)[1:])   # the metric and the guard
     fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', experiment.result),
               ('Reason', experiment.reason or '(none recorded)'), (VERSION_FIELD, version),
               ('Signature', anomaly.signature))
