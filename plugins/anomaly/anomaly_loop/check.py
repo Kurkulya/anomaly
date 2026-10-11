@@ -774,11 +774,12 @@ def command_words(words):
 
 
 def writes_output(args, flag, long_option):
-    """True when `args` of curl or wget name an output file: `-<flag>` (also last in a bundle such as
-    `-qO`) or `long_option`, with a target other than `-` or /dev/null, attached (`-ofile`, `--output=file`)
+    """True when `args` of curl or wget name an output file: `-<flag>` (also in a bundle such as `-qO`;
+    the first `flag` letter is the option, what follows it is its value) or `long_option`, with a target other than `-` or /dev/null, attached (`-ofile`, `--output=file`)
     or the next argument."""
     for index, arg in enumerate(args):
-        found = re.fullmatch(rf'-[A-Za-z]*{flag}(.*)', arg) or re.fullmatch(rf'{long_option}(?:=(.*))?', arg)
+        found = (re.fullmatch(rf'-[A-Za-z]*?{flag}(.*)', arg, re.DOTALL)
+                 or re.fullmatch(rf'{long_option}(?:=(.*))?', arg, re.DOTALL))
         if found:
             target = found.group(1) or (args[index + 1] if index + 1 < len(args) else '-')
             if target not in NO_FILE_TARGETS:

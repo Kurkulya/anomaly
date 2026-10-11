@@ -1046,7 +1046,8 @@ class SubagentBashVerdictTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_allowed(command)
         for command in ('curl -o f http://host', 'wget -O f http://host', 'wget -qOf http://host',
-                        'curl -sSLo f http://host', 'curl --output f http://host', 'curl --output=f http://host'):
+                        'curl -sSLo f http://host', 'curl --output f http://host', 'curl --output=f http://host',
+                        'curl -ovideo http://host', 'curl http://host -ovideo', 'curl -o"a\nb" http://host'):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
