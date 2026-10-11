@@ -1743,11 +1743,13 @@ class ConductSkillTest(unittest.TestCase):
 
     def test_the_finish_fix_branch_step_calls_a_warm_review_delta_round_on_the_merge_before_its_trace_tags(self):
         """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge, a call of
-        the review skill's delta mode (so its tally, worklog and sum run), placed before the step's trace tags."""
+        the review skill's delta mode (so its tally, worklog and sum run), placed before the step's trace tags. Its
+        tally counts only this round: `lens tally sum` adds every run, and step 17 already tallied the earlier rounds."""
         step = ' '.join(next(line for line in self.text().splitlines() if 'One fix branch off the tip' in line).split())
         self.assertTrue(step.endswith(']'), 'the step does not end with its trace tags')
         after_merge = step.split('Merge `--no-ff`', 1)[-1].split('[O38', 1)[0]
-        for token in ('`anomaly:review` delta', '`<pre-merge tip>..<merge>`', 'warm', '"last review: yes"'):
+        for token in ('`anomaly:review` delta', '`<pre-merge tip>..<merge>`', 'warm', '"last review: yes"',
+                      'tally counts only this round'):
             with self.subTest(token=token):
                 self.assertIn(token, after_merge)
 
