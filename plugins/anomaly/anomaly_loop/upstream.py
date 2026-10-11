@@ -54,26 +54,6 @@ ISSUE_LINK = re.compile(r'.*/issues/(\d+)/?')
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): upstream '
 
 
-def adapter_name(resolution):
-    """The name of the issue tool the `upstream` port names (checked against constants.UPSTREAM_ADAPTERS), or None on
-    the core default."""
-    adapter = ports.port(resolution, 'upstream')
-    if adapter.is_default:
-        return None
-    if adapter.value not in UPSTREAM_ADAPTERS:
-        raise RecordError(f'profile key upstream_tool: unknown upstream adapter {adapter.value!r} '
-                          f'(accepted: {", ".join(UPSTREAM_ADAPTERS)})')
-    return adapter.value
-
-
-def call(function, *args, **kwargs):
-    """function(*args, **kwargs), with the error of an issue tool as a RecordError."""
-    try:
-        return function(*args, **kwargs)
-    except ADAPTER_ERRORS as error:
-        raise RecordError(str(error)) from None
-
-
 def part_word(context, target):
     """What the title names after `anomaly:`: the skill or agent (addenda.plugin_part), or for plugin code the path
     from the plugin root. Any other target is refused: the report has no title for it."""
@@ -207,7 +187,7 @@ def run_defect(args, environ):
     if gitrepo.plugin_repo(context.plugin_root, context.profile) is not None:
         print(CHECKOUT_SET)
         return 1
-    name = adapter_name(ports.resolve(context.home))
+    name = ports.adapter_name(ports.resolve(context.home), 'upstream', UPSTREAM_ADAPTERS, 'upstream')
     if name is None and (args.comment is not None or args.create):
         raise RecordError(f'{LABEL}: the upstream port is on its core default, so there is no tool to call '
                           '(set upstream_tool in the profile)')
@@ -229,16 +209,17 @@ def run_defect(args, environ):
     tool = ADAPTERS[name]
     if args.comment is not None:
         version = dict(fields)['Installed version']
-        call(tool.comment_issue, repo, args.comment, f'+1: the same defect on the installed version {version}',
-             environ=environ)
+        ports.call_tool(ADAPTER_ERRORS, tool.comment_issue, repo, args.comment,
+                        f'+1: the same defect on the installed version {version}', environ=environ)
         number = args.comment
         print(f'+1 added to #{number}')
     elif args.create:
-        link = call(tool.create_issue, repo, title, body, environ=environ)
+        link = ports.call_tool(ADAPTER_ERRORS, tool.create_issue, repo, title, body, environ=environ)
         number = issue_number(link)
         print(link)
     else:
-        print('\n'.join(search_lines(repo, call(tool.list_issues, repo, prefix, environ=environ), title, prefix)))
+        issues = ports.call_tool(ADAPTER_ERRORS, tool.list_issues, repo, prefix, environ=environ)
+        print('\n'.join(search_lines(repo, issues, title, prefix)))
         return 0
     addenda.log_line(anomaly, f'upstream {args.today.isoformat()} · {number}')
     print(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
