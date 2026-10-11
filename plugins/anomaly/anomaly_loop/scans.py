@@ -1,4 +1,4 @@
-"""Scans of the environment that tests and runtime checks share: the deny-shape matcher, the profile's org markers,
+"""Scans of the environment that tests and runtime checks share: the deny-shape matcher, the profile's environment markers,
 their match rule and the repo-layer names."""
 import json
 import re

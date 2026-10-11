@@ -102,31 +102,31 @@ class PortTableTest(PortsCase):
         self.assertEqual(found['ci'], ('some-ci-tool', 'profile'))
         self.assertEqual(found['ui_check'], ('some-checker', 'profile'))
 
-    def test_an_org_reviewer_is_added_beside_the_three_lenses(self):
-        self.write_profile('reviewers: org-reviewer, org-security-reviewer')
+    def test_an_environment_reviewer_is_added_beside_the_three_lenses(self):
+        self.write_profile('reviewers: environment-reviewer, environment-security-reviewer')
         found = self.section(self.ports(), 'port')
-        self.assertEqual(found['reviewers'], (f'{LENSES}, org-reviewer, org-security-reviewer',
+        self.assertEqual(found['reviewers'], (f'{LENSES}, environment-reviewer, environment-security-reviewer',
                                               'core default + profile'))
 
     def test_a_reviewer_list_in_brackets_or_on_several_lines(self):
-        self.write_profile('reviewers: [org-a, org-b]', 'gather:', '  - skill-a', '  - skill-b, <skill>')
+        self.write_profile('reviewers: [environment-a, environment-b]', 'gather:', '  - skill-a', '  - skill-b, <skill>')
         found = self.section(self.ports(), 'port')
-        self.assertEqual(found['reviewers'], (f'{LENSES}, org-a, org-b', 'core default + profile'))
+        self.assertEqual(found['reviewers'], (f'{LENSES}, environment-a, environment-b', 'core default + profile'))
         self.assertEqual(found['gather'], ("read the repo's code and docs, skill-a, skill-b", 'core default + profile'))
 
-    def test_an_org_conventions_source_is_listed_after_the_repos_own_docs(self):
-        self.write_profile('conventions:', '  stack-a: docs/org-conventions.md')
+    def test_an_environment_conventions_source_is_listed_after_the_repos_own_docs(self):
+        self.write_profile('conventions:', '  stack-a: docs/environment-conventions.md')
         found = self.section(self.ports(), 'port')
         base = found['conventions'][0]
         self.assertEqual(found['conventions'][1], 'core default')
-        self.assertEqual(found['conventions.stack-a'], (f'{base}, docs/org-conventions.md', 'core default + profile'))
+        self.assertEqual(found['conventions.stack-a'], (f'{base}, docs/environment-conventions.md', 'core default + profile'))
 
     def test_a_per_stack_value_without_a_stack_is_the_adapter_for_every_stack(self):
-        self.write_profile('implementers: some-agent', 'conventions: docs/org.md', 'test_writers:',
+        self.write_profile('implementers: some-agent', 'conventions: docs/environment.md', 'test_writers:',
                            '  pack:writer-tool', '  stack-a: writer-one', '  stack-b:')
         found = self.section(self.ports(), 'port')
         self.assertEqual(found['implementer'], ('some-agent', 'profile'))
-        self.assertEqual(found['conventions'], ("the repo's own docs, only the sections the diff touches, docs/org.md",
+        self.assertEqual(found['conventions'], ("the repo's own docs, only the sections the diff touches, docs/environment.md",
                                                 'core default + profile'))
         self.assertEqual(found['test_writer'], ('pack:writer-tool', 'profile'))
         self.assertEqual(found['test_writer.stack-a'], ('writer-one', 'profile'))

@@ -71,7 +71,7 @@ related. Answer these four points, briefly and with evidence:
    review misses).
 3. **Conflicts**: with a recorded decision (a `wontfix` or closed anomaly, the
    `## Closed` list in `INDEX.md`, the glossary file named in the profile), with a plugin
-   rule (the README, this plugin's skills), or with a win that must not be removed. Say
+   rule (`docs/reference.md`, this plugin's skills), or with a win that must not be removed. Say
    "none found" only after you looked.
 4. **The strongest case against**: the best honest argument for not adopting it, including
    what it costs in the user's time and tokens. Write it as if you wanted it to win.

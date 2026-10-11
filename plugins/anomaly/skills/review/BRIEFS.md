@@ -1,6 +1,6 @@
 # Reviewer briefs
 
-Loaded at dispatch; the last section is for the main window. Fill one brief per agent; leave out a line that has no value. Never paste an org name or path into core text: it comes from the ports line.
+Loaded at dispatch; the last section is for the main window. Fill one brief per agent; leave out a line that has no value. Never paste an environment name or path into core text: it comes from the ports line.
 
 ## Every agent
 
@@ -12,7 +12,7 @@ Loaded at dispatch; the last section is for the main window. Fill one brief per 
 
 ## anomaly:code
 
-- Repo docs, and the org conventions sections for the touched areas only. [R5, I23]
+- Repo docs, and the environment conventions sections for the touched areas only. [R5, I23]
 - Combined mode: also apply the ticket-mode checklist of <the `agents/feature.md` path in SKILL.md § When an agent's read fails> to <ticket path or task text>. [I22]
 
 ## anomaly:feature
@@ -34,7 +34,7 @@ Loaded at dispatch; the last section is for the main window. Fill one brief per 
 
 - Mode: spec or tickets. Work-unit folder: <path>, in place of Range and Tip. Main checkout: <path>. Ports line, word limit.
 
-## An org reviewer
+## An environment reviewer
 
 - The same range and tip as the core agents; its findings go under its own heading and its own lens.
 

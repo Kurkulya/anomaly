@@ -184,7 +184,7 @@ the two counts. Count only what happened in this session; never guess a count. A
 no decisions gets no entry. The entries are recorded together with the chosen anomalies, after
 the user's answer, unless the user declines them. The `review` and `build` skills record their own
 lenses through the CLI (`lens tally`), under the fixed names that command holds (`code`, `feature`,
-`security`, `plan`, `interview`, `model_pick` and the org reviewers' adapter names). A capture adds
+`security`, `plan`, `interview`, `model_pick` and the environment reviewers' adapter names). A capture adds
 no entry for those names: their tally already holds the counts, and a later apply replaces or
 refuses a line (ADR-0021).
 

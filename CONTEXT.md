@@ -33,7 +33,7 @@
 | **log** | A work unit's `log.md`: events only, for people and agents, with no cost numbers. Written only by `anomaly log add`. | journal, digest |
 | **risk area** | A kind of change that makes the security review join a ticket's review: auth; input parsing and execution; secrets or config; dependencies; network calls (core globs in `constants.RISK_AREAS`), plus the extra `risk_patterns` of the repo layer. `risk <range>` names the matched areas and files. | security zone |
 | **port** | A named extension point of the pipeline with one fixed mode (add, extend or replace) and a core default that works with an empty profile. | hook (that is a Claude Code feature) |
-| **adapter** | The org value or tool the profile injects into a port, such as an org implementer agent or MR tool. | plugin, integration |
+| **adapter** | The environment value or tool the profile injects into a port, such as an environment implementer agent or MR tool. | plugin, integration |
 | **core default** | What a port does when the profile names no adapter, written in the plugin's own words. | fallback |
 | **model role** | A kind of dispatch that the `models` key maps to one model, and optionally an effort. | role (alone), agent model |
 | **base branch** | The branch a work unit's integration branch is cut from: the repo layer's `base` key, else the branch `origin/HEAD` points at, else `main`. `ports` prints it as `repo base`. | a ticket's `Base:` line (that holds the **integration branch**) |
@@ -60,7 +60,7 @@
 | **stack profile** | One file per stack (language and test runner) in a skill's `reference/stacks/` that gives the commands and greps the skill runs on that stack; a stack with no file gets a drafted one. | profile (alone; that is the environment mapping) |
 | **lock** | A guard that stops an architecture finding from coming back: an import or lint rule at error level, or a failing test. | guard rail |
 | **cover** | The kept test that a test cut relies on: it must fail on each break of the cut test's behaviour. | replacement |
-| **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the README uses "mutation probe" and "probe edit") |
+| **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the reference (`docs/reference.md`) uses "mutation probe" and "probe edit") |
 | **addendum** | One rule line in a user's addenda file in home, tied to one experiment, that adds to or narrows one plugin skill or agent (ADR-0023). | patch, override, local rule |
 | **upstream report** | Opt-in text an installed-copy user sends to the plugin's repository as a GitHub issue or a +1 comment, in one of two lanes (ADR-0024). | report (alone), telemetry, issue (alone) |
 | **defect report** | The upstream report lane for a plugin fault, sent with no experiment. | bug report |
