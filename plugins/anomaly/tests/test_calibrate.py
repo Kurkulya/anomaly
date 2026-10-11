@@ -894,7 +894,10 @@ class BatchTest(CalibrateCase):
         return sorted(line.strip() for line in out.splitlines() if 'upstream: ' in line)
 
     def plan_offers(self):
-        code, out, err = self.cli('plan')
+        """The plan's offer lines, with `verdict.verdict` failing when called: the offer runs no permutation test
+        (AC-8, D-6)."""
+        with mock.patch('anomaly_loop.verdict.verdict', side_effect=AssertionError('the plan ran verdict.verdict')):
+            code, out, err = self.cli('plan')
         self.assertEqual((code, err), (0, ''))
         return self.offers(out)
 
@@ -960,6 +963,34 @@ class BatchTest(CalibrateCase):
                             addenda.stamp(self.plugin / 'skills' / 'research'))
         write_experiment_anomaly(self.home, 'marked-one', target='anomaly:research', metric='active minutes',
                                  guard='rework sightings', fixed_by='2026-09-20 · addenda/research.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_a_kept_line_whose_reason_or_per_dispatch_agent_name_the_check_refuses_gets_no_offer(self):
+        """AC-9 (D-6): the reason and the agent name of a per-dispatch metric are text the check reads; `run-tickets`
+        is a build skill of the profile."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        for signature, name, metric in (('reason-one', 'observe', 'active minutes'),
+                                        ('agent-one', 'research', 'model-weighted tokens per dispatch run-tickets')):
+            addenda.append_line(addenda.addendum_path(self.home, name), f'Rule of {signature}.', signature,
+                                addenda.stamp(self.plugin / 'skills' / name))
+            write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', metric=metric,
+                                     guard='rework sightings', fixed_by=f'2026-09-20 · addenda/{name}.md',
+                                     check_by='2026-10-25', result='keep', status='fixed')
+        reasoned = self.anomaly('reason-one')
+        reasoned.experiment.reason = 'Run run-tickets first.'
+        records.write_anomaly(self.home, reasoned)
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_a_kept_line_whose_fixed_by_has_no_fix_date_gets_no_offer(self):
+        """AC-10 (D-7): the send refuses it before its readings, so the offer does too."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Rule of undated-one.', 'undated-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'undated-one', target='anomaly:research', metric='active minutes',
+                                 guard='rework sightings', fixed_by='later · addenda/research.md',
                                  check_by='2026-10-25', result='keep', status='fixed')
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
 
