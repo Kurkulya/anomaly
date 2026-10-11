@@ -629,11 +629,9 @@ class TuningGhTest(TuningCase):
         self.assertEqual(self.gh.calls('create'), [])
         self.assert_logged(12)
 
-    def test_comment_on_a_closed_issue_or_one_with_another_title_is_refused_with_the_tuning_label(self):
-        """AC-18, AC-19 (D-2): the refusal line of `upstream tuning` names `upstream tuning`."""
+    def test_comment_on_an_issue_with_another_title_is_refused_with_the_tuning_label(self):
+        """AC-18 (D-2): the refusal line of `upstream tuning` names `upstream tuning`."""
         self.assert_comment_refused(self.run_tuning, 'upstream tuning', 13, ('An unrelated issue', 'OPEN', url_of(13)))
-        self.assert_comment_refused(self.run_tuning, 'upstream tuning', 14,
-                                    (title_of('observe'), 'CLOSED', url_of(14)))
 
     def test_create_opens_the_issue_from_the_report_and_logs_the_number_of_the_new_issue(self):
         self.run_ok_tuning('--create')

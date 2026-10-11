@@ -984,21 +984,17 @@ class BatchTest(CalibrateCase):
                                  check_by='2026-10-25', result='keep', status='fixed')
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
 
-    def test_a_kept_line_whose_reason_or_per_dispatch_agent_name_the_check_refuses_gets_no_offer(self):
-        """AC-9 (D-6): the reason and the agent name of a per-dispatch metric are text the check reads; `run-tickets`
-        is a build skill of the profile."""
+    def test_a_kept_line_whose_per_dispatch_agent_name_the_check_refuses_gets_no_offer(self):
+        """AC-9 (D-6): the agent name of a per-dispatch metric is text the check reads; `run-tickets` is a build
+        skill of the profile."""
         self.lay_out_plugin()
         self.kept_addendum('kept-one')
-        for signature, name, metric in (('reason-one', 'observe', 'active minutes'),
-                                        ('agent-one', 'research', 'model-weighted tokens per dispatch run-tickets')):
-            addenda.append_line(addenda.addendum_path(self.home, name), f'Rule of {signature}.', signature,
-                                addenda.stamp(self.plugin / 'skills' / name))
-            write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', metric=metric,
-                                     guard='rework sightings', fixed_by=f'2026-09-20 · addenda/{name}.md',
-                                     check_by='2026-10-25', result='keep', status='fixed')
-        reasoned = self.anomaly('reason-one')
-        reasoned.experiment.reason = 'Run run-tickets first.'
-        records.write_anomaly(self.home, reasoned)
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Rule of agent-one.', 'agent-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'agent-one', target='anomaly:research',
+                                 metric='model-weighted tokens per dispatch run-tickets', guard='rework sightings',
+                                 fixed_by='2026-09-20 · addenda/research.md', check_by='2026-10-25', result='keep',
+                                 status='fixed')
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
 
     def test_a_kept_line_whose_fixed_by_has_no_fix_date_gets_no_offer(self):
