@@ -19,10 +19,11 @@ NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
 TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
 TAG_SHAPE = f'{TAG_OPEN}<signature>{TAG_SEPARATOR}<stamp>{TAG_CLOSE}'
-TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?:{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
-                    rf'[0-9a-f]{{{STAMP_CHARS}}}{re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
+TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?P<signature>{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
+                    rf'(?P<stamp>[0-9a-f]{{{STAMP_CHARS}}}){re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
 HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
 HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
+LOG_HEADING = 'Addenda log'   # the anomaly section that records what happened to its addenda line
 
 
 def addendum_path(home, name, agent=False):
@@ -69,6 +70,49 @@ def append_line(path, line, signature, stamp):
     tagged = f'{line} {TAG_OPEN}{signature}{TAG_SEPARATOR}{stamp}{TAG_CLOSE}'
     files.write_lines(path, lines + [tagged])
     return tagged
+
+
+def is_tagged_with(line, signature):
+    found = TAGGED.fullmatch(line)
+    return found is not None and found['signature'] == signature
+
+
+def tagged_line(path, signature):
+    """The line of the file tagged with this experiment's signature (TAGGED), or None."""
+    return next((line for line in read_lines(path) if is_tagged_with(line, signature)), None)
+
+
+def remove_line(path, signature):
+    """Remove the line tagged with this signature from the file and keep every other line as it is; returns the
+    removed line, or None when the file holds no such line and is not changed."""
+    lines = read_lines(path)
+    removed = next((line for line in lines if is_tagged_with(line, signature)), None)
+    if removed is not None:
+        files.write_lines(path, [line for line in lines if not is_tagged_with(line, signature)])
+    return removed
+
+
+def log_line(anomaly, line):
+    """Append `line` as the last `- ` line of the anomaly's `## Addenda log`, which is added when missing; the
+    one writer of that section."""
+    for number, (name, content) in enumerate(anomaly.sections):
+        if name.lower() == LOG_HEADING.lower():
+            anomaly.sections[number] = (name, '\n'.join([content, f'- {line}']).strip())
+            return
+    anomaly.sections.append((LOG_HEADING, f'- {line}'))
+
+
+def has_verdict(experiment):
+    """True when the experiment has a verdict. A blank or `inconclusive` result is none: the experiment is still
+    in flight (ADR-0002), so its line is not dropped yet."""
+    return experiment is not None and experiment.result not in ('', 'inconclusive')
+
+
+def addenda_files(home):
+    """(path, name, agent) of every addenda file in home: the skills' files, then the agents', each by name."""
+    folder = Path(home) / ADDENDA_DIR
+    return ([(path, path.stem, False) for path in sorted(folder.glob('*.md'))]
+            + [(path, path.stem, True) for path in sorted((folder / AGENTS).glob('*.md'))])
 
 
 def file_block(path, heading):

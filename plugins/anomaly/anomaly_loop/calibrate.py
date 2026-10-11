@@ -12,6 +12,7 @@ module ranks, records and judges, so the numbers never depend on the conversatio
   decide   the user's result for an experiment the numbers could not judge
   close    mark anomalies wontfix (stale ones)
   merge    fold a near-duplicate into the anomaly that stays
+  drop     remove the addenda line of an experiment that has a verdict, keep the result, log why
 
 Batches. Open and reopened problems are grouped: a `repo:` or `plugin:` scope is one batch;
 any other scope (`global` and the like) is split by target, and problems without a target share one
@@ -40,7 +41,7 @@ from pathlib import Path
 
 from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
-                        GUARD_HELP, IMPACT_RANGE, PLUGIN_AGENTS_DIR, QUALITY_GUARDS, SESSION_KINDS,
+                        FIXED_BY_SEPARATOR, GUARD_HELP, IMPACT_RANGE, PLUGIN_AGENTS_DIR, QUALITY_GUARDS, SESSION_KINDS,
                         SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
 from .files import RecordError
 
@@ -296,16 +297,38 @@ def checked_addendum(context, anomaly, label, line, environ):
     return Addendum(addenda.addendum_path(context.home, part.name, part.agent), part.unit, line)
 
 
-def write_addendum(home, anomaly, addendum):
-    """Append the tagged line to its addenda file and commit that file alone; returns the lines to print.
-    The fixed anomaly record is validated first, as observe.write_anomalies does, so a record that cannot be
-    saved leaves no line behind."""
+def check_record(anomaly):
+    """Validate the changed anomaly record as observe.write_anomalies does, before an addenda file changes, so a
+    record that cannot be saved leaves the addenda file as it was."""
     problems = records.validate_anomaly(anomaly)
     if problems:
         raise RecordError(f'anomaly {anomaly.signature}: ' + '; '.join(problems))
+
+
+def write_addendum(home, anomaly, addendum):
+    """Append the tagged line to its addenda file and commit that file alone; returns the lines to print.
+    The fixed anomaly record is validated first (check_record)."""
+    check_record(anomaly)
     tagged = addenda.append_line(addendum.path, addendum.line, anomaly.signature, addenda.stamp(addendum.unit))
     return [f'addendum: {tagged}',
             observe.commit_home(home, [addendum.path], COMMIT_PREFIX + f'addendum for {anomaly.signature}')]
+
+
+def addendum_file(home, anomaly):
+    """The addenda file in home that the anomaly's fix names (`fixed_by` = `<date> · addenda/...`), or None."""
+    ref = anomaly.fixed_by.partition(FIXED_BY_SEPARATOR)[2].strip()
+    return next((path for path, _, _ in addenda.addenda_files(home) if home_relative(home, path) == ref), None)
+
+
+def remove_addendum(home, anomaly, path):
+    """Remove the anomaly's tagged line from the addenda file `path` and commit that file alone; returns the lines
+    to print, [] when the file holds no such line. The changed anomaly record is validated first (check_record)."""
+    check_record(anomaly)
+    removed = addenda.remove_line(path, anomaly.signature)
+    if removed is None:
+        return []
+    return [f'removed: {removed}',
+            observe.commit_home(home, [path], COMMIT_PREFIX + f'remove the addendum of {anomaly.signature}')]
 
 
 # ---------- the subcommands ----------
@@ -462,11 +485,16 @@ def run_fix(args, environ):
     return 0
 
 
-def write_result(anomaly, result, reason):
+def write_result(home, anomaly, result, reason):
+    """Write the experiment's result; a revert also reopens the anomaly and removes its line from the addenda file
+    its fix names (remove_addendum). Returns the lines to print."""
     anomaly.experiment.result = result
     anomaly.experiment.reason = reason
-    if result == 'revert':
-        anomaly.status = 'reopened'
+    if result != 'revert':
+        return []
+    anomaly.status = 'reopened'
+    path = addendum_file(home, anomaly)
+    return [] if path is None else remove_addendum(home, anomaly, path)
 
 
 def run_verify(args, environ):
@@ -498,16 +526,16 @@ def run_verify(args, environ):
     lines.append(f'result: {found.result} ({found.reason})')
     anomaly = anomalies[seen.signature]
     if found.result != 'inconclusive':
-        write_result(anomaly, found.result, found.reason)
+        removed = write_result(context.home, anomaly, found.result, found.reason)
         reopened = '; the anomaly is reopened' if found.result == 'revert' else ''
-        lines.append(f'written: result {found.result}{reopened}')
+        lines += [f'written: result {found.result}{reopened}'] + removed
     elif reason == trends.DUE_FOR_DECISION:
         lines.append('still inconclusive after the moved check date: the user decides '
                      f'(`calibrate decide --signature {seen.signature} --result keep|revert`)')
         print('\n'.join(lines))
         return 0
     else:
-        write_result(anomaly, 'inconclusive', found.reason)
+        write_result(context.home, anomaly, 'inconclusive', found.reason)
         anomaly.experiment.check_by = (args.today + timedelta(days=EXPERIMENT_CHECK_DAYS)).isoformat()
         lines.append(f'written: result inconclusive; check date moved once, to {anomaly.experiment.check_by}')
     lines.append(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
@@ -534,8 +562,9 @@ def run_decide(args, environ):
         raise RecordError(f'the experiment of {anomaly.signature} is not due')
     if reason != trends.DUE_FOR_DECISION and measurable(anomaly):
         raise RecordError(f'the numbers can still judge {anomaly.signature}: run `calibrate verify` first')
-    write_result(anomaly, args.result, 'decided by the user')
-    print(f'decided: {anomaly.signature} result {args.result}' + ('; reopened' if args.result == 'revert' else ''))
+    removed = write_result(context.home, anomaly, args.result, 'decided by the user')
+    print('\n'.join([f'decided: {anomaly.signature} result {args.result}'
+                     + ('; reopened' if args.result == 'revert' else '')] + removed))
     print(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
                                  COMMIT_PREFIX + f'decide {anomaly.signature}'))
     return 0
@@ -569,6 +598,33 @@ def run_merge(args, environ):
     print(f'merged: {folded.signature} into {kept.signature} (seen {kept.occurrences} times, score {kept.score})')
     print(observe.save_anomalies(home, args.today, anomalies, [kept.signature, folded.signature],
                                  COMMIT_PREFIX + f'merge {folded.signature} into {kept.signature}'))
+    return 0
+
+
+def run_drop(args, environ):
+    context = digest.context_from_args(args, environ, strict=True)
+    home, today, anomalies = context.home, args.today, writable(context)
+    anomaly = find(anomalies, args.signature)
+    label = f'drop for {anomaly.signature}'
+    path = addendum_file(home, anomaly)
+    if path is None or addenda.tagged_line(path, anomaly.signature) is None:
+        raise RecordError(f'{label}: no addenda line is tagged with {anomaly.signature} in the file its fix names '
+                          f'({anomaly.fixed_by or "none"})')
+    experiment = anomaly.experiment
+    if not addenda.has_verdict(experiment):
+        check_by = (experiment.check_by if experiment else '') or '?'
+        raise RecordError(f'{label}: the experiment has no verdict yet; an experiment ends with a verdict, so judge '
+                          f'it with `calibrate verify` once its check date {check_by} has come')
+    reason = args.reason.strip()
+    if not reason:
+        raise RecordError(f'{label}: --reason is empty; say why the line goes, in one line')
+    privacy.check_text(label, 'reason', reason, SIGHTING_MAX_CHARS)
+    addenda.log_line(anomaly, f'dropped {today.isoformat()} · {reason}')
+    lines = remove_addendum(home, anomaly, path)
+    lines.append(f'dropped: {anomaly.signature}; the result {experiment.result} stays')
+    lines.append(observe.save_anomalies(home, today, anomalies, [anomaly.signature],
+                                        COMMIT_PREFIX + f'drop the addendum of {anomaly.signature}'))
+    print('\n'.join(lines))
     return 0
 
 
@@ -616,4 +672,8 @@ def register(commands, common):
     merge = action('merge', run_merge, 'fold a near-duplicate into the anomaly that stays')
     merge.add_argument('--into', required=True, help='the anomaly that stays')
     merge.add_argument('--from', dest='source', required=True, help='the anomaly folded in (becomes wontfix)')
+    drop = action('drop', run_drop, 'remove the addenda line of an experiment that has a verdict; the result stays')
+    drop.add_argument('signature', help='the experiment whose line goes')
+    drop.add_argument('--reason', required=True, help="why the line goes, one line; logged under the anomaly's "
+                                                      f'## {addenda.LOG_HEADING}')
 
