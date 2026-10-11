@@ -367,7 +367,7 @@ def run_declare(args, environ):
     current = anomaly.experiment
     in_flight = (f'{label}: an experiment is in flight since {anomaly.fixed_by}; verify it (`calibrate verify`, '
                  'or `calibrate decide`) first')
-    if current is not None and not current.result and anomaly.fixed_by.strip():
+    if current is not None and not addenda.has_verdict(current) and anomaly.fixed_by.strip():
         raise RecordError(in_flight)
     if changes_this_plugin(context, anomaly.target) and not args.approved:
         raise RecordError(f'{label}: {anomaly.target} is part of this plugin; change it only after the '
@@ -549,11 +549,10 @@ def run_verify(args, environ):
 
 def measurable(anomaly):
     try:
-        verdict.resolve_metric(anomaly.experiment.metric)
-        verdict.resolve_metric(anomaly.experiment.guard)
+        verdict.verdict_inputs(anomaly)
     except RecordError:
         return False
-    return records.fix_date(anomaly) is not None
+    return True
 
 
 def run_decide(args, environ):

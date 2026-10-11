@@ -380,14 +380,27 @@ class DeclareCommandTest(CalibrateCase):
                          ('faster', 'active minutes', 'rework sightings', TODAY.isoformat()))
 
     def test_a_finished_experiment_is_archived_when_a_new_one_is_declared(self):
-        write_experiment_anomaly(self.home, 'retry', status='reopened', fixed_by=FIX, check_by='2026-10-01',
-                                 result='revert', guard='rework sightings')
-        code, _, _ = self.declare(signature='retry')
-        self.assertEqual(code, 0)
-        anomaly = self.anomaly('retry')
-        self.assertEqual(anomaly.fixed_by, '')
-        self.assertEqual(anomaly.experiment.result, '')
-        self.assertEqual(records.earlier_experiments(anomaly)[0][0], 'revert')
+        for result in ('keep', 'revert', 'unproven'):
+            with self.subTest(result=result):
+                write_experiment_anomaly(self.home, 'retry', status='reopened', fixed_by=FIX, check_by='2026-10-01',
+                                         result=result, guard='rework sightings')
+                code, _, _ = self.declare(signature='retry')
+                self.assertEqual(code, 0)
+                anomaly = self.anomaly('retry')
+                self.assertEqual(anomaly.fixed_by, '')
+                self.assertEqual(anomaly.experiment.result, '')
+                self.assertEqual(records.earlier_experiments(anomaly)[0][0], result)
+
+    def test_an_inconclusive_experiment_in_flight_is_refused_and_kept(self):
+        write_experiment_anomaly(self.home, 'retry', status='reopened', fixed_by=FIX, check_by='2026-10-03',
+                                 result='inconclusive', guard='rework sightings')
+        before = self.anomaly('retry')
+        code, _, err = self.declare(signature='retry')
+        self.assertEqual(code, 2)
+        self.assertIn('in flight', err)
+        after = self.anomaly('retry')
+        self.assertEqual((after.experiment, after.fixed_by), (before.experiment, FIX))
+        self.assertEqual(records.earlier_experiments(after), [])
 
     def test_an_earlier_reverted_attempt_on_the_same_target_is_mentioned(self):
         write_experiment_anomaly(self.home, 'old-try', target='scripts/check.sh', status='reopened', fixed_by=FIX,
@@ -747,6 +760,11 @@ class AddendumRemovalTest(CalibrateCase):
             self.assertGreaterEqual(out.count('home is not in a git repository'), 2, out)
 
 
+class MeasurableTest(CalibrateCase):
+    def test_an_anomaly_with_no_experiment_cannot_be_measured(self):
+        self.assertFalse(calibrate.measurable(write_anomaly_with(self.home, 'bare')))
+
+
 # ---------- batches and housekeeping ----------
 
 class BatchTest(CalibrateCase):
@@ -894,7 +912,10 @@ class BatchTest(CalibrateCase):
         return sorted(line.strip() for line in out.splitlines() if 'upstream: ' in line)
 
     def plan_offers(self):
-        code, out, err = self.cli('plan')
+        """The plan's offer lines, with `verdict.verdict` failing when called: the offer runs no permutation test
+        (AC-8, D-6)."""
+        with mock.patch('anomaly_loop.verdict.verdict', side_effect=AssertionError('the plan ran verdict.verdict')):
+            code, out, err = self.cli('plan')
         self.assertEqual((code, err), (0, ''))
         return self.offers(out)
 
@@ -959,6 +980,45 @@ class BatchTest(CalibrateCase):
         addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Run run-tickets first.', 'marked-one',
                             addenda.stamp(self.plugin / 'skills' / 'research'))
         write_experiment_anomaly(self.home, 'marked-one', target='anomaly:research', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/research.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_a_kept_line_whose_reason_or_per_dispatch_agent_name_the_check_refuses_gets_no_offer(self):
+        """AC-9 (D-6): the reason and the agent name of a per-dispatch metric are text the check reads; `run-tickets`
+        is a build skill of the profile."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        for signature, name, metric in (('reason-one', 'observe', 'active minutes'),
+                                        ('agent-one', 'research', 'model-weighted tokens per dispatch run-tickets')):
+            addenda.append_line(addenda.addendum_path(self.home, name), f'Rule of {signature}.', signature,
+                                addenda.stamp(self.plugin / 'skills' / name))
+            write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', metric=metric,
+                                     guard='rework sightings', fixed_by=f'2026-09-20 · addenda/{name}.md',
+                                     check_by='2026-10-25', result='keep', status='fixed')
+        reasoned = self.anomaly('reason-one')
+        reasoned.experiment.reason = 'Run run-tickets first.'
+        records.write_anomaly(self.home, reasoned)
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_a_kept_line_whose_fixed_by_has_no_fix_date_gets_no_offer(self):
+        """AC-10 (D-7): the send refuses it before its readings, so the offer does too."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Rule of undated-one.', 'undated-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'undated-one', target='anomaly:research', metric='active minutes',
+                                 guard='rework sightings', fixed_by='later · addenda/research.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_a_kept_line_whose_metric_resolve_metric_refuses_gets_no_offer(self):
+        """D-7: the send refuses it before its readings, so the offer does too."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Rule of unknown-one.', 'unknown-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'unknown-one', target='anomaly:research', metric='speed',
                                  guard='rework sightings', fixed_by='2026-09-20 · addenda/research.md',
                                  check_by='2026-10-25', result='keep', status='fixed')
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])

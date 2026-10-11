@@ -115,6 +115,36 @@ class NeedsReworkTest(FlagsCase):
         self.assertEqual(lines, ['## Needs rework', '- demo:measure: 3 commits in 28 days',
                                  '- measure: 3 commits in 28 days'])
 
+    def resolver(self):
+        """A function from a target to resolve_target's answer in the `demo` checkout, and the `measure` skill's (repository, folder)."""
+        ctx = self.make(plugin_root=self.plugin_checkout())
+        repo = gitrepo.plugin_repo(ctx.plugin_root, ctx.profile)
+        return (lambda target: flags.resolve_target(ctx, target, repo)), (repo[0], repo[1] / 'skills' / 'measure')
+
+    def test_a_plugin_skill_with_prose_after_it_counts_its_commits_for_needs_rework(self):
+        plugin = self.plugin_checkout()
+        self.skill_history('measure', [LONG_AGO, '2026-09-12', '2026-09-20', '2026-10-01'])
+        write_anomaly_with(self.home, 'm-a', target='demo:measure asks twice')
+        self.assertEqual(flags.needs_rework(self.make(plugin_root=plugin)),
+                         ['## Needs rework', '- demo:measure asks twice: 3 commits in 28 days'])
+
+    def test_a_plugin_skill_with_prose_holding_a_second_colon_resolves_to_the_skill(self):
+        resolve, skill = self.resolver()
+        self.assertEqual(resolve('demo:measure step 10: delta'), skill)
+
+    def test_a_plugin_skill_with_prose_holding_a_slash_or_a_backslash_resolves_to_the_skill(self):
+        resolve, skill = self.resolver()
+        for target in ('demo:measure asks and/or skips', 'demo:measure asks a\\b'):
+            with self.subTest(target=target):
+                self.assertEqual(resolve(target), skill)
+
+    def test_a_plugin_target_whose_first_word_names_no_skill_has_no_repository(self):
+        resolve, _ = self.resolver()
+        write_text(self.plugin / 'x' / 'SKILL.md', '# x\n')
+        for target in ('demo:nosuch asks twice', 'demo:../x'):
+            with self.subTest(target=target):
+                self.assertIsNone(resolve(target))
+
     def test_an_installed_copy_uses_the_checkout_named_by_the_profile(self):
         self.plugin_checkout()
         self.skill_history('measure', [LONG_AGO, '2026-09-12', '2026-09-20', '2026-10-01'])
