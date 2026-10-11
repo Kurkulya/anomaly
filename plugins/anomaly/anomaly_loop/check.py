@@ -10,6 +10,9 @@
               a missing line, a bad Status:, a bad Model:, a blocker with no file or in a cycle, a path:NN
               anchor); a ticket over 5 KB only warns. Prints as `stories` does
               (`slice check passed`).
+  subagent-bash  the PreToolUse hook check (ADR-0022): reads the hook JSON on standard input and
+              prints a deny when a subagent's Bash command writes a file through the shell; exit 0
+              always, and no output for anything else (it fails open)
 
 `stories` prints each error as one line, `<file>:<line>: <problem> (<allowed shape>)`, then each
 warning as `warning: <file>: ...`; it exits 1 on any error, 0 otherwise (clean prints one
@@ -33,7 +36,9 @@ only the edits after the red commit it was written for.
 """
 import argparse
 import glob
+import json
 import re
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import files, gitrepo, paths, ports, ticket
@@ -606,6 +611,134 @@ def slice(folder, key_line=KEY_LINE_CORE):
     return errors, warnings
 
 
+# ---------- subagent-bash ----------
+
+SUBAGENT_BASH_EXEMPT = 'anomaly:survey'   # its brief allows shell writes (ADR-0022)
+SHELL_OPERATOR_CHARS = ';&|<>()`'
+SHELL_OPERATOR = re.compile(r'&>>|&>|>>|>\||>&|<<<|<<|<&|&&|\|\||\|&|.')
+FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
+INPUT_REDIRECTS = frozenset({'<', '<&', '<>', '<<<'})
+SHELL_WRAPPERS = frozenset({'command', 'env', 'exec', 'nice', 'nohup', 'sudo', 'time', 'xargs'})
+ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
+SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
+CURL_OUTPUT = re.compile(r'-[A-Za-z]*o|-o.+|--output(=.*)?')
+WGET_OUTPUT = re.compile(r'-[A-Za-z]*O|--output-document(=.*)?')
+SUBAGENT_BASH_REASON = ('A subagent writes files with the Write and Edit tools, not through the shell ({what}). '
+                        'Use Write to create or replace a file and Edit to change one.')
+
+
+def shell_tokens(command):
+    """The `(kind, text)` tokens of a shell line: `('word', text)` with its quotes resolved, `('op', text)`
+    for an unquoted operator (`;`, `|`, `>>`, `<<`, ...) or a newline. A `>` or `<<` inside quotes stays
+    part of a word. An unclosed quote ends the stream: what came before it still counts, so a heredoc
+    whose body holds an apostrophe is still seen. A `#` that starts a word is a comment."""
+    tokens, word, index = [], None, 0
+    while index < len(command):
+        char = command[index]
+        if char in '\'"':
+            end = index + 1
+            while end < len(command) and command[end] != char:
+                end += 2 if char == '"' and command[end] == '\\' else 1
+            if end >= len(command):
+                return tokens
+            body = command[index + 1:end]
+            word = (word or []) + [re.sub(r'\\(.)', r'\1', body) if char == '"' else body]
+            index = end + 1
+            continue
+        index += 1
+        if char == '\\':
+            word = (word or []) + ([] if command[index:index + 1] == '\n' else [command[index:index + 1]])
+            index += 1
+        elif char == '#' and word is None:
+            end = command.find('\n', index)
+            index = len(command) if end < 0 else end
+        elif char in ' \t\r\n' or char in SHELL_OPERATOR_CHARS:
+            if word is not None:
+                tokens.append(('word', ''.join(word)))
+                word = None
+            if char == '\n':
+                tokens.append(('op', char))
+            elif char in SHELL_OPERATOR_CHARS:
+                end = index - 1
+                while end < len(command) and command[end] in SHELL_OPERATOR_CHARS:
+                    end += 1
+                tokens.extend(('op', op) for op in SHELL_OPERATOR.findall(command[index - 1:end]))
+                index = end
+        else:
+            word = (word or []) + [char]
+    if word is not None:
+        tokens.append(('word', ''.join(word)))
+    return tokens
+
+
+def segment_write(words):
+    """What one simple command (its words) writes through the shell, as a short name, or None."""
+    words = list(words)
+    while words and (ENV_ASSIGNMENT.match(words[0]) or words[0] in SHELL_WRAPPERS):
+        wrapper = words.pop(0) in SHELL_WRAPPERS
+        while wrapper and words and words[0].startswith('-'):
+            words.pop(0)
+    if not words:
+        return None
+    name, args = PurePosixPath(words[0]).name, words[1:]
+    if name == 'tee':
+        return 'tee'
+    if name == 'sed' and any(SED_IN_PLACE.match(arg) for arg in args):
+        return 'sed -i'
+    if name == 'curl' and any(CURL_OUTPUT.fullmatch(arg) for arg in args):
+        return 'curl -o'
+    if name == 'wget' and any(WGET_OUTPUT.match(arg) for arg in args):
+        return 'wget -O'
+    return None
+
+
+def shell_write(command):
+    """What in `command` writes a file through the shell, as a short name, or None: a heredoc `<<`, a `>`,
+    `>>`, `>|`, `&>` or `>&` to anything but /dev/null (or, for `>&`, a file descriptor), `tee`, `sed -i`,
+    `curl -o`, `wget -O`. Only unquoted text counts; a `<<<` here-string and inline code are not looked into."""
+    tokens, segment, skip = shell_tokens(command), [], False
+    for index, (kind, text) in enumerate(tokens):
+        if kind == 'word':
+            if not skip:
+                segment.append(text)
+            skip = False
+            continue
+        skip = False
+        following = tokens[index + 1] if index + 1 < len(tokens) and tokens[index + 1][0] == 'word' else None
+        if text == '<<':
+            return 'a heredoc'
+        if text in FILE_REDIRECTS:
+            if following and following[1] != '/dev/null':
+                return f'a {text} redirect to a file'
+            skip = True
+        elif text == '>&':
+            if following and not re.fullmatch(r'\d+|-', following[1]):
+                return 'a >& redirect to a file'
+            skip = True
+        elif text in INPUT_REDIRECTS:
+            skip = True
+        else:   # ;  &  |  (  )  newline ...: the simple command ends here
+            found = segment_write(segment)
+            if found:
+                return found
+            segment = []
+    return segment_write(segment)
+
+
+def subagent_bash(data):
+    """The deny for a subagent's Bash call (the parsed PreToolUse hook input) that writes a file through the
+    shell, or None to allow it. The main window has no `agent_id` and returns before the command is read."""
+    if not isinstance(data, dict) or not data.get('agent_id') or data.get('agent_type') == SUBAGENT_BASH_EXEMPT:
+        return None
+    tool_input = data.get('tool_input')
+    command = tool_input.get('command') if isinstance(tool_input, dict) else None
+    found = shell_write(command) if isinstance(command, str) else None
+    if not found:
+        return None
+    return {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny',
+                                   'permissionDecisionReason': SUBAGENT_BASH_REASON.format(what=found)}}
+
+
 # ---------- the command line ----------
 
 def register(commands, common):
@@ -672,6 +805,15 @@ def register(commands, common):
                      'not there) is one anomaly: line and exit 2.'))
     check_slice.add_argument('folder', help='the work-unit folder (holds stories.md and tickets/)')
     check_slice.set_defaults(handler=run_slice)
+    actions.add_parser(
+        'subagent-bash', parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help='the PreToolUse hook: deny a subagent\'s Bash command that writes a file (reads the hook JSON on stdin)',
+        description=('Read the PreToolUse hook JSON on standard input. For a subagent (the input has agent_id) other\n'
+                     'than anomaly:survey, print a deny that names Write and Edit when tool_input.command holds a\n'
+                     'heredoc, sed -i, tee, a > or >> redirect to a file, curl -o or wget -O; 2>&1, >/dev/null,\n'
+                     'a here-string, quoted text, inline code and pipes are allowed. Anything else prints nothing.\n'
+                     'Always exit 0: input that is not JSON, a command it cannot parse and any error are an allow.'
+                     )).set_defaults(handler=run_subagent_bash)
 
 
 def print_check(word, errors, warnings, folder):
@@ -695,6 +837,16 @@ def run_stories(args, environ):
 def run_slice(args, environ):
     key_line = ports.key_line(paths.resolve_home(args.home, environ))
     return print_check('slice', *slice(args.folder, key_line), args.folder)
+
+
+def run_subagent_bash(args, environ):
+    try:
+        verdict = subagent_bash(json.loads(sys.stdin.read()))
+    except Exception:   # fail open on any error: the check never blocks a session on its own failure (ADR-0022)
+        return 0
+    if verdict:
+        print(json.dumps(verdict))
+    return 0
 
 
 def run_pre_merge(args, environ):
