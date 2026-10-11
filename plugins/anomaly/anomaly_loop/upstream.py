@@ -68,6 +68,9 @@ READING_FIELD = 'Reading'                # the agent name of a per-dispatch read
 OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', READING_FIELD, VERSION_FIELD, 'Signature')   # see check_report
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
+GENERIC_USERS = frozenset({'root', 'user', 'admin', 'ubuntu', 'runner', 'vscode', 'codespace', 'node', 'docker',
+                           'ec2-user', 'vagrant'})   # account names that name no person; see user_names
+USER_NAME_MIN = 3                        # a shorter user name is not checked; see user_names
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
 NO_REPOSITORY = ('no target repository is known: the marketplace record of this copy names no GitHub source and '
                  'the profile has no upstream_repo')
@@ -91,8 +94,11 @@ def part_word(context, target, label=LABEL):
 
 
 def user_names(environ):
-    """Patterns of the OS user name (USER_NAME_KEYS in `environ`) as a whole word in any case; none when unset."""
-    names = {environ.get(key, '').strip() for key in USER_NAME_KEYS} - {''}
+    """Patterns of the OS user name (USER_NAME_KEYS in `environ`) as a whole word in any case; none when unset.
+    A generic account name (GENERIC_USERS, in any case) or a name under USER_NAME_MIN characters gives none: it
+    names no person, and as a common word (`root cause`) it would refuse plain text."""
+    names = {environ.get(key, '').strip() for key in USER_NAME_KEYS}
+    names = {name for name in names if len(name) >= USER_NAME_MIN and name.lower() not in GENERIC_USERS}
     return [re.compile(rf'(?<!\w){re.escape(name)}(?!\w)', re.I) for name in sorted(names)]
 
 

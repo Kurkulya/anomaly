@@ -313,6 +313,9 @@ class RefusalTest(UpstreamCase):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 self.report(self.run_ok(), title_of('observe'))
+        self.write_anomaly(summary='the root cause is a stale cache, as jo says')
+        code, out, err = self.run_defect(environ={'USER': 'Root', 'USERNAME': 'jo'})   # generic, and under 3 characters
+        self.assertEqual(code, 0, (out, err))
         for summary in ('the check reads /home/jdoe/notes.txt twice', 'it reads ~/notes.txt twice',
                         r'it reads C:\Users\notes.txt twice', 'JDoe sees the check run twice',
                         'it reads "/srv/x/app" twice', 'it sets dir=/opt/x twice'):
