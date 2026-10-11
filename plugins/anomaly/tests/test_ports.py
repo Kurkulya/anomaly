@@ -13,7 +13,7 @@ from tests.fixtures import GitFixture, run_cli, write_text
 
 LINE = re.compile(r'(\S+) (\S+) = (.*?) ?\[([^\[\]]*)\]')
 PORT_NAMES = {'implementer', 'test_writer', 'conventions', 'reviewers', 'gather', 'tracker', 'issue_source',
-              'ci', 'mr', 'commit', 'branch', 'ui_check', 'key_line', 'adr_folder'}
+              'ci', 'mr', 'commit', 'branch', 'ui_check', 'key_line', 'adr_folder', 'upstream'}
 COMMANDS = ('verify', 'e2e', 'install', 'codegen', 'hook_path')
 LENSES = 'anomaly:code, anomaly:feature, anomaly:security'
 MODEL_ROLES = ('explore', 'implement', 'implement_wide', 'digest', 'survey', 'review', 'review_code',
@@ -182,10 +182,12 @@ class ProfileKeysTest(unittest.TestCase):
         keys = {key for _, _, key, _ in constants.PORTS} | {constants.MODELS_KEY}
         new = keys - set(profile.PROFILE_KEYS)
         self.assertEqual(new, {'test_writers', 'conventions', 'reviewers', 'gather', 'ci', 'models',
-                               'key_line', 'adr_folder'})
+                               'key_line', 'adr_folder', 'upstream_tool'})
         self.assertLessEqual(new, set(profile.OPTIONAL_KEYS))
         template = profile.parse_profile(TEMPLATE.read_text(encoding='utf-8'))
         self.assertLessEqual(new, set(template))
+        self.assertLessEqual({'upstream_repo'}, set(profile.OPTIONAL_KEYS))   # a key beside the port, not a port key
+        self.assertIn('upstream_repo', TEMPLATE.read_text(encoding='utf-8'))   # commented or not
         self.assertEqual(re.findall(r'^  (\w+): <model>$', TEMPLATE.read_text(encoding='utf-8'), re.M),
                          list(MODEL_ROLES))   # one template line per role
 

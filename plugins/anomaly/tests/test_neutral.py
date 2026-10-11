@@ -14,7 +14,7 @@ from pathlib import Path
 
 from anomaly_loop import flags, paths, profile
 from anomaly_loop.scans import profile_markers
-from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli
+from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli, write_anomaly_with, write_text
 
 HOST = re.compile(r'https?://([A-Za-z0-9.-]+)')
 RESERVED_HOST = re.compile(r'(?:.+\.)?(?:example(?:\.com|\.net|\.org)?|test|invalid|localhost)')
@@ -45,6 +45,11 @@ class ProfileMarkersTest(unittest.TestCase):
         self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:test-builder', 'acme-kit', 'test-builder', 'acme-reviewer', 'acme-kit:sec-check', 'sec-check',
             'context-pull', 'ci-watcher', 'acme-docs', 'team-guide'})
+
+    def test_the_upstream_keys_become_markers_too(self):
+        """D-47 (Amended): the upstream tool and the upstream repository are the 10th and 11th key."""
+        values = {'upstream_tool': 'acme-upstream-bot', 'upstream_repo': 'acme-org/acme-plugin'}
+        self.assertLessEqual({'acme-upstream-bot', 'acme-org'}, profile_markers(values, PLUGIN))
 
     def test_a_per_stack_line_without_a_stack_keeps_its_whole_id(self):
         values = {'implementers': 'acme-kit:web-builder\nmobile-ui: acme-kit:app-builder',
@@ -125,6 +130,13 @@ class EmptyProfileTest(unittest.TestCase):
         self.seams.write_text('- a seam · `a.py` · replaces a copy (ticket 01)\n', encoding='utf-8', newline='\n')
         self.run_command('lens', 'tally', 'add', '--session', 's1', '--lens', 'code', '--accepted', '2',
                          '--rejected', '1')
+        self.config = root / 'config'   # an installed copy of the plugin outside git, with a GitHub marketplace record
+        self.installed = self.config / 'plugins' / 'cache' / 'market' / 'plugin' / 'ab12cd3'
+        write_text(self.installed / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}\n')
+        write_text(self.installed / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_text(self.config / 'plugins' / 'known_marketplaces.json',
+                   '{"market": {"source": {"source": "github", "repo": "owner/plugin"}}}\n')
+        write_anomaly_with(self.home, 'slow-check', target='anomaly:observe')
 
     def run_command(self, *argv):
         return run_cli(*argv, '--home', str(self.home), '--data', str(self.data))
@@ -161,6 +173,8 @@ class EmptyProfileTest(unittest.TestCase):
             ('lens', 'tally', 'sum', '--session', 's1'),
             ('worklog', 'start', 'a-feature', 'build'),
             ('worklog', 'add', '--feature', 'a-feature', '--stage', 'build', '--session', 's1'),
+            ('upstream', 'defect', 'slow-check', '--plugin-root', str(self.installed),
+             '--user-config', str(self.config)),
         ]
         for command in commands:
             with self.subTest(command=command[:2]):
