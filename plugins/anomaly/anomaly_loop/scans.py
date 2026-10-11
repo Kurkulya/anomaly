@@ -72,11 +72,12 @@ def profile_markers(values, plugin_root):
     """Identifiers that name agents, tools and skills, with each '-' part of an agent id: every
     agent id in `implementers` and `test_writers` (the stack name is left out; stack lines are read
     as frontmatter.nested reads them, so a line without a stack keeps its whole id), every item of
-    `build_skills`, `reviewers`, `gather` and `upstream_repo` (the owner and the name), only the first
-    identifier of `mr_tool`, `verify_ui`, `ci` and `upstream_tool` (the rest is prose, such as "or the
-    built-in browser"), and the first identifier of each `conventions` value: 11 keys. A name qualified
-    by this plugin's own name (`<plugin>:<skill>`) is the plugin's, not an environment fact, so it is
-    no marker."""
+    `build_skills`, `reviewers`, `gather` and `upstream_repo`, only the first identifier of `mr_tool`,
+    `verify_ui`, `ci` and `upstream_tool` (the rest is prose, such as "or the built-in browser"), and
+    the first identifier of each `conventions` value: 11 keys. An identifier holds a `-` or `:`, so of
+    `upstream_repo` only such an owner or name becomes a marker, and a plain `owner/plugin` gives none.
+    A name qualified by this plugin's own name (`<plugin>:<skill>`) is the plugin's, not an environment
+    fact, so it is no marker."""
     found = []
     for key in ('implementers', 'test_writers'):
         for line in stack_values(values.get(key, '')):
