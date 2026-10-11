@@ -10,21 +10,22 @@ line, the installed version (the plugin root folder name: plugin.json has no ver
   upstream tuning <signature> [--comment <number> | --create] [--plugin-root <dir>] [--user-config <dir>]
 
 The tuning report (a kept addenda line, sent with its experiment's result) of the anomaly `<signature>`. It is
-refused unless the experiment's result is in KEPT (`keep`, or `unproven`: kept, not proven) and the addenda file
-its fix names still holds its tagged line (tuning_source). Its title is that of a defect report on the same target;
-its body holds the target, the rule (the line without its tag), the verdict word, the installed version, the
-signature, then the readings as `calibrate verify` prints them (verdict.reading_lines: the metric and the guard
-before the fix and since, n= the sessions on each side). It is written to `<home>/upstream/<signature>.tuning.md`;
-all that follows holds for both reports.
+refused unless the anomaly is `fixed` (a reopened one: the fix did not hold), the experiment's result is in KEPT
+(`keep`, or `unproven`: kept, not proven) and the addenda file its fix names still holds its tagged line
+(tuning_source). Its title is that of a defect report on the same target (title_fields); its body holds the target,
+the rule (the line without its tag), the verdict word, the recorded reason, the installed version, the signature,
+then the readings as `calibrate verify` prints them, read today (`Readings as of <today>`: the record keeps no
+verify day; verdict.reading_lines: the metric and the guard before the fix and since, n= the sessions on each side).
 
 When `plugin_repo` resolves to a checkout (gitrepo.plugin_repo), the command prints CHECKOUT_SET and exits 1 with
-nothing written: a checkout fixes the plugin through an MR. Else every run checks the report (check_report: each line
-passes privacy.check_text and names no profile marker, scans.profile_markers, and no repo-layer name,
-scans.repo_layer_names; a hit refuses with no file written and nothing redacted), writes it to
-`<home>/upstream/<signature>.defect.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
-repo-layer check reads only the text from outside the CLI (the symptom, the rule, the installed version folder and the
-signature), not the title, target and readings the CLI composes; that text is also refused when it holds a local
-path or the OS user name.
+nothing written: a checkout fixes the plugin through an MR. Else every run checks the report (checked_report, then
+check_report: each field and each readings line passes privacy.check_text and names no profile marker,
+scans.profile_markers, and no repo-layer name, scans.repo_layer_names; a hit refuses with no file written and nothing
+redacted), writes it to `<home>/upstream/<signature>.defect.md` or `<home>/upstream/<signature>.tuning.md` (a
+`Title:` line, a blank line, the body) and prints the path. The marker and repo-layer check reads only the text from
+outside the CLI (the symptom, the rule, the reason, each readings line, which can name an agent, the installed
+version folder and the signature), not the title, target, verdict word and readings heading the CLI composes; that
+text is also refused when it holds a local path or the OS user name.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and

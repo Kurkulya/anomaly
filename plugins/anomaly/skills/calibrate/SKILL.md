@@ -25,13 +25,14 @@ default home. If `python` is not found, try `python3`.
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" measure --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" digest --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}" --plugin-root "${CLAUDE_PLUGIN_ROOT}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" calibrate <action> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" <options>
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" upstream tuning|defect <signature> --home '${user_config.home}' --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--comment <number> | --create]
 ```
 
 The `calibrate` actions:
 
 | Action | Options | What it does |
 |---|---|---|
-| `plan` | | housekeeping, then the open problems in batches, then the metric names, the allowed guards and the sessions per kind |
+| `plan` | | housekeeping, then the open problems in batches, then the upstream reports not yet sent, then the metric names, the allowed guards and the sessions per kind |
 | `effort` | `--set <signature>=S\|M\|L` (repeat) | sets the effort of anomalies |
 | `declare` | `--signature`, `--expect`, `--metric`, `--guard`, `--kind`, optional `--check-by`, `--effort`, `--approved` | writes the experiment, before the change |
 | `fix` | `--signature`, `--ref <commit or file>` or `--addendum '<line>'`, optional `--date` | records the change, after it landed; with `--addendum` it writes the line to the target's addenda file itself |
