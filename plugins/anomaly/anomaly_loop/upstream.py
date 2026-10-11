@@ -184,30 +184,44 @@ def tuning_source(context, anomaly):
     return part_word(context, anomaly.target.strip(), TUNING_LABEL), addenda.TAGGED.fullmatch(line)['rule']
 
 
-def tuning_report(context, anomaly):
-    """The tuning report of the anomaly (tuning_source), its readings from verdict.verdict as of today (the record
-    keeps no verify day); RecordError when upstream tuning refuses it."""
+def tuning_checked(context, anomaly):
+    """The checked part of the anomaly's tuning report, with no verdict run: tuning_source, its fields and the agent
+    name of each per-dispatch reading (verdict.per_dispatch_agent of the experiment's metric and guard as
+    verdict.resolve_metric names them, the names of the readings tuning_report adds). RecordError when upstream
+    tuning refuses it, also when verdict.verdict would refuse it before its readings: a fixed_by with no fix date
+    or a metric resolve_metric refuses."""
     word, rule = tuning_source(context, anomaly)
-    found = verdict.verdict(context, anomaly)
     experiment, version = anomaly.experiment, installed_version(context)
-    heading = f'Readings as of {context.today.isoformat()}'
+    if records.fix_date(anomaly) is None:
+        raise RecordError(f'anomaly {anomaly.signature}: fixed_by {anomaly.fixed_by!r} has no fix date, so '
+                          'there is no before and after; the user decides')
+    names = (verdict.resolve_metric(experiment.metric).name, verdict.resolve_metric(experiment.guard).name)
     fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', experiment.result),
               ('Reason', experiment.reason or '(none recorded)'), (VERSION_FIELD, version),
-              ('Signature', anomaly.signature), (heading, 'before the fix and since; n= is the sessions on each side'))
-    readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
-    agents = tuple((READING_FIELD, agent) for agent in map(verdict.per_dispatch_agent, (r.name for r in found.readings))
+              ('Signature', anomaly.signature))
+    agents = tuple((READING_FIELD, agent) for agent in map(verdict.per_dispatch_agent, names)
                    if agent is not None)   # the user part of a reading; the rest of its line is CLI text
     plus_one = f'+1: the same line, {experiment.result} on the installed version {version}'
-    return Report(TUNING_SUFFIX, word, fields, readings, plus_one, agents)
+    return Report(TUNING_SUFFIX, word, fields, (), plus_one, agents)
 
 
-ACTIONS = {'defect': (LABEL, defect_report), 'tuning': (TUNING_LABEL, tuning_report)}   # action: (label, compose)
+def tuning_report(context, anomaly, checked):
+    """The tuning report the send writes: its checked part `checked` (tuning_checked) with the readings of
+    verdict.verdict as of today (the record keeps no verify day), CLI text only."""
+    found = verdict.verdict(context, anomaly)
+    heading = (f'Readings as of {context.today.isoformat()}',
+               'before the fix and since; n= is the sessions on each side')
+    readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
+    return checked._replace(fields=checked.fields + (heading,), lines=readings)
+
+
+ACTIONS = {'defect': (LABEL, defect_report), 'tuning': (TUNING_LABEL, tuning_checked)}   # action: (label, compose)
 
 
 def checked_report(context, anomaly, action, environ):
     """The report of `action` (ACTIONS) for the anomaly once check_report passed it: its fields and its checked
-    pairs (the agent name of a per-dispatch reading); RecordError when the action refuses it, OSError when a file
-    it reads cannot be read."""
+    pairs (the agent name of a per-dispatch reading), for a tuning report its checked part (tuning_checked, no
+    readings); RecordError when the action refuses it, OSError when a file it reads cannot be read."""
     label, compose = ACTIONS[action]
     report = compose(context, anomaly)
     check_report(context, report.fields + report.checked, environ, label)
@@ -337,6 +351,8 @@ def run_report(args, environ, action):
     if sent and (args.comment is not None or args.create):
         raise RecordError(f'{label}: {anomaly.signature} was already sent upstream ({sent[-1]}); a report goes once')
     report = checked_report(context, anomaly, action, environ)
+    if action == 'tuning':
+        report = tuning_report(context, anomaly, report)
     path, title, body = write_report(context.home, anomaly.signature, report)
     print(f'report: {path}')
     repo = target_repository(context, label)
