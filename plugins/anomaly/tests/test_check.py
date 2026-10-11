@@ -1068,7 +1068,7 @@ class SubagentBashVerdictTest(unittest.TestCase):
         for command in ("echo x > f 'oops", "echo x > f'oops", "cat <<EOF\ndon't\nEOF", "sed -i 's/a/b/ f"):
             with self.subTest(command=command):
                 self.assert_denied(command)
-        for command in ('echo "a > b', "echo 'a > b"):
+        for command in ('echo "a > b', "echo 'a > b", 'echo "$(tee f', 'echo "$((1', 'echo "`tee f'):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
