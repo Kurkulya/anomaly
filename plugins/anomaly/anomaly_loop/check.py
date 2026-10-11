@@ -641,7 +641,7 @@ def shell_tokens(command):
             while end < len(command) and command[end] != char:
                 end += 2 if char == '"' and command[end] == '\\' else 1
             if end >= len(command):
-                return tokens
+                return tokens + ([('word', ''.join(word))] if word is not None else [])
             body = command[index + 1:end]
             word = (word or []) + [re.sub(r'\\(.)', r'\1', body) if char == '"' else body]
             index = end + 1
@@ -839,7 +839,9 @@ def register(commands, common):
                      'than anomaly:survey, print a deny that names Write and Edit when tool_input.command holds a\n'
                      'heredoc, sed -i, tee, a > or >> redirect to a file, curl -o or wget -O; 2>&1, >/dev/null,\n'
                      'a here-string, quoted text, inline code and pipes are allowed. Anything else prints nothing.\n'
-                     'Always exit 0: input that is not JSON, a command it cannot parse and any error are an allow.'
+                     'Always exit 0: input that is not JSON, no tool_input.command and any error are an allow. An\n'
+                     'unclosed quote ends the scan but a write before it still counts (echo x > f \'oops is denied,\n'
+                     'echo "a > b is allowed).'
                      )).set_defaults(handler=run_subagent_bash)
 
 

@@ -1054,6 +1054,15 @@ class SubagentBashVerdictTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
+    def test_a_write_before_an_unclosed_quote_is_denied_and_an_unclosed_quote_alone_is_allowed(self):
+        """AC-27 Amended: the scan stops at the unclosed quote, a write before it still counts."""
+        for command in ("echo x > f 'oops", "echo x > f'oops", "cat <<EOF\ndon't\nEOF", "sed -i 's/a/b/ f"):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        for command in ('echo "a > b', "echo 'a > b"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_a_write_command_name_as_an_argument_is_allowed(self):
         """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
         for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f'):

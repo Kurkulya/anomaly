@@ -1601,8 +1601,10 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `2>/dev/null`, a copy of one stream to another (`>&2`), a here-string `<<<`, a `>` or `<<` inside
   a quoted argument, inline code with `-c` or `-e`, pipes and chains. The check returns before it
   reads the command when `agent_id` is absent (the main window, also a session started with
-  `--agent`), and it fails open: input that is not JSON, no `tool_input.command`, a command it cannot
-  parse and any error are an allow with no output. The exit code is always 0. A `tee`, `sed`,
+  `--agent`), and it fails open: input that is not JSON, no `tool_input.command` and any error are an
+  allow with no output. An unclosed quote ends the scan of the command, but a write before it still
+  counts: `echo x > f 'oops` and a heredoc whose body holds an apostrophe are denied, `echo "a > b`
+  is allowed. The exit code is always 0. A `tee`, `sed`,
   `curl` or `wget` counts only as the name of a command, not as an argument: the first word after
   `|`, `;`, `&&`, `$(` or a newline, past the keywords `if`, `then`, `else`, `elif`, `do`, `while`,
   `until`, `!` and `{`, assignments such as `FOO=1`, and the wrappers `sudo`, `env`, `nice`, `nohup`,
