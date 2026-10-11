@@ -107,9 +107,9 @@ class UpstreamCase(unittest.TestCase):
     def anomaly_path(self):
         return self.home / 'anomalies' / f'{SIGNATURE}.md'
 
-    def run_defect(self, *flags, signature=SIGNATURE):
+    def run_defect(self, *flags, signature=SIGNATURE, environ=None):
         return run_cli('upstream', 'defect', signature, '--home', str(self.home), '--plugin-root', str(self.plugin),
-                       '--user-config', str(self.config), *flags)
+                       '--user-config', str(self.config), *flags, environ=environ)
 
     def run_ok(self, *flags, signature=SIGNATURE):
         code, out, err = self.run_defect(*flags, signature=signature)
@@ -234,6 +234,20 @@ class RefusalTest(UpstreamCase):
         """D-12 Amended: the marker and repo-layer check reads only the symptom and the signature."""
         write_text(self.home / 'repos' / 'anomaly.md', '---\nverify: run-all\n---\n')
         self.report(self.run_ok(), title_of('observe'))
+
+    def test_a_local_path_or_the_user_name_in_the_symptom_is_refused_and_no_file_is_written(self):
+        """D-12 Amended: an absolute path, a `~/` start or the OS user name; a slash inside a word is no path."""
+        user = {'USER': 'jdoe'}
+        self.write_anomaly(summary='the check fails for owner/name and/or its forks')
+        self.report(self.run_ok(), title_of('observe'))
+        for summary in ('the check reads /home/jdoe/notes.txt twice', 'it reads ~/notes.txt twice',
+                        r'it reads C:\Users\notes.txt twice', 'JDoe sees the check run twice'):
+            with self.subTest(summary=summary):
+                self.write_anomaly(summary=summary)
+                before = self.tree()
+                code, out, err = self.run_defect(environ=user)
+                self.assertEqual(code, 2, (out, err))
+                self.assertEqual(self.tree(), before)
 
 
 class TargetRepositoryTest(UpstreamCase):

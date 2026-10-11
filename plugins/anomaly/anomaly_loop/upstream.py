@@ -12,7 +12,8 @@ nothing written: a checkout fixes the plugin through an MR. Else every run check
 passes privacy.check_text and names no profile marker, scans.profile_markers, and no repo-layer name,
 scans.repo_layer_names; a hit refuses with no file written and nothing redacted), writes it to
 `<home>/upstream/<signature>.defect.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
-repo-layer check reads only the user's text (the symptom and the signature), not the title and target the CLI writes.
+repo-layer check reads only the user's text (the symptom and the signature), not the title and target the CLI writes;
+that text is also refused when it holds a local path or the OS user name.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
@@ -43,6 +44,8 @@ MARKETPLACES = Path('plugins') / 'known_marketplaces.json'   # in the Claude Cod
 PREFIX = '[anomaly:{part}]'              # the start of a title: `<prefix> <signature>`
 LABEL = 'upstream defect'
 USER_FIELDS = ('Symptom', 'Signature')   # the report fields the user wrote; the CLI writes the others
+LOCAL_PATH = re.compile(r'(?<!\S)(?:/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # absolute, `~/` or drive path
+USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
 NO_REPOSITORY = ('no target repository is known: the marketplace record of this copy names no GitHub source and '
                  'the profile has no upstream_repo')
@@ -84,17 +87,30 @@ def part_word(context, target):
     raise RecordError(f'{LABEL}: the target {target or "(none)"} is not a skill, an agent or a file of this plugin')
 
 
-def check_report(context, fields):
+def user_names(environ):
+    """Patterns of the OS user name (USER_NAME_KEYS in `environ`) as a whole word in any case; none when unset."""
+    names = {environ.get(key, '').strip() for key in USER_NAME_KEYS} - {''}
+    return [re.compile(rf'(?<!\w){re.escape(name)}(?!\w)', re.I) for name in sorted(names)]
+
+
+def check_report(context, fields, environ):
     """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text, or when a field of
     the user's text (USER_FIELDS: the symptom and the signature, not the lines the CLI writes) holds a profile marker
-    (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits."""
+    (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path
+    (LOCAL_PATH: `/x` or `~/` at the start of a word, or a drive `X:\\` or `X:/`; a slash inside a word such as
+    `and/or` is none) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
+    users = user_names(environ)
     for key, value in fields:
         privacy.check_text(LABEL, key, value)
-        found = scans.marker_hits(value, names) if key in USER_FIELDS else []
+        if key not in USER_FIELDS:
+            continue
+        found = scans.marker_hits(value, names)
         if found:
             raise RecordError(f'{LABEL}: {key} names {", ".join(found)}, from the profile or the repo layer in home; '
                               'describe it in your own words')
+        if LOCAL_PATH.search(value) or any(user.search(value) for user in users):
+            raise RecordError(f'{LABEL}: {key} holds a local path or the user name; describe it in your own words')
 
 
 def defect_fields(context, anomaly, word):
@@ -180,7 +196,7 @@ def run_defect(args, environ):
     anomaly = addenda.find(anomalies, args.signature)
     word = part_word(context, anomaly.target.strip())
     fields = defect_fields(context, anomaly, word)
-    check_report(context, fields)
+    check_report(context, fields, environ)
     path, title, body = write_report(context.home, anomaly.signature, fields)
     print(f'report: {path}')
     repo = target_repository(context)
