@@ -1016,13 +1016,13 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   line goes at the end of the file (a ticket, or any markdown file). With `--after AC-n` (in
   `stories.md`, or a ticket's checkbox line `- [ ] AC-n:` or `- [x] AC-n:`) or `--after D-n` (in
   `decisions.md`) it goes right below that list item, and below the `Amended` lines already under
-  it, so the dated lines stay in order; it is indented like those lines, else by two spaces under a `D-n` and not at all under an `AC-n`. An id matches whole
-  (`AC-1` is not the line of `AC-10`), and the first match outside a fenced code block is used. The
-  text must be one line and pass the privacy check (no email address, credential, URL with a query,
-  pasted program output or long opaque identifier). It has no length limit, because real `Amended`
-  lines are long. An id that is not in the file, an id that is no `AC-n` or `D-n`, or a text that
-  fails a check is an error (exit 2) and the file is left byte for byte as it was. This action does
-  not need a `Status:` line.
+  it, so the dated lines stay in order; it is indented like those lines, else by two spaces under a
+  `D-n` and not at all under an `AC-n`. An id matches whole (`AC-1` is not the line of `AC-10`),
+  and the first match outside a fenced code block is used. The text must be one line and pass the
+  privacy check (no email address, credential, URL with a query, pasted program output or long
+  opaque identifier). It has no length limit, because real `Amended` lines are long. An id that is
+  not in the file, an id that is no `AC-n` or `D-n`, or a text that fails a check is an error
+  (exit 2) and the file is left byte for byte as it was. This action does not need a `Status:` line.
 
 ## Frontier
 
