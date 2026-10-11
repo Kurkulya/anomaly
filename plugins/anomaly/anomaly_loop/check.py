@@ -727,7 +727,7 @@ def shell_write(command):
                 return f'a {text} redirect to a file'
             skip = True
         elif text == '>&':
-            if following and not re.fullmatch(r'\d+|-', following[1]):
+            if following and not re.fullmatch(r'\d+|-|/dev/null', following[1]):
                 return 'a >& redirect to a file'
             skip = True
         elif text in INPUT_REDIRECTS:

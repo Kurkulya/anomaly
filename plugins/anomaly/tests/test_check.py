@@ -1035,6 +1035,13 @@ class SubagentBashVerdictTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
+    def test_a_both_streams_redirect_to_dev_null_is_allowed_and_to_a_file_is_denied(self):
+        """AC-22: `>&` takes /dev/null like `>`; `>&f` writes a file."""
+        for command in ('cmd >& /dev/null', 'cmd >&/dev/null'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        self.assert_denied('cmd >&f')
+
     def test_a_write_command_name_as_an_argument_is_allowed(self):
         """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
         for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f'):
