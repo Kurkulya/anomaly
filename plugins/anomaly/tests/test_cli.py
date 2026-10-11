@@ -56,6 +56,7 @@ class SkillFileTest(unittest.TestCase):
         'WORKTREE.md': 2 * 1024,      # the commit recipe, loaded only inside a worktree
         BUILD_UI_DOC.name: 3 * 1024,  # the UI walkthrough, loaded only when Verify step 4 runs
     }
+    REVIEW_SKILL_MAX_BYTES = 8 * 1024 + 24   # review only: the D-11 delta rule, a round for every fixed finding (calibrate-fixes-1 ticket 05)
 
     def skills(self):
         return sorted((PLUGIN / 'skills').glob('*/SKILL.md'))
@@ -78,7 +79,7 @@ class SkillFileTest(unittest.TestCase):
         for path in self.skills():
             if path.parent.name not in constants.LOOP_SKILLS:
                 with self.subTest(skill=path.parent.name):
-                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
+                    cap = {'build': self.BUILD_SKILL_MAX_BYTES, 'conduct': self.CONDUCT_SKILL_MAX_BYTES, 'review': self.REVIEW_SKILL_MAX_BYTES}.get(path.parent.name, self.SKILL_MAX_BYTES)
                     self.assertLessEqual(path.stat().st_size, cap)
         for path in self.agents():
             with self.subTest(agent=path.stem):
