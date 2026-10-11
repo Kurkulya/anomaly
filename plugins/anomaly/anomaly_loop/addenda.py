@@ -85,8 +85,9 @@ def tagged_line(path, signature):
 
 
 def remove_line(path, signature):
-    """Remove the line tagged with this signature from the file and keep every other line as it is; returns the
-    removed line, or None when the file holds no such line and is not changed."""
+    """Remove the line tagged with this signature from the file and keep every other line as it is (blank lines
+    are not kept, as in append_line); returns the removed line, or None when the file holds no such line and is
+    not changed."""
     lines = read_lines(path)
     removed = next((line for line in lines if is_tagged_with(line, signature)), None)
     if removed is not None:
