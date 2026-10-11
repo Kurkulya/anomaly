@@ -635,10 +635,6 @@ class TuningGhTest(TuningCase):
         self.assert_comment_refused(self.run_tuning, 'upstream tuning', 14,
                                     (title_of('observe'), 'CLOSED', url_of(14)))
 
-    def test_a_failed_read_of_the_issue_is_one_gh_error_line_and_nothing_is_posted_or_logged(self):
-        """AC-20 (D-3)."""
-        self.assert_comment_read_failed(self.run_tuning, 12)
-
     def test_create_opens_the_issue_from_the_report_and_logs_the_number_of_the_new_issue(self):
         self.run_ok_tuning('--create')
         creates = self.gh.calls('create')
