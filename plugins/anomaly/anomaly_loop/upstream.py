@@ -4,7 +4,7 @@
 
 The defect report (a plugin fault, no experiment) of the anomaly `<signature>`. Its title is
 `[anomaly:<skill or agent>] <signature>`, or for a plugin-code target `[anomaly:<path from the plugin root>]`
-(calibrate.plugin_part names the skill or agent); its body holds the target, the anomaly's summary as the symptom
+(addenda.plugin_part names the skill or agent); its body holds the target, the anomaly's summary as the symptom
 line, the installed version (the plugin root folder name: plugin.json has no version) and the signature.
 
 When `plugin_repo` resolves to a checkout (gitrepo.plugin_repo), the command prints CHECKOUT_SET and exits 1 with
@@ -30,7 +30,7 @@ from importlib import import_module
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from . import addenda, calibrate, digest, files, flags, gh, gitrepo, observe, ports, privacy, profile, scans
+from . import addenda, digest, files, flags, gh, gitrepo, observe, ports, privacy, profile, scans
 from .constants import COMMIT_SCOPE, UPSTREAM_ADAPTERS
 from .files import RecordError
 
@@ -69,9 +69,9 @@ def call(function, *args, **kwargs):
 
 
 def part_word(context, target):
-    """What the title names after `anomaly:`: the skill or agent (calibrate.plugin_part), or for plugin code the path
+    """What the title names after `anomaly:`: the skill or agent (addenda.plugin_part), or for plugin code the path
     from the plugin root. Any other target is refused: the report has no title for it."""
-    part = calibrate.plugin_part(context, target, None)
+    part = addenda.plugin_part(context, target, None)
     if part is not None and part.name:
         return part.name
     if part is not None and flags.is_path(target):
@@ -178,8 +178,8 @@ def run_defect(args, environ):
     if name is None and (args.comment is not None or args.create):
         raise RecordError(f'{LABEL}: the upstream port is on its core default, so there is no tool to call '
                           '(set upstream_tool in the profile)')
-    anomalies = calibrate.writable(context)
-    anomaly = calibrate.find(anomalies, args.signature)
+    anomalies = addenda.writable(context)
+    anomaly = addenda.find(anomalies, args.signature)
     word = part_word(context, anomaly.target.strip())
     fields = defect_fields(context, anomaly, word)
     check_report(context, fields)

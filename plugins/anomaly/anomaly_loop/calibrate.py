@@ -33,7 +33,6 @@ any case, or a path inside the plugin folder or its checkout) needs --approved.
 
 The metric registry and the verdict live in verdict.py.
 """
-import copy
 import sys
 from collections import Counter, namedtuple
 from datetime import date, timedelta
@@ -41,7 +40,7 @@ from pathlib import Path
 
 from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
-                        FIXED_BY_SEPARATOR, GUARD_HELP, IMPACT_RANGE, PLUGIN_AGENTS_DIR, QUALITY_GUARDS, SESSION_KINDS,
+                        FIXED_BY_SEPARATOR, GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS,
                         SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
 from .files import RecordError
 
@@ -165,13 +164,6 @@ def plan_lines(context):
 
 # ---------- writing ----------
 
-def find(anomalies, signature):
-    anomaly = anomalies.get(signature)
-    if anomaly is None:
-        raise RecordError(f'no anomaly {signature!r} in home')
-    return anomaly
-
-
 def check_date(label, value, today):
     if not records.is_date(value):
         raise RecordError(f'{label}: check_by {value!r} must be a date like {today.isoformat()}')
@@ -187,51 +179,11 @@ def only_one(values, what):
     return values[0] if values else None
 
 
-PluginPart = namedtuple('PluginPart', 'name agent unit')   # unit: the skill folder or agent file, else None
-
-
-def plugin_part(context, target, plugin):
-    """The part of this plugin a target is, or None when it is not this plugin. A target is this plugin
-    when it is a path inside the plugin folder or its checkout's plugin folder (flags.target_path), or
-    `<plugin name>:...` (flags.names_this_plugin). The part is a skill (`<plugin>:<skill>` or a path inside
-    `skills/<skill>/`), an agent (`<plugin>:<agent>` or `agents/<agent>.md`), or else (name and unit None)
-    plugin code or docs, or a `<plugin>:...` that names no skill or agent. The qualifier ends at the first
-    `:` and is read before any path, and after it only the first word counts, so `anomaly:review step 10:
-    delta` and `anomaly:review asks and/or skips` are the review skill. `plugin` is gitrepo.plugin_repo's answer."""
-    target = target.strip()
-    if not target:
-        return None
-    root = Path(context.plugin_root)
-    qualifier, colon, rest = target.partition(':')   # flags.resolve_target reads a target differently (paths first)
-    if colon and flags.names_this_plugin(context, qualifier, plugin):
-        name = (rest.split() or [''])[0]
-        if not privacy.is_identifier(name) or ':' in name:
-            return PluginPart(None, False, None)
-        if (root / 'skills' / name / flags.SKILL_FILE).is_file():
-            return PluginPart(name, False, root / 'skills' / name)
-        if (root / PLUGIN_AGENTS_DIR / f'{name}.md').is_file():
-            return PluginPart(name, True, root / PLUGIN_AGENTS_DIR / f'{name}.md')
-        return PluginPart(None, False, None)
-    if flags.is_path(target):
-        found = flags.target_path(context, target, plugin)
-        folders = [root] + ([Path(plugin[1])] if plugin else [])
-        base = next((f for f in folders if found is not None and found.resolve().is_relative_to(f.resolve())), None)
-        if base is None:
-            return None
-        parts = found.resolve().relative_to(base.resolve()).parts
-        if len(parts) >= 2 and parts[0] == 'skills' and (base / 'skills' / parts[1] / flags.SKILL_FILE).is_file():
-            return PluginPart(parts[1], False, base / 'skills' / parts[1])
-        if len(parts) == 2 and parts[0] == PLUGIN_AGENTS_DIR and found.suffix == '.md' and found.is_file():
-            return PluginPart(found.stem, True, found)
-        return PluginPart(None, False, None)
-    return None
-
-
 def changes_this_plugin(context, target):
-    """True when the target is this plugin (plugin_part)."""
+    """True when the target is this plugin (addenda.plugin_part)."""
     if not target.strip():
         return False
-    return plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile)) is not None
+    return addenda.plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile)) is not None
 
 
 def takes_no_addenda(part):
@@ -241,7 +193,7 @@ def takes_no_addenda(part):
 def fix_home(context, target, plugin):
     """The plan's fix-home mark of a target with no plugin checkout (ADR-0021), or None: the addenda file
     (relative to home), or why there is none. With a checkout (`plugin` set) there is no mark."""
-    part = None if plugin is not None else plugin_part(context, target, plugin)
+    part = None if plugin is not None else addenda.plugin_part(context, target, plugin)
     if part is None:
         return None
     if part.unit is None:
@@ -264,12 +216,6 @@ def switch_over_text(kind, skill):
             'in neither')
 
 
-def writable(context):
-    """signature -> Anomaly from a strict Context, for a command that reads the context and then
-    writes: home is read once, and the records are copied so the context itself is never changed."""
-    return {a.signature: copy.deepcopy(a) for a in context.anomalies}
-
-
 Addendum = namedtuple('Addendum', 'path unit line')   # the addenda file, the skill folder or agent file, the rule
 
 
@@ -278,7 +224,7 @@ def checked_addendum(context, anomaly, label, line, environ):
     (not one in addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text)
     that no live deny rule fully matches (scans.deny_regex)."""
     target = anomaly.target.strip()
-    part = plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile))
+    part = addenda.plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile))
     if part is None or part.unit is None:
         raise RecordError(f'{label}: an addendum adds to one skill or agent of this plugin; the target '
                           f'{target or "(none)"} is not `<plugin>:<skill>`, `<plugin>:<agent>` or a path inside one '
@@ -343,13 +289,13 @@ def run_plan(args, environ):
 
 def run_effort(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, anomalies = context.home, writable(context)
+    home, anomalies = context.home, addenda.writable(context)
     changed = []
     for pair in args.set:
         signature, equals, effort = pair.partition('=')
         if not equals or effort not in EFFORTS:
             raise RecordError(f'--set {pair!r}: write signature=effort, the effort one of {", ".join(EFFORTS)}')
-        find(anomalies, signature).effort = effort
+        addenda.find(anomalies,signature).effort = effort
         changed.append(signature)
     print('\n'.join(f'effort: {s} is {anomalies[s].effort}' for s in dict.fromkeys(changed)))
     print(observe.save_anomalies(home, args.today, anomalies, changed, COMMIT_PREFIX + 'set effort'))
@@ -359,8 +305,8 @@ def run_effort(args, environ):
 def run_declare(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today = context.home, args.today
-    anomalies = writable(context)
-    anomaly = find(anomalies, args.signature)
+    anomalies = addenda.writable(context)
+    anomaly = addenda.find(anomalies,args.signature)
     label = f'experiment for {anomaly.signature}'
     if anomaly.kind != 'problem':
         raise RecordError(f'{label}: only a problem gets a fix; {anomaly.signature} is a {anomaly.kind}')
@@ -450,8 +396,8 @@ def run_declare(args, environ):
 
 def run_fix(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, today, anomalies = context.home, args.today, writable(context)
-    anomaly = find(anomalies, args.signature)
+    home, today, anomalies = context.home, args.today, addenda.writable(context)
+    anomaly = addenda.find(anomalies,args.signature)
     label = f'fix for {anomaly.signature}'
     experiment = anomaly.experiment
     if experiment is None or experiment.result:
@@ -507,7 +453,7 @@ def write_result(home, anomaly, result, reason):
 
 def run_verify(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    anomalies = writable(context)
+    anomalies = addenda.writable(context)
     seen = next((a for a in context.anomalies if a.signature == args.signature), None)
     if seen is None:
         raise RecordError(f'no anomaly {args.signature!r} in home')
@@ -563,8 +509,8 @@ def measurable(anomaly):
 
 def run_decide(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    anomalies = writable(context)
-    anomaly = find(anomalies, args.signature)
+    anomalies = addenda.writable(context)
+    anomaly = addenda.find(anomalies,args.signature)
     reason = trends.experiment_due(context, anomaly)
     if reason is None:
         raise RecordError(f'the experiment of {anomaly.signature} is not due')
@@ -580,9 +526,9 @@ def run_decide(args, environ):
 
 def run_close(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, anomalies = context.home, writable(context)
+    home, anomalies = context.home, addenda.writable(context)
     for signature in args.signature:
-        anomaly = find(anomalies, signature)
+        anomaly = addenda.find(anomalies,signature)
         if not anomaly.active:
             raise RecordError(f'anomaly {signature} is already {anomaly.status}')
         anomaly.status = 'wontfix'
@@ -594,8 +540,8 @@ def run_close(args, environ):
 
 def run_merge(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, anomalies = context.home, writable(context)
-    kept, folded = find(anomalies, args.into), find(anomalies, args.source)
+    home, anomalies = context.home, addenda.writable(context)
+    kept, folded = addenda.find(anomalies,args.into), addenda.find(anomalies,args.source)
     if kept.signature == folded.signature or kept.kind != folded.kind or not (kept.active and folded.active):
         raise RecordError('merge needs two different open or reopened anomalies of the same kind')
     merged = records.merge_anomalies(kept, folded)
@@ -611,8 +557,8 @@ def run_merge(args, environ):
 
 def run_drop(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, today, anomalies = context.home, args.today, writable(context)
-    anomaly = find(anomalies, args.signature)
+    home, today, anomalies = context.home, args.today, addenda.writable(context)
+    anomaly = addenda.find(anomalies,args.signature)
     label = f'drop for {anomaly.signature}'
     path = addendum_file(home, anomaly)
     if path is None or addenda.tagged_line(path, anomaly.signature) is None:
