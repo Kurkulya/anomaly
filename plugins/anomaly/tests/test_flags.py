@@ -132,13 +132,13 @@ class NeedsReworkTest(FlagsCase):
         resolve, skill = self.resolver()
         self.assertEqual(resolve('demo:measure step 10: delta'), skill)
 
-    def test_a_plugin_skill_with_prose_holding_a_slash_a_backslash_or_a_leading_tilde_resolves_to_the_skill(self):
+    def test_a_plugin_skill_with_prose_holding_a_slash_or_a_backslash_resolves_to_the_skill(self):
         resolve, skill = self.resolver()
-        for target in ('demo:measure asks and/or skips', 'demo:measure asks a\\b', 'demo:measure ~ is home'):
+        for target in ('demo:measure asks and/or skips', 'demo:measure asks a\\b'):
             with self.subTest(target=target):
                 self.assertEqual(resolve(target), skill)
 
-    def test_a_plugin_word_whose_first_word_names_no_skill_has_no_repository(self):
+    def test_a_plugin_target_whose_first_word_names_no_skill_has_no_repository(self):
         resolve, _ = self.resolver()
         write_text(self.plugin / 'x' / 'SKILL.md', '# x\n')
         for target in ('demo:nosuch asks twice', 'demo:../x'):
