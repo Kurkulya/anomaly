@@ -783,8 +783,8 @@ status to `fixed`. It refuses an experiment that `declare` did not write, and a 
 **An addenda fix.** `fix --addendum '<rule>'`, given in place of `--ref`, makes the change
 itself: it appends the rule with its tag to the target's addenda file (see Addenda files), commits
 that file alone, prints `addendum: <tagged line>`, and the file (`addenda/<skill>.md` or
-`addenda/agents/<agent>.md`) becomes the ref. It refuses a target that is not one skill or agent
-of this plugin, a skill that takes no addenda, an empty rule, a rule that is not one clean line of
+`addenda/agents/<agent>.md`) becomes the ref. It refuses when a plugin checkout is set (`a plugin
+checkout is set: change the skill there`), a target that is not one skill or agent of this plugin, a skill that takes no addenda, an empty rule, a rule that is not one clean line of
 at most 300 characters (the privacy checks of `observe`), a rule that is a whole command a live
 deny rule of your settings denies, a file that already holds 5 lines, and a second line of the
 same experiment. A new `declare` on an anomaly whose last line is still in its addenda file is

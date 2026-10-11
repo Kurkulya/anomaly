@@ -7,7 +7,8 @@ module ranks, records and judges, so the numbers never depend on the conversatio
   declare  write the experiment BEFORE the change: expect, one metric, one guard, check_by, kind,
            and for a switch-over the new skill (ADR-0013)
   fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed; with
-           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0021)
+           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0021); refused
+           when a plugin checkout is set (ADDENDUM_CHECKOUT_SET)
   verify   judge a due experiment from the numbers and write its result
   decide   the user's result for an experiment the numbers could not judge
   close    mark anomalies wontfix (stale ones)
@@ -51,6 +52,7 @@ WHOLE_SCOPES = ('repo:', 'plugin:')   # scopes that are one batch each; any othe
 UNTARGETED = 'untargeted'
 UPSTREAM_DEFECT = 'upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream'
 UPSTREAM_HEADING = "## Upstream reports not yet sent (offer each; send one only after the user's yes)"
+ADDENDUM_CHECKOUT_SET = 'a plugin checkout is set: change the skill there'
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): calibrate '
 
 
@@ -254,11 +256,15 @@ Addendum = namedtuple('Addendum', 'path unit line')   # the addenda file, the sk
 
 
 def checked_addendum(context, anomaly, label, line, environ):
-    """The addendum `fix --addendum` writes for this anomaly, after its checks: the target is one skill
-    (not one in addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text)
-    that no live deny rule fully matches (scans.deny_regex)."""
+    """The addendum `fix --addendum` writes for this anomaly, after its checks: no plugin checkout is set
+    (gitrepo.plugin_repo; with one the skill itself is changed there), the target is one skill (not one in
+    addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text) that no live
+    deny rule fully matches (scans.deny_regex)."""
     target = anomaly.target.strip()
-    part = addenda.plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile))
+    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
+    if plugin is not None:
+        raise RecordError(f'{label}: {ADDENDUM_CHECKOUT_SET}')
+    part = addenda.plugin_part(context, target, plugin)
     if part is None or part.unit is None:
         raise RecordError(f'{label}: an addendum adds to one skill or agent of this plugin; the target '
                           f'{target or "(none)"} is not `<plugin>:<skill>`, `<plugin>:<agent>` or a path inside one '

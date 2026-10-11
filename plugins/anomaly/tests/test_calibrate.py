@@ -585,6 +585,14 @@ class FixAddendumTest(CalibrateCase):
         self.assertFalse((self.home / 'addenda').exists())
         self.assertEqual(self.anomaly('slow-measure').fixed_by, '')
 
+    def test_with_a_plugin_checkout_an_addendum_is_refused_and_nothing_is_written(self):
+        self.checkout()
+        self.experiment_on('slow-check', 'anomaly:calibrate')
+        assert_cli_error(self, self.fix_addendum('slow-check', 'Ask which repo before logging.'),
+                         'a plugin checkout is set: change the skill there')
+        self.assertFalse((self.home / 'addenda').exists())
+        self.assertEqual(self.anomaly('slow-check').fixed_by, '')
+
     def test_a_target_that_is_no_skill_or_agent_or_a_line_that_is_empty_or_too_long_is_refused_and_writes_nothing(self):
         line = 'Ask which repo before logging.'
         cases = (('not-the-plugin', 'repo:demo', line, ()),
