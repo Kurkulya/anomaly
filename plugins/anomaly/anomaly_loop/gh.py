@@ -110,13 +110,14 @@ def list_issues(project, prefix, environ=None):
 
 
 def view_issue(project, number, environ=None):
-    """(title, state) of issue `number` of `project`; the state is `open` or `closed`."""
+    """(title, state, link) of issue `number` of `project`; the state is `open` or `closed`. gh also answers for a
+    pull request number: its link is then a pull request link, which the caller checks."""
     check_project(project)
-    out = call('issue', 'view', str(number), '--repo', project, '--json', 'title,state', environ=environ)
+    out = call('issue', 'view', str(number), '--repo', project, '--json', 'title,state,url', environ=environ)
     try:
         answer = json.loads(out)
-        if isinstance(answer['title'], str):
-            return answer['title'], answer['state'].lower()
+        if isinstance(answer['title'], str) and isinstance(answer['url'], str):
+            return answer['title'], answer['state'].lower(), answer['url']
     except (ValueError, KeyError, TypeError, AttributeError):
         pass
     raise GhError(f'gh answered issue {number} of {project} in an unknown shape')
