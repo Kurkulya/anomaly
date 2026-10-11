@@ -178,6 +178,13 @@ class GhSearchTest(UpstreamCase):
         self.assertEqual(self.gh.calls('comment') + self.gh.calls('create'), [])
         self.assertEqual(self.anomaly_path.read_bytes(), before)
 
+    def test_a_comment_number_below_1_is_a_usage_error_and_calls_nothing(self):
+        """L6: an issue number is a whole number of 1 or more."""
+        for number in ('0', '-3', '1.5', 'x'):
+            with self.subTest(number=number):
+                assert_cli_error(self, self.run_defect(f'--comment={number}'), 'an issue number of 1 or more')
+                self.assertEqual(self.gh.records, [])
+
 
 class SecondRunTest(UpstreamCase):
     def setUp(self):

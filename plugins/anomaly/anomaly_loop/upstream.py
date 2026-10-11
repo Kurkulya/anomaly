@@ -26,13 +26,14 @@ title names the same target and offers an exact title hit as the +1. A second ru
 appends `upstream <date> · <number>` under the anomaly's `## Addenda log` (addenda.log_line) and commits the anomaly.
 Without either flag nothing is written to GitHub. A failed `gh` call is one `anomaly:` line (exit 2).
 """
+import argparse
 import json
 import re
 from importlib import import_module
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from . import addenda, digest, files, flags, gh, gitrepo, observe, ports, privacy, profile, scans
+from . import addenda, digest, files, flags, gh, gitrepo, observe, ports, privacy, profile, records, scans
 from .constants import COMMIT_SCOPE, UPSTREAM_ADAPTERS
 from .files import RecordError
 
@@ -183,6 +184,17 @@ def search_lines(repo, issues, title, prefix):
     return lines
 
 
+def issue_option(text):
+    """The argparse type of --comment: records.count_option, and at least 1."""
+    try:
+        value = records.count_option(text)
+    except argparse.ArgumentTypeError:
+        value = 0
+    if value < 1:
+        raise argparse.ArgumentTypeError(f'an issue number of 1 or more, got: {text}')
+    return value
+
+
 def issue_number(link):
     found = ISSUE_LINK.fullmatch(link)
     if found is None:
@@ -241,7 +253,7 @@ def register(commands, common):
                                 help='write the defect report of an anomaly, then search, +1 or create its issue')
     defect.add_argument('signature', help='the anomaly the report is about')
     act = defect.add_mutually_exclusive_group()
-    act.add_argument('--comment', type=int, metavar='<number>',
+    act.add_argument('--comment', type=issue_option, metavar='<number>',
                      help="only after the user's yes: add a +1 comment to this issue")
     act.add_argument('--create', action='store_true',
                      help="only after the user's yes: open the issue from the report file")
