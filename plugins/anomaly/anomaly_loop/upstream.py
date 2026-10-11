@@ -129,11 +129,17 @@ def installed_version(context):
     return Path(context.plugin_root).resolve().name
 
 
+def title_fields(word, signature):
+    """The Title and Target fields of either report; `word` is part_word's answer. The title names no lane: one
+    signature is sent in one lane only."""
+    return ('Title', f'{PREFIX.format(part=word)} {signature}'), ('Target', f'anomaly:{word}')
+
+
 def defect_report(context, anomaly):
     """The defect report of the anomaly; RecordError when upstream defect refuses its target (part_word)."""
     word, version = part_word(context, anomaly.target.strip()), installed_version(context)
-    fields = (('Title', f'{PREFIX.format(part=word)} {anomaly.signature}'), ('Target', f'anomaly:{word}'),
-              ('Symptom', anomaly.summary), (VERSION_FIELD, version), ('Signature', anomaly.signature))
+    fields = (*title_fields(word, anomaly.signature), ('Symptom', anomaly.summary), (VERSION_FIELD, version),
+              ('Signature', anomaly.signature))
     return Report(DEFECT_SUFFIX, word, fields, (), f'+1: the same defect on the installed version {version}')
 
 
@@ -159,8 +165,8 @@ def tuning_report(context, anomaly):
     word, rule = tuning_source(context, anomaly)
     found = verdict.verdict(context, anomaly)
     result, version = anomaly.experiment.result, installed_version(context)
-    fields = (('Title', f'{PREFIX.format(part=word)} {anomaly.signature}'), ('Target', f'anomaly:{word}'),
-              ('Rule', rule), ('Verdict', result), (VERSION_FIELD, version), ('Signature', anomaly.signature),
+    fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', result), (VERSION_FIELD, version),
+              ('Signature', anomaly.signature),
               ('Readings', 'before the fix and since; n= is the sessions on each side'))
     readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
     plus_one = f'+1: the same line, {result} on the installed version {version}'
