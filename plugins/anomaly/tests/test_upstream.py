@@ -44,24 +44,23 @@ FIX_REF = '2026-09-20 · addenda/observe.md'   # fixed_by of the kept addendum: 
 
 class FakeIssueGh(FakeGh):
     """FakeGh for the issue calls: `issues` is the list of open (number, title) a list call answers as JSON, a create
-    answers the link of the new issue, a comment answers nothing. `failure` set to a text fails every call.
+    answers the link of the new issue, a comment answers nothing. `failure` set to a text fails every call, or with
+    `failing_word` set only the calls that have that word (such as `view` or `comment`) as one of their arguments.
     `views` maps an issue number to the (title, state, url) an `issue view` call answers as JSON, as gh prints the
-    state (`OPEN` or `CLOSED`); a number not in it fails the call. `view_failure` set to a text fails only that call."""
+    state (`OPEN` or `CLOSED`); a number not in it fails the call."""
 
     def __init__(self):
         super().__init__()
         self.issues = []
         self.views = {}
-        self.view_failure = None
+        self.failing_word = None
 
     def run(self, *args, environ=None, **kwargs):
         self.records.append(record(args, kwargs))
         self.environs.append(environ)
-        if self.failure:
+        if self.failure and (self.failing_word is None or self.failing_word in args):
             return finished('gh', args, code=1, stderr=self.failure)
         if 'view' in args:
-            if self.view_failure:
-                return finished('gh', args, code=1, stderr=self.view_failure)
             number = int(args[args.index('view') + 1])
             if number not in self.views:
                 return finished('gh', args, code=1, stderr=f'no issue {number} in the fake')
@@ -161,7 +160,7 @@ class UpstreamCase(unittest.TestCase):
     def assert_comment_read_failed(self, run, number):
         """A failed `issue view` for `--comment <number>`: exit 2, one gh error line, nothing posted or logged."""
         self.gh.views[number] = (title_of('observe'), 'OPEN', url_of(number))
-        self.gh.view_failure = TOOL_FAILURE
+        self.gh.failure, self.gh.failing_word = TOOL_FAILURE, 'view'
         before = self.anomaly_path.read_bytes()
         result = run('--comment', str(number))
         assert_cli_error(self, result, TOOL_FAILURE)
@@ -456,13 +455,17 @@ class GhFailureTest(UpstreamCase):
         assert_cli_error(self, self.run_defect(), TOOL_FAILURE)
 
     def test_a_failed_comment_or_create_is_one_anomaly_line_and_exit_2_and_logs_nothing(self):
-        """AC-25: the first run works, the second run's call fails."""
+        """AC-25: the first run works, the second run's comment or create call fails (the issue read before the
+        comment passes)."""
         self.run_ok()
         before = self.anomaly_path.read_bytes()
+        self.gh.views[12] = (title_of('observe'), 'OPEN', url_of(12))
         self.gh.failure = TOOL_FAILURE
-        for flags in (('--comment', '12'), ('--create',)):
+        for flags, word in ((('--comment', '12'), 'comment'), (('--create',), 'create')):
             with self.subTest(flags=flags):
+                self.gh.failing_word = word
                 assert_cli_error(self, self.run_defect(*flags), TOOL_FAILURE)
+                self.assertEqual(len(self.gh.calls(word)), 1, self.gh.records)   # the failed call was made
                 self.assertEqual(self.anomaly_path.read_bytes(), before)
 
 
