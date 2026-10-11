@@ -60,7 +60,7 @@
 | **stack profile** | One file per stack (language and test runner) in a skill's `reference/stacks/` that gives the commands and greps the skill runs on that stack; a stack with no file gets a drafted one. | profile (alone; that is the environment mapping) |
 | **lock** | A guard that stops an architecture finding from coming back: an import or lint rule at error level, or a failing test. | guard rail |
 | **cover** | The kept test that a test cut relies on: it must fail on each break of the cut test's behaviour. | replacement |
-| **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the README uses "mutation probe" and "probe edit") |
+| **break** | One deliberate code change, written by hand, that a cut's cover must fail on; one run against one break is a **break probe**. | mutant (unless the repo's mutation tool made it), probe (alone; the reference (`docs/reference.md`) uses "mutation probe" and "probe edit") |
 | **addendum** | One rule line in a user's addenda file in home, tied to one experiment, that adds to or narrows one plugin skill or agent (ADR-0023). | patch, override, local rule |
 | **upstream report** | Opt-in text an installed-copy user sends to the plugin's repository as a GitHub issue or a +1 comment, in one of two lanes (ADR-0024). | report (alone), telemetry, issue (alone) |
 | **defect report** | The upstream report lane for a plugin fault, sent with no experiment. | bug report |

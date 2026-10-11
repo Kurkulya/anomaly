@@ -52,7 +52,7 @@ loop in the order you meet it, then the pipeline, from tickets to the stage skil
 Requirements: Python 3.13, standard library only; git 2.31 or later (`ports` names a repository
 with `git rev-parse --path-format=absolute`, added in 2.31).
 
-Use the path of this folder (the checkout) on your machine.
+Use the path of the repository root (the checkout) on your machine.
 
 ```
 claude plugin marketplace add <path-to-this-repo>
@@ -2440,7 +2440,7 @@ against a home with no profile. Without a profile the identifier check is skippe
 
 `tests/test_pipeline_files.py` and `tests/test_cli.py` hold the static checks over the text of the
 pipeline (every skill except the four loop skills, its extra docs, the agent files and the files
-under `docs/`). They pass while those files do not exist. Once they do:
+under `plugins/anomaly/docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
   `SKILL.md` is 8 KB or less (build: 9229 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
@@ -2462,7 +2462,7 @@ under `docs/`). They pass while those files do not exist. Once they do:
   permissions.
 - This reference (`docs/reference.md`) names every command group of `--help` and every `<group> <action>` pair of
   `<group> --help`.
-- No doc of `build` or `review` other than `SKILL.md`, nor any file under `docs/`, holds a `${…}`
+- No doc of `build` or `review` other than `SKILL.md`, nor any file under `plugins/anomaly/docs/`, holds a `${…}`
   placeholder: in a skill
   folder Claude Code fills `${CLAUDE_PLUGIN_ROOT}`-style placeholders only in `SKILL.md`
   (`${user_config.*}` not even there, ADR-0001).
