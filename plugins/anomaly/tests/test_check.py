@@ -1035,6 +1035,8 @@ class SubagentBashVerdictTest(unittest.TestCase):
     def test_a_wrapper_long_option_with_a_separate_value_is_skipped_and_one_without_is_not_a_value(self):
         """AC-21: `sudo --user root tee f` finds `tee`; `sudo --preserve-env tee f` has no value to skip."""
         for command in ('sudo --user root tee f', 'sudo --preserve-env tee f', 'sudo --user=root tee f',
+                        'sudo --host h tee f', 'sudo --chroot /r tee f', 'sudo --close-from 5 tee f',
+                        'sudo --command-timeout 5 tee f',
                         'nice --adjustment 5 tee f', 'timeout --signal KILL 5 tee f',
                         'xargs --max-args 1 sed -i s/a/b/', 'env --unset X tee f', 'env --ignore-signal tee f'):
             with self.subTest(command=command):

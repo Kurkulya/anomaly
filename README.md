@@ -1617,8 +1617,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   whose `--help` shows a required value; `--name=value` and `-nVALUE` are always one word, and an
   option with an optional or no value, such as `sudo --preserve-env` or `xargs -i`, takes no next
   word). Short: `sudo -u -g -h -p -C -D -R -T -U`, `env -u -C -S -f -a`, `nice -n`, `time -f -o`,
-  `timeout -s -k`, `xargs -n -I -L -P -s -d -E -a -J`, `exec -a`. Long: `sudo --chdir --group
-  --other-user --prompt --user`, `env --chdir --file --unset --split-string --argv0`,
+  `timeout -s -k`, `xargs -n -I -L -P -s -d -E -a -J`, `exec -a`. Long: `sudo --chdir --chroot
+  --close-from --command-timeout --group --host --other-user --prompt --user`, `env --chdir --file --unset --split-string --argv0`,
   `nice --adjustment`, `time --format --output`, `timeout --signal --kill-after`, `xargs --arg-file
   --delimiter --max-args --max-chars --max-lines --max-procs --process-slot-var`. `timeout` also
   skips its duration (`timeout 5 tee f`). `command -v tee` and `command -V tee` look a name up and
