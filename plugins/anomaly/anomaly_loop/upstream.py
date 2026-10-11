@@ -35,11 +35,13 @@ exits 1, the file written.
 The `upstream` port (profile key `upstream_tool`, constants.UPSTREAM_ADAPTERS): on its core default the command
 prints the search link of the repository's GitHub issues and calls nothing. With `gh` it lists the open issues whose
 title names the same target and offers an exact title hit as the +1. A second run acts, each after the user's yes:
-`--comment <number>` adds a +1 comment to that issue, `--create` opens the issue from the file this run writes; either
-appends `upstream <date> · <number>` under the anomaly's `## Addenda log` (addenda.log_line) and commits the anomaly.
-Without either flag nothing is written to GitHub. When the Addenda log already holds an `upstream ` line, `--comment`
-and `--create` are refused (exit 2) with nothing sent or written: a report goes once. A failed `gh` call is one
-`anomaly:` line (exit 2).
+`--comment <number>` reads the title, state and link of that issue (gh.view_issue) and adds a +1 comment to it only
+when it is open, its link is an issue link (ISSUE_LINK, not a pull request) and its title, after printable() and a
+strip, starts with the report's prefix (PREFIX), else it is refused (exit 2) with nothing posted, logged or
+committed; `--create` opens the issue from the file this run writes; either appends `upstream <date> · <number>`
+under the anomaly's `## Addenda log` (addenda.log_line) and commits the anomaly. Without either flag nothing is
+written to GitHub. When the Addenda log already holds an `upstream ` line, `--comment` and `--create` are refused
+(exit 2) with nothing sent or written: a report goes once. A failed `gh` call is one `anomaly:` line (exit 2).
 """
 import argparse
 import json
@@ -256,10 +258,16 @@ def printable(text):
     return ''.join(character for character in text if character.isprintable())
 
 
+def starts_with_prefix(title, prefix):
+    """Whether an issue title from GitHub, after printable() and a strip, starts with the report's `prefix`: the one
+    title test of the search lines and of the --comment check."""
+    return printable(title).strip().startswith(prefix)
+
+
 def search_lines(repo, issues, title, prefix):
-    """The open issues whose title starts with `prefix`, an exact title hit marked as the +1 offer; each title is
-    printed as printable() leaves it."""
-    same = [(number, printable(text)) for number, text in issues if printable(text).strip().startswith(prefix)]
+    """The open issues whose title starts with `prefix` (starts_with_prefix), an exact title hit marked as the +1
+    offer; each title is printed as printable() leaves it."""
+    same = [(number, printable(text)) for number, text in issues if starts_with_prefix(text, prefix)]
     if not same:
         return [f'no open issue of {repo} names {prefix}: run again with --create to open one']
     lines = [f'open issues of {repo} that name {prefix}:']
@@ -324,6 +332,12 @@ def run_report(args, environ, action):
         return 0
     tool = ADAPTERS[name]
     if args.comment is not None:
+        issue_title, state, link = ports.call_tool(ADAPTER_ERRORS, tool.view_issue, repo, args.comment,
+                                                   environ=environ)
+        if (state != 'open' or ISSUE_LINK.fullmatch(link) is None   # a pull request link is not an issue
+                or not starts_with_prefix(issue_title, prefix)):
+            raise RecordError(f'{label}: issue #{args.comment} of {repo} is not an open issue whose title starts with '
+                              f'{prefix}; nothing was posted')
         ports.call_tool(ADAPTER_ERRORS, tool.comment_issue, repo, args.comment, report.plus_one, environ=environ)
         number = args.comment
         print(f'+1 added to #{number}')
@@ -361,7 +375,8 @@ def register(commands, common):
         action.add_argument('signature', help='the anomaly the report is about')
         act = action.add_mutually_exclusive_group()
         act.add_argument('--comment', type=issue_option, metavar='<number>',
-                         help="only after the user's yes: add a +1 comment to this issue")
+                         help="only after the user's yes: add a +1 comment to this issue, refused unless it is an "
+                              "open issue and its title starts with the report's [anomaly:<word>] prefix")
         act.add_argument('--create', action='store_true',
                          help="only after the user's yes: open the issue from the report file")
         action.set_defaults(handler=handler)

@@ -62,8 +62,8 @@ ISSUE_LINK = 'https://example.com/owner/repo/issues/42'
 
 class GhIssueTest(unittest.TestCase):
     """The issue calls of the `upstream` port (ticket 05). Names this file chooses: `list_issues(project, prefix)`
-    answers a list of (number, title); `comment_issue(project, number, body)`; `create_issue(project, title, body)`
-    answers the link of the new issue."""
+    answers a list of (number, title); `view_issue(project, number)` answers (title, state, link);
+    `comment_issue(project, number, body)`; `create_issue(project, title, body)` answers the link of the new issue."""
 
     def test_open_issues_are_listed_with_an_argument_list_and_read_as_number_and_title(self):
         answer = '[{"number": 3, "title": "[anomaly:observe] a"}, {"number": 5, "title": "[anomaly:facts] b"}]'
@@ -95,6 +95,30 @@ class GhIssueTest(unittest.TestCase):
         self.assertNotIn('+1 from another user', command)
         self.assertEqual(run.call_args.kwargs['input'], '+1 from another user')
         self.assertFalse(run.call_args.kwargs.get('shell'))
+
+    def test_an_issue_is_viewed_with_an_argument_list_and_read_as_title_state_and_link(self):
+        """AC-21 (D-3, amended 2026-10-11: the link too, as `gh issue view` also answers for a pull request)."""
+        answer = '{"title": "[anomaly:observe] a", "state": "OPEN", "url": "%s"}' % ISSUE_LINK
+        with mock.patch('subprocess.run', return_value=done(answer)) as run:
+            title, state, link = gh.view_issue('owner/repo', 12)
+        self.assertEqual(title, '[anomaly:observe] a')
+        self.assertEqual(state, 'open')
+        self.assertEqual(link, ISSUE_LINK)
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ['gh', 'issue', 'view'])
+        self.assertIn('12', command)
+        self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
+        self.assertEqual(command[command.index('--json') + 1], 'title,state,url')
+        self.assertFalse(run.call_args.kwargs.get('shell'))
+
+    def test_an_answer_that_is_not_an_issue_view_is_an_error(self):
+        for answer in ('{}', '[1]', '{"title": null, "state": "OPEN", "url": "%s"}' % ISSUE_LINK,
+                       '{"title": "a", "state": 1, "url": "%s"}' % ISSUE_LINK, '{"title": "a", "state": "OPEN"}',
+                       '{"title": "a", "state": "OPEN", "url": 7}', 'not json'):
+            with self.subTest(answer=answer):
+                with mock.patch('subprocess.run', return_value=done(answer)):
+                    with self.assertRaises(gh.GhError):
+                        gh.view_issue('owner/repo', 12)
 
     def test_a_new_issue_is_created_from_a_body_file_and_answers_its_link(self):
         """D-18: `gh issue create --body-file`; the body is never an argument."""
