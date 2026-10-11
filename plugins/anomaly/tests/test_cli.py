@@ -39,7 +39,7 @@ class RegistryTest(unittest.TestCase):
 
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
-    BUILD_SKILL_MAX_BYTES = 9 * 1024 + 13   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10); +13: a delta round after any fix round (calibrate-fixes-1 ticket 05)
+    BUILD_SKILL_MAX_BYTES = 9 * 1024 + 63   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10); +13: a delta round after any fix round (calibrate-fixes-1 ticket 05); +50: the port's no-ticket fallback (2026-10-12)
     CONDUCT_SKILL_MAX_BYTES = 9 * 1024   # conduct only: the fix-branch and research dispatches name roles and effort (model-roles cumulative review, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
