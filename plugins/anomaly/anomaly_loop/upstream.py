@@ -1,4 +1,4 @@
-"""upstream: a report from an installed copy to the plugin's owner, as a GitHub issue (ADR-0022).
+"""upstream: a report from an installed copy to the plugin's owner, as a GitHub issue (ADR-0024).
 
   upstream defect <signature> [--comment <number> | --create] [--plugin-root <dir>] [--user-config <dir>]
 

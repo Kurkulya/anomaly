@@ -426,7 +426,7 @@ digest of it, see assess).
 
 An installed copy of the plugin has no checkout to change. An **addenda file** lets you tune one
 of its skills or agents from home instead
-([ADR-0021](docs/adr/0021-user-addenda-in-home-load-through-cli-output.md)):
+([ADR-0023](docs/adr/0023-user-addenda-in-home-load-through-cli-output.md)):
 `addenda/<skill>.md` for a skill, `addenda/agents/<agent>.md` for an agent. It is plain text,
 one rule per line, at most 5 lines, and each line is one experiment:
 
@@ -935,7 +935,7 @@ holds, or to make room in a full file. It logs `dropped <date> · <reason>` unde
 and refuses an anomaly with no tagged line in the file its fix names.
 
 **Upstream reports.** With no plugin checkout, you can send the plugin's owner what you found, as
-a GitHub issue ([ADR-0022](docs/adr/0022-upstream-reports-through-an-upstream-port.md)). Each
+a GitHub issue ([ADR-0024](docs/adr/0024-upstream-reports-through-an-upstream-port.md)). Each
 report goes once, and nothing reaches GitHub without your yes.
 
 ```

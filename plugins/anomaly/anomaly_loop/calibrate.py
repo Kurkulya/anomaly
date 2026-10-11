@@ -7,7 +7,7 @@ module ranks, records and judges, so the numbers never depend on the conversatio
   declare  write the experiment BEFORE the change: expect, one metric, one guard, check_by, kind,
            and for a switch-over the new skill (ADR-0013)
   fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed; with
-           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0021); refused
+           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0023); refused
            when a plugin checkout is set (ADDENDUM_CHECKOUT_SET)
   verify   judge a due experiment from the numbers and write its result
   decide   the user's result for an experiment the numbers could not judge
@@ -236,7 +236,7 @@ def takes_no_addenda(part):
 
 
 def fix_home(context, target, plugin):
-    """The plan's fix-home mark of a target with no plugin checkout (ADR-0021), or None: the addenda file
+    """The plan's fix-home mark of a target with no plugin checkout (ADR-0023), or None: the addenda file
     (relative to home), or why there is none: UPSTREAM_DEFECT for plugin code or docs, NO_PART for a
     `<plugin>:...` that names no skill or agent (upstream.part_word refuses it, so no report has a title for it).
     With a checkout (`plugin` set) there is no mark."""

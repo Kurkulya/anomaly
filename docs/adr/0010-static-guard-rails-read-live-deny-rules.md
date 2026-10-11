@@ -1,6 +1,6 @@
 # ADR-0010: Static guard rails read the live deny rules, and `ui_check` joins the ports
 
-Status: Accepted; partly superseded by ADR-0021 (the CLI reads the settings files at run time, for the write-time deny check of an addendum line) · Date: 2026-10-04 · Owner: VK · Revisit-by: 2026-12-01
+Status: Accepted; partly superseded by ADR-0023 (the CLI reads the settings files at run time, for the write-time deny check of an addendum line) · Date: 2026-10-04 · Owner: VK · Revisit-by: 2026-12-01
 
 ## Context
 

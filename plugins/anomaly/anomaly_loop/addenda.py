@@ -1,4 +1,4 @@
-"""A user's addenda files in home (ADR-0021): one file per plugin skill (`addenda/<skill>.md`) or agent
+"""A user's addenda files in home (ADR-0023): one file per plugin skill (`addenda/<skill>.md`) or agent
 (`addenda/agents/<agent>.md`), each line one rule tied to one experiment, at most ADDENDA_MAX_LINES lines.
 
 A line is written as `<rule> [exp: <signature> · <stamp>]`. The stamp is 8 hex characters of sha256 over

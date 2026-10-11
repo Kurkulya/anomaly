@@ -1,4 +1,4 @@
-# ADR-0022: Upstream reports go through a new `upstream` port, and a checkout never reports
+# ADR-0024: Upstream reports go through a new `upstream` port, and a checkout never reports
 
 Status: Proposed · Date: 2026-10-11 · Owner: VK · Revisit-by: 2027-01-11
 

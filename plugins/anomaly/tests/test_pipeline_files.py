@@ -38,7 +38,7 @@ CHAINED = re.compile(r'&&|\|\||;|`|\$\(|(?<!\|)\|(?!\|)|\s\d?>>?|\s<\s|&\s*$')  
 SETTINGS_FILE = re.compile(r'settings(?:\.local)?\.json')
 ALLOW_RULE = re.compile(r'"allow"\s*:|permissions\.allow')
 TOOL_RULE = re.compile(r'\b(?:Bash|Read|Edit|Write|WebFetch)\([^)\n]*\)')   # a rule in the text a user reads
-SETTINGS_READER = 'anomaly_loop/scans.py'   # the one plugin file that names settings files to read them, never writes them or prints an allow rule (ADR-0021)
+SETTINGS_READER = 'anomaly_loop/scans.py'   # the one plugin file that names settings files to read them, never writes them or prints an allow rule (ADR-0023)
 QUOTED = re.compile(r'"([^"\n]*)"|\'[^\'\n]*\'')   # a double-quoted span (group 1) or a single-quoted one, left to right
 PLACEHOLDER = re.compile(r'<[^<>\n]*>')
 FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|\bticket amend\s+\S+(?:\s+--after\s+\S+)?|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--after\b|--from\s+(?:<[^>]*>|\S+)(?:\s+--[\w-]+\s+(?:<[^>]*>|\S+))*\s*$)")

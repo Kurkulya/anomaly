@@ -1,4 +1,4 @@
-# ADR-0021: User addenda live in home and load through CLI output
+# ADR-0023: User addenda live in home and load through CLI output
 
 Status: Proposed; partly supersedes ADR-0010 (the CLI reads the settings files at run time for the write-time deny check) · Date: 2026-10-11 · Owner: VK · Revisit-by: 2027-01-11
 
@@ -12,7 +12,7 @@ The calibrate loop fixes a problem by editing its target and recording the chang
 
 ## Decision
 
-- Routing: with no checkout, `calibrate plan` sends a target `anomaly:<skill>`, `anomaly:<agent>`, or a path inside one skill folder or agent file to its addenda file. A target in plugin code or docs becomes a defect report (ADR-0022). With a checkout, nothing changes.
+- Routing: with no checkout, `calibrate plan` sends a target `anomaly:<skill>`, `anomaly:<agent>`, or a path inside one skill folder or agent file to its addenda file. A target in plugin code or docs becomes a defect report (ADR-0024). With a checkout, nothing changes.
 - Writing: `calibrate fix --addendum '<line>'` appends the line with `[exp: <signature> · <stamp>]` and refuses it without a declared experiment, over the cap, on a failed `check_text`, or when it fully matches a live deny rule. A revert result removes exactly that line; `calibrate drop` removes a line whose experiment has a verdict (`keep` or `unproven`; an `inconclusive` result is none). `declare` keeps its `--approved` gate.
 - Loading: the call prints the skill's addendum last, then the addendum of each agent the skill dispatches, with a line asking the skill to add it to that agent's brief. A header says the lines add or narrow, and that the core rules and invariants win on a clash. With no file, the output is unchanged.
 - Stamp: 8 hex characters of sha256 over the target's files, on each line, so only a changed skill asks for a re-check and an append never hides an older line. A missing target is listed too.
