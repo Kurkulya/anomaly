@@ -503,6 +503,15 @@ class TuningTextTest(TuningCase):
                      f'- Readings as of {LOGGED_DAY}', *self.reading_lines()):
             self.assertIn(fact, text)
 
+    def test_a_repo_layer_name_that_a_reading_line_holds_does_not_refuse_the_report(self):
+        """Amended 2026-10-11 (code delta review): only the agent of a per-dispatch reading is outside text, so a
+        repo named like a word of every reading line (`since`) refuses nothing; calibrate plan asks the same
+        checked_report, so its offer stands too."""
+        write_text(self.home / 'repos' / 'since.md', '---\nverify: run-all\n---\n')
+        lines = self.reading_lines()
+        self.assertTrue(lines and all('since' in line for line in lines), lines)
+        self.assertIn(lines[0], self.report_text(self.run_ok_tuning()))
+
 
 class TuningGhTest(TuningCase):
     """AC-28: search, +1 and create are the tail that `upstream defect` runs (AC-19 to AC-25), so one case each."""

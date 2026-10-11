@@ -19,13 +19,14 @@ verify day; verdict.reading_lines: the metric and the guard before the fix and s
 
 When `plugin_repo` resolves to a checkout (gitrepo.plugin_repo), the command prints CHECKOUT_SET and exits 1 with
 nothing written: a checkout fixes the plugin through an MR. Else every run checks the report (checked_report, then
-check_report: each field and each readings line passes privacy.check_text and names no profile marker,
-scans.profile_markers, and no repo-layer name, scans.repo_layer_names; a hit refuses with no file written and nothing
-redacted), writes it to `<home>/upstream/<signature>.defect.md` or `<home>/upstream/<signature>.tuning.md` (a
-`Title:` line, a blank line, the body) and prints the path. The marker and repo-layer check reads only the text from
-outside the CLI (the symptom, the rule, the reason, each readings line, which can name an agent, the installed
-version folder and the signature), not the title, target, verdict word and readings heading the CLI composes; that
-text is also refused when it holds a local path or the OS user name.
+check_report: each field, and the agent name of a per-dispatch reading, passes privacy.check_text and names no
+profile marker, scans.profile_markers, and no repo-layer name, scans.repo_layer_names; a hit refuses with no file
+written and nothing redacted), writes it to `<home>/upstream/<signature>.defect.md` or
+`<home>/upstream/<signature>.tuning.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
+repo-layer check reads only the text from outside the CLI (the symptom, the rule, the reason, the agent name of a
+per-dispatch reading, verdict.per_dispatch_agent, the installed version folder and the signature), not the title,
+target, verdict word, readings heading and the rest of each readings line, which the CLI composes; that text is also
+refused when it holds a local path or the OS user name.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
@@ -63,7 +64,7 @@ LABEL = 'upstream defect'
 TUNING_LABEL = 'upstream tuning'
 KEPT = ('keep', 'unproven')              # the experiment results a tuning report is sent for
 VERSION_FIELD = 'Installed version'
-READING_FIELD = 'Reading'                # one readings line, as check_report reads it
+READING_FIELD = 'Reading'                # the agent name of a per-dispatch reading, as check_report reads it
 OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', READING_FIELD, VERSION_FIELD, 'Signature')   # see check_report
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
@@ -97,14 +98,14 @@ def user_names(environ):
 
 def check_report(context, fields, environ, label=LABEL):
     """Refuse the report (ADR-0003: refuse, never redact; `label` starts the error) when a field fails
-    privacy.check_text, or when a field from outside the CLI (OUTSIDE_FIELDS: the symptom, the rule, the reason, a
-    readings line, the installed version folder and the signature, not the title and target the CLI composes; an
-    installed version that is a commit id, privacy.COMMIT_ID, holds no name and is skipped, so a short repo-layer
-    name such as `add` cannot match its hex) holds a profile marker (scans.profile_markers) or a repo-layer name
-    (scans.repo_layer_names), by scans.marker_hits, a local path (LOCAL_PATH: `/x/y` or `~/` not right after a
-    letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, or a drive `X:\\` or `X:/`; a slash
-    inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash command such as
-    `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
+    privacy.check_text, or when a field from outside the CLI (OUTSIDE_FIELDS: the symptom, the rule, the reason, the
+    agent name of a per-dispatch reading, the installed version folder and the signature, not the title and target
+    the CLI composes; an installed version that is a commit id, privacy.COMMIT_ID, holds no name and is skipped, so
+    a short repo-layer name such as `add` cannot match its hex) holds a profile marker (scans.profile_markers) or a
+    repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path (LOCAL_PATH: `/x/y` or `~/` not
+    right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, or a drive `X:\\` or
+    `X:/`; a slash inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash
+    command such as `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
     users = user_names(environ)
     for key, value in fields:
@@ -119,10 +120,11 @@ def check_report(context, fields, environ, label=LABEL):
             raise RecordError(f'{label}: {key} holds a local path or the user name; describe it in your own words')
 
 
-Report = namedtuple('Report', 'suffix word fields lines plus_one')
+Report = namedtuple('Report', 'suffix word fields lines plus_one checked', defaults=((),))
 Report.__doc__ = ('One report to send: the file suffix, the title word (part_word), the (key, text) fields with the '
-                  'title first, the lines that follow the fields in the body as they are, and the text of a +1 '
-                  'comment.')
+                  'title first, the lines that follow the fields in the body as they are, the text of a +1 '
+                  'comment, and the (key, text) pairs from outside the CLI that those lines hold, checked with the '
+                  'fields but not written as fields.')
 
 
 def installed_version(context):
@@ -175,21 +177,22 @@ def tuning_report(context, anomaly):
               ('Reason', experiment.reason or '(none recorded)'), (VERSION_FIELD, version),
               ('Signature', anomaly.signature), (heading, 'before the fix and since; n= is the sessions on each side'))
     readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
+    agents = tuple((READING_FIELD, agent) for agent in map(verdict.per_dispatch_agent, (r.name for r in found.readings))
+                   if agent is not None)   # the user part of a reading; the rest of its line is CLI text
     plus_one = f'+1: the same line, {experiment.result} on the installed version {version}'
-    return Report(TUNING_SUFFIX, word, fields, readings, plus_one)
+    return Report(TUNING_SUFFIX, word, fields, readings, plus_one, agents)
 
 
 ACTIONS = {'defect': (LABEL, defect_report), 'tuning': (TUNING_LABEL, tuning_report)}   # action: (label, compose)
 
 
 def checked_report(context, anomaly, action, environ):
-    """The report of `action` (ACTIONS) for the anomaly once check_report passed it: its fields, and each line that
-    follows them as a READING_FIELD field; RecordError when the action refuses it, OSError when a file it reads
-    cannot be read."""
+    """The report of `action` (ACTIONS) for the anomaly once check_report passed it: its fields and its checked
+    pairs (the agent name of a per-dispatch reading); RecordError when the action refuses it, OSError when a file
+    it reads cannot be read."""
     label, compose = ACTIONS[action]
     report = compose(context, anomaly)
-    check_report(context, report.fields + tuple((READING_FIELD, line.strip()) for line in report.lines), environ,
-                 label)
+    check_report(context, report.fields + report.checked, environ, label)
     return report
 
 
