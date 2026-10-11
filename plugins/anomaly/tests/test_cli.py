@@ -936,7 +936,7 @@ class PlanReviewerTest(unittest.TestCase):
         for mode in ('spec', 'tickets'):
             self.assertRegex(section, rf'`{mode}`|\b{mode}\b')
 
-    def test_the_new_files_do_not_name_the_org_plan_reviewers(self):
+    def test_the_new_files_do_not_name_the_environment_plan_reviewers(self):
         """ADR-0006: plan-audit and plan-sanity are not copied and not named."""
         for path in (self.AGENT, self.SPEC, self.TICKETS):
             text = self.text(path).lower()
@@ -1673,7 +1673,7 @@ class ShipSkillTest(unittest.TestCase):
     GATE_MAX_BYTES = 2 * 1024
     DOMAIN_WORDS = re.compile(r'(?i)\b(?:recipes?|bakery|library|garden|plants?|shop|carts?|orders?|invoices?|books?|'
                               r'loans?|playlists?|tea|coffee|pets?|trips?|bookings?|menu|quiz|calendar|weather)\b')   # loose: a made-up everyday domain
-    REAL_NAME = re.compile(r'(?i)\b(?:anomaly|claude|anthropic|jira|gitlab|github|glab)\b')   # a real product, org or project name
+    REAL_NAME = re.compile(r'(?i)\b(?:anomaly|claude|anthropic|jira|gitlab|github|glab)\b')   # a real product or project name
     TICKET_KEY = re.compile(r'\b(?!AC-|D-|ADR-)[A-Z][A-Z0-9]+-\d+\b')   # PRJ-123; AC-n, D-n and ADR-n are the plugin's own ids
 
     def text(self):
@@ -1710,7 +1710,7 @@ class ShipSkillTest(unittest.TestCase):
                     if all(re.search(rf'(?i)\b{section}\b', block) for section in ('why', 'what changed', 'tested'))]
         self.assertEqual(len(examples), 1, 'expected one fenced MR body example with Why, What changed and Tested')
         example = examples[0]
-        self.assertIsNone(self.REAL_NAME.search(example), 'a real product, org or project name')
+        self.assertIsNone(self.REAL_NAME.search(example), 'a real product or project name')
         self.assertIsNone(self.TICKET_KEY.search(example), 'a ticket key')
         self.assertIsNone(re.search(r'https?://|@\w|\b[0-9a-f]{7,40}\b', example), 'a link, a mention or a commit id')
         self.assertIsNotNone(self.DOMAIN_WORDS.search(example), 'no word of a made-up everyday domain')

@@ -22,7 +22,7 @@ Standard library only; no install step.
 
 ## Rules
 
-- **Tracked text holds no org facts**: no employer, product, repository or colleague names, no
+- **Tracked text holds no environment facts**: no employer, product, repository or colleague names, no
   local paths. `tests/test_neutral.py` guards plugin files.
 - **Edit cited files last.** Docs cite other files by `file:line`. Never insert lines above a
   cited line; append, or re-check every cite below the insert.

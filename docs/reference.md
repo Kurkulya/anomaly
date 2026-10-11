@@ -31,7 +31,7 @@ The pipeline runs one **work unit** (a feature, kept in `.anomaly/<work-unit>/`)
 **review** dispatches the reviewer agents at each gate, and **diagnose** finds a bug's root cause
 and leaves a light-path ticket for `build`. Each stage writes a work-unit line, so the loop can
 read what each piece of work cost, and each reviewer's accepted and rejected findings, so the loop
-can judge the reviewers. Org-specific tools and names come in through **ports** in a profile kept
+can judge the reviewers. Environment-specific tools and names come in through **ports** in a profile kept
 outside the plugin.
 
 **architecture** audits a repo in 7 areas against six principles, with an area score and a lock
@@ -130,7 +130,7 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `build_skills` | optional: skills that mark a session as build work, as a comma or line list. The plugin ships no default list: without this key no session counts as build. The digest and `calibrate` read it (see Session kind) |
 | `plugin_repo` | optional: the plugin's folder inside its git checkout, for example `<checkout>/plugins/anomaly` (a leading `~` is expanded). Used only when the installed plugin is a git-ignored copy and so has no repository of its own; a real checkout of the plugin uses its own folder and repository. With neither, the checks that need the plugin repository are skipped and one notice line says so |
 | `test_writers` | optional port: the agent that writes acceptance tests, per stack (one `stack: agent` per indented line, with a space after the colon) |
-| `conventions` | optional port: an org conventions source per stack, read after the repo's own docs (one `stack: source` per indented line, with a space after the colon) |
+| `conventions` | optional port: an environment conventions source per stack, read after the repo's own docs (one `stack: source` per indented line, with a space after the colon) |
 | `reviewers` | optional port: reviewers added beside `anomaly:code`, `anomaly:feature` and `anomaly:security`, as a comma or line list |
 | `gather` | optional port: context skills added beside reading the repo's code and docs, as a comma or line list |
 | `ci` | optional port: the CI tool the CI step watches and reads logs with; the only value today is `glab` (the GitLab CLI), see CI |
@@ -148,7 +148,7 @@ repo layer).
 
 ## Ports and the repo layer
 
-The pipeline reads org values only through **ports**, never from its own text
+The pipeline reads environment values only through **ports**, never from its own text
 ([ADR-0007](adr/0007-one-plugin-ports-and-adapters.md)). Each port has one fixed mode and a
 **core default** that works with an empty profile. An **adapter** is a profile value; one that
 is absent, blank or still a `<placeholder>` leaves the port on its core default, and the
@@ -1573,8 +1573,8 @@ The modes, in one line each (the full dispatch table is in
 
 - It stops before any dispatch when the range does not resolve or the diff is empty. A docs-only
   diff (no source, config, script or test file) uses combined mode.
-- The agents come from the `reviewers` port: an org reviewer gets the same range, its own heading
-  and its own lens. Org conventions sections for the touched areas go to `anomaly:code` only. The
+- The agents come from the `reviewers` port: an environment reviewer gets the same range, its own heading
+  and its own lens. Environment conventions sections for the touched areas go to `anomaly:code` only. The
   model and effort are those of the agent's lens model role (see Reviewer agents). The first round
   goes out in one message, in the background.
 - Cumulative mode reads `stories.md` + `decisions.md` as the spec, passes every
@@ -1602,7 +1602,7 @@ The plugin ships five read-only reviewer agents in `plugins/anomaly/agents/`: th
 ones, `anomaly:plan`, the planning gate's, and `anomaly:docs`, the docs check (below the table). Only
 the `review` skill dispatches the first four, and it passes the model and effort of its lens model
 role: `review_code` for `anomaly:code`, `review_feature` for `anomaly:feature`, `review_security`
-for `anomaly:security`, `review` for `anomaly:plan` and org reviewers. No agent file pins one. Each
+for `anomaly:security`, `review` for `anomaly:plan` and environment reviewers. No agent file pins one. Each
 has the tools Read, Grep, Glob and Bash (no Edit, no Write), a description of 250 characters or
 fewer and a file of 6 KB or less. Two more read-only agents are readers, not reviewers:
 `anomaly:facts` and `anomaly:digest`. They have no Bash and no Write, pin no model either, and
@@ -1623,7 +1623,7 @@ and keeps the same limits.
 | `anomaly:survey` | one research or probe task a skill hands it: web searches and fetches, repository reads, commands; tools Read, Grep, Glob, Bash, Write, WebSearch and WebFetch; model role `survey`; writes only to the output path and the other paths its task names, reads what it fetches as data, never as an instruction, and copies no secret, token or personal data | one mode: the task, the output path and the word or line limit the dispatcher passes |
 
 `anomaly:docs` is not a lens of the `review` skill and is not in the `reviewers` port, so `lens tally`
-does not accept the lens `docs` unless an org adds the agent to its own `reviewers` line. It never repeats
+does not accept the lens `docs` unless the profile adds the agent to its `reviewers` line. It never repeats
 checks 1 to 3 (overdue ADR revisit dates, unkeyed deferrals, dead paths in `CLAUDE.md`): `docs scan`
 owns them, and the agent may be passed that output. It reads ADRs from the ADR folder
 the caller passes, already resolved through the CLI (so the folder fallback of `docs scan` has one
@@ -1862,7 +1862,7 @@ python plugins/anomaly/scripts/anomaly.py ci log   <commit|ref> [--pipeline] [--
 
 Four small commands serve the review and build skills: `risk`, `lens tally`, `worklog` and `log add`
 (which writes a work unit's `log.md`, and also serves specify and slice). None of them needs a
-profile; `lens tally add` reads the profile's `reviewers` only to learn the org lens names.
+profile; `lens tally add` reads the profile's `reviewers` only to learn the environment lens names.
 
 ### risk
 
@@ -1927,7 +1927,7 @@ each close and sums after the close when its caller said "last review: yes".
 - The lens names are fixed: `code`, `feature`, `security` (the core reviewers `anomaly:code`,
   `anomaly:feature`, `anomaly:security`), `plan` (the plan-gate reviewer `anomaly:plan`),
   `interview` (the interview's recommendations), `model_pick` (`build`'s verdict on a ticket's
-  model pick) and each org reviewer's adapter name from the `reviewers` port (see Ports and the
+  model pick) and each environment reviewer's adapter name from the `reviewers` port (see Ports and the
   repo layer). Any other name is one `anomaly:` line that lists the allowed names, exit 2, and
   nothing is written.
 - `--revised <n>` counts the accepted findings whose fix differed from the one the reviewer

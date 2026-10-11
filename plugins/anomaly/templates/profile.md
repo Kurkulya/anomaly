@@ -44,7 +44,7 @@ issue_source: <tracker name, read-only or read-write>
 # space after the colon.
 test_writers:
   stack-a: <agent id>
-# Org conventions read after the repo's own docs, per stack. One `stack: path` per indented
+# Environment conventions read after the repo's own docs, per stack. One `stack: path` per indented
 # line, with a space after the colon.
 conventions:
   stack-a: <path to the conventions doc>

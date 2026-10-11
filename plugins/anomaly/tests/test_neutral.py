@@ -1,6 +1,6 @@
 """The plugin stays free of environment facts: they live only in the profile (ADR-0001).
 
-The org names are never listed here, because that would put them into the plugin. The check
+The environment names are never listed here, because that would put them into the plugin. The check
 instead reads the identifiers in the owner's real profile (agent ids, tool and skill names
 written with '-' or ':') and looks for them in every plugin file. Without a profile that part is
 skipped; the host check needs no profile.
@@ -49,8 +49,8 @@ class ProfileMarkersTest(unittest.TestCase):
 
     def test_the_upstream_keys_become_markers_too(self):
         """D-47 (Amended): the upstream tool and the upstream repository are the 10th and 11th key."""
-        values = {'upstream_tool': 'acme-upstream-bot', 'upstream_repo': 'acme-org/acme-plugin'}
-        self.assertLessEqual({'acme-upstream-bot', 'acme-org'}, profile_markers(values, PLUGIN))
+        values = {'upstream_tool': 'acme-upstream-bot', 'upstream_repo': 'acme-owner/acme-plugin'}
+        self.assertLessEqual({'acme-upstream-bot', 'acme-owner'}, profile_markers(values, PLUGIN))
 
     def test_a_per_stack_line_without_a_stack_keeps_its_whole_id(self):
         values = {'implementers': 'acme-kit:web-builder\nmobile-ui: acme-kit:app-builder',
@@ -83,7 +83,7 @@ class ProfileMarkersTest(unittest.TestCase):
                               f'{Path("skills") / "build" / "BRIEF.md"}: acme-web-builder'])
 
 
-class OrgNeutralTest(unittest.TestCase):
+class EnvironmentNeutralTest(unittest.TestCase):
     def test_no_identifier_from_the_owners_profile_appears_in_a_plugin_file(self):
         home = paths.resolve_home(None, os.environ)
         markers = profile_markers(profile.load_profile(home).values, PLUGIN)

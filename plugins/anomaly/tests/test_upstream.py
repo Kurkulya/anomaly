@@ -371,7 +371,7 @@ class RefusalTest(UpstreamCase):
         self.assertEqual(self.tree(), before)
 
     def test_a_commit_id_version_folder_is_not_matched_against_a_short_repo_layer_name(self):
-        """A hex folder name (a commit id) holds no org name; `add` must not refuse version `add12cd3`."""
+        """A hex folder name (a commit id) holds no environment name; `add` must not refuse version `add12cd3`."""
         write_text(self.home / 'repos' / 'add.md', '---\nverify: run-all\n---\n')
         self.plugin = self.plugin.parent / 'add12cd3'
         write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}\n')

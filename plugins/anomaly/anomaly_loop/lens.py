@@ -22,7 +22,7 @@ replaces the session's line with larger ones.
 Session and lens names are single tokens (privacy.check_identifier, ADR-0003). The session also names
 the batch file, so it holds no ":" either (privacy.check_file_token), in `add` as in `sum`. A lens is
 one of the known lenses (allowed_names): each core reviewer under its short name (`anomaly:code` is
-`code`) and each org reviewer under its adapter name, read from the `reviewers` port (ports.resolve),
+`code`) and each environment reviewer under its adapter name, read from the `reviewers` port (ports.resolve),
 `plan`, the plan-gate reviewer, `interview`, the interview's own recommendations, and `model_pick`,
 build's verdict on a ticket's model pick.
 """
@@ -62,7 +62,7 @@ def sum_runs(rows, session):
 
 def lens_name(reviewer):
     """The lens of one reviewer of the `reviewers` port: a core reviewer under its short name
-    (`anomaly:code` is `code`), an org reviewer under its adapter name."""
+    (`anomaly:code` is `code`), an environment reviewer under its adapter name."""
     return reviewer.split(':', 1)[1] if reviewer in ports.core_default(REVIEWERS_PORT) else reviewer
 
 
@@ -103,7 +103,7 @@ def register(commands, common):
     add = steps.add_parser('add', parents=[common], help="store one lens's accepted and rejected counts over its rounds")
     add.add_argument('--session', required=True, help='the session id (one word)')
     add.add_argument('--lens', required=True,
-                     help=f"the lens name: {', '.join(core_lenses())}, {PLAN_LENS}, {INTERVIEW_LENS}, {MODEL_PICK_LENS} or an org reviewer's adapter name")
+                     help=f"the lens name: {', '.join(core_lenses())}, {PLAN_LENS}, {INTERVIEW_LENS}, {MODEL_PICK_LENS} or an environment reviewer's adapter name")
     add.add_argument('--accepted', required=True, type=records.count_option,
                      help='findings accepted (fixed or kept as open)')
     add.add_argument('--rejected', required=True, type=records.count_option, help='findings rejected (judged wrong)')

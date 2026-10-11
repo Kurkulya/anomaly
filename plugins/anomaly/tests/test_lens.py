@@ -171,12 +171,12 @@ class AddTest(LensCase):
         self.assertEqual(batch, {'lenses': [dict(session=SID, lens='model_pick', accepted=0, rejected=1),
                                             dict(session=SID, lens='code', accepted=2, rejected=0)]})
 
-    def test_an_org_reviewer_from_the_reviewers_port_is_a_lens_under_its_adapter_name(self):
-        """AC-97: the allowed names follow the profile's reviewers port, so the refusal lists the org name too."""
-        write_text(self.home / 'profile.md', '---\nreviewers: org-reviewer\n---\n')
-        self.add_ok('org-reviewer', 2, 1)
-        self.assertEqual(self.tally_lines()[0]['lens'], 'org-reviewer')
-        assert_cli_error(self, self.add('other-reviewer'), 'org-reviewer', 'security')
+    def test_an_environment_reviewer_from_the_reviewers_port_is_a_lens_under_its_adapter_name(self):
+        """AC-97: the allowed names follow the profile's reviewers port, so the refusal lists the environment name too."""
+        write_text(self.home / 'profile.md', '---\nreviewers: environment-reviewer\n---\n')
+        self.add_ok('environment-reviewer', 2, 1)
+        self.assertEqual(self.tally_lines()[0]['lens'], 'environment-reviewer')
+        assert_cli_error(self, self.add('other-reviewer'), 'environment-reviewer', 'security')
 
     def test_a_revised_count_greater_than_the_accepted_count_is_refused_naming_both(self):
         """AC-97: revised counts accepted findings whose fix differed from the proposed one, so it is a subset."""

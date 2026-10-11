@@ -181,7 +181,7 @@ def unit_folders(root, name):
 
 def adr_folder_path(adr_folder):
     """The ADR folder as a repo-relative POSIX path with no trailing slash. A value that names no folder of the
-    repo (no path part such as `.`, `..`, an absolute path or a URL) gives the core folder: an org that keeps
+    repo (no path part such as `.`, `..`, an absolute path or a URL) gives the core folder: an environment that keeps
     its ADRs outside the repo gets `docs/adr` (ADR-0017)."""
     parts = () if '://' in adr_folder else relative_parts(adr_folder)
     return PurePosixPath(*(parts or relative_parts(ADR_FOLDER_CORE))).as_posix()
