@@ -38,6 +38,7 @@ SECTIONS = (
     ('flags', 'near_duplicates'),
     ('flags', 'lens_rates'),
     ('flags', 'unused_skills'),
+    ('addenda', 'recheck_section'),
 )
 
 
@@ -79,6 +80,10 @@ class Context:
     @cached_property
     def profile(self):
         return profile.load_profile(self.home)
+
+    @cached_property
+    def rechecks(self):
+        return addenda.scan_rechecks(self.home, self.plugin_root)
 
 
 def render(context, sections=None):
