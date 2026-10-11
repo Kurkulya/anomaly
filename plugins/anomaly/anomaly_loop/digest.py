@@ -7,7 +7,7 @@ objects are handed to every section: a section reads them and must never change 
 write files), because the next section sees the same objects. `data` is the throwaway data
 folder, or None when none was given: a section that needs it must cope with None.
 Sections compute what they need in their own module; the Context stays a small set of
-shared inputs.
+shared inputs, plus `rechecks`, a scan of the addenda files cached for its one section.
 """
 import argparse
 from dataclasses import dataclass
