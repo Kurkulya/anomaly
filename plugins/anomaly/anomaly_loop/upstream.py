@@ -1,0 +1,227 @@
+"""upstream: a report from an installed copy to the plugin's owner, as a GitHub issue (ADR-0022).
+
+  upstream defect <signature> [--comment <number> | --create] [--plugin-root <dir>] [--user-config <dir>]
+
+The defect report (a plugin fault, no experiment) of the anomaly `<signature>`. Its title is
+`[anomaly:<skill or agent>] <signature>`, or for a plugin-code target `[anomaly:<path from the plugin root>]`
+(calibrate.plugin_part names the skill or agent); its body holds the target, the anomaly's summary as the symptom
+line, the installed version (the plugin root folder name: plugin.json has no version) and the signature.
+
+When `plugin_repo` resolves to a checkout (gitrepo.plugin_repo), the command prints CHECKOUT_SET and exits 1 with
+nothing written: a checkout fixes the plugin through an MR. Else every run checks the report (check_report: each line
+passes privacy.check_text and names no profile marker, scans.profile_markers, and no repo-layer name,
+scans.repo_layer_names; a hit refuses with no file written and nothing redacted), writes it to
+`<home>/upstream/<signature>.defect.md` (a `Title:` line, a blank line, the body) and prints the path.
+
+The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
+GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
+exits 1, the file written.
+
+The `upstream` port (profile key `upstream_tool`, constants.UPSTREAM_ADAPTERS): on its core default the command
+prints the search link of the repository's GitHub issues and calls nothing. With `gh` it lists the open issues whose
+title names the same target and offers an exact title hit as the +1. A second run acts, each after the user's yes:
+`--comment <number>` adds a +1 comment to that issue, `--create` opens the issue from the file this run writes; either
+appends `upstream <date> · <number>` under the anomaly's `## Addenda log` (addenda.log_line) and commits the anomaly.
+Without either flag nothing is written to GitHub. A failed `gh` call is one `anomaly:` line (exit 2).
+"""
+import json
+import re
+from importlib import import_module
+from pathlib import Path
+from urllib.parse import quote_plus
+
+from . import addenda, calibrate, digest, files, flags, gh, gitrepo, observe, ports, privacy, profile, scans
+from .constants import COMMIT_SCOPE, UPSTREAM_ADAPTERS
+from .files import RecordError
+
+ADAPTERS = {name: import_module(f'.{name}', __package__) for name in UPSTREAM_ADAPTERS}   # the module of each adapter
+ADAPTER_ERRORS = tuple(module.ERROR for module in ADAPTERS.values())
+UPSTREAM_DIR = 'upstream'                # <home>/upstream/<signature>.defect.md: the issue text of a defect report
+DEFECT_SUFFIX = '.defect.md'
+MARKETPLACES = Path('plugins') / 'known_marketplaces.json'   # in the Claude Code user folder
+PREFIX = '[anomaly:{part}]'              # the start of a title: `<prefix> <signature>`
+LABEL = 'upstream defect'
+CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
+NO_REPOSITORY = ('no target repository is known: the marketplace record of this copy names no GitHub source and '
+                 'the profile has no upstream_repo')
+ISSUE_LINK = re.compile(r'.*/issues/(\d+)/?')
+COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): upstream '
+
+
+def adapter_name(resolution):
+    """The name of the issue tool the `upstream` port names (checked against constants.UPSTREAM_ADAPTERS), or None on
+    the core default."""
+    adapter = ports.port(resolution, 'upstream')
+    if adapter.is_default:
+        return None
+    if adapter.value not in UPSTREAM_ADAPTERS:
+        raise RecordError(f'profile key upstream_tool: unknown upstream adapter {adapter.value!r} '
+                          f'(accepted: {", ".join(UPSTREAM_ADAPTERS)})')
+    return adapter.value
+
+
+def call(function, *args, **kwargs):
+    """function(*args, **kwargs), with the error of an issue tool as a RecordError."""
+    try:
+        return function(*args, **kwargs)
+    except ADAPTER_ERRORS as error:
+        raise RecordError(str(error)) from None
+
+
+def part_word(context, target):
+    """What the title names after `anomaly:`: the skill or agent (calibrate.plugin_part), or for plugin code the path
+    from the plugin root. Any other target is refused: the report has no title for it."""
+    part = calibrate.plugin_part(context, target, None)
+    if part is not None and part.name:
+        return part.name
+    if part is not None and flags.is_path(target):
+        found = flags.target_path(context, target, None)
+        root = Path(context.plugin_root).resolve()
+        if found is not None and found.resolve().is_relative_to(root):
+            return found.resolve().relative_to(root).as_posix()
+    raise RecordError(f'{LABEL}: the target {target or "(none)"} is not a skill, an agent or a file of this plugin')
+
+
+def name_pattern(name):
+    """A name as a whole word: no letter, digit, `_` or `-` right before or after it, in any case."""
+    return re.compile(rf'(?<![\w-]){re.escape(name)}(?![\w-])', re.I)
+
+
+def check_report(context, fields):
+    """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text or names a profile
+    marker (scans.profile_markers) or a repo-layer name (scans.repo_layer_names)."""
+    names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
+    for key, value in fields:
+        privacy.check_text(LABEL, key, value)
+        found = sorted(name for name in names if name_pattern(name).search(value))
+        if found:
+            raise RecordError(f'{LABEL}: {key} names {", ".join(found)}, from the profile or the repo layer in home; '
+                              'describe it in your own words')
+
+
+def defect_fields(context, anomaly, word):
+    """(key, text) of the defect report, the title first; `word` is part_word's answer."""
+    return (('Title', f'{PREFIX.format(part=word)} {anomaly.signature}'), ('Target', f'anomaly:{word}'),
+            ('Symptom', anomaly.summary), ('Installed version', Path(context.plugin_root).resolve().name),
+            ('Signature', anomaly.signature))
+
+
+def write_report(home, signature, fields):
+    """Write the report file (`Title: <title>`, a blank line, one `- <key>: <text>` line per field); returns
+    (path, title, body)."""
+    (_, title), *rest = fields
+    body = '\n'.join(f'- {key}: {value}' for key, value in rest)
+    path = Path(home) / UPSTREAM_DIR / f'{signature}{DEFECT_SUFFIX}'
+    files.write_text(path, f'Title: {title}\n\n{body}\n')
+    return path, title, body
+
+
+def marketplace_repo(user_config, plugin_root):
+    """`source.repo` of the marketplace record of the installed copy when its source is GitHub, else None. The
+    marketplace is the grandparent folder of the plugin root (`<config>/plugins/cache/<marketplace>/<plugin>/<version>`).
+    A missing or unreadable record file, or an entry of another shape, gives None, as scans.deny_rules reads settings."""
+    try:
+        data = json.loads((Path(user_config) / MARKETPLACES).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    entry = data.get(Path(plugin_root).resolve().parent.parent.name) if isinstance(data, dict) else None
+    source = entry.get('source') if isinstance(entry, dict) else None
+    if isinstance(source, dict) and source.get('source') == 'github' and isinstance(source.get('repo'), str):
+        return source['repo']
+    return None
+
+
+def target_repository(context):
+    """The repository the report goes to (marketplace_repo, else the profile's `upstream_repo`), or None."""
+    found = marketplace_repo(context.user_config, context.plugin_root)
+    if found is None:
+        value = context.profile.values.get('upstream_repo')
+        found = profile.one_line(value) if profile.is_set(value) else None
+    if found is not None and not gh.PROJECT.fullmatch(found):
+        raise RecordError(f'{LABEL}: the target repository {found!r} is not owner/name')
+    return found
+
+
+def search_link(repo, prefix):
+    """The link of the repository's open GitHub issues whose title holds `prefix`."""
+    return f'https://{gh.HOST}/{repo}/issues?q=' + quote_plus(f'is:issue is:open in:title "{prefix}"')
+
+
+def search_lines(repo, issues, title, prefix):
+    """The open issues whose title starts with `prefix`, an exact title hit marked as the +1 offer."""
+    same = [(number, text) for number, text in issues if text.strip().startswith(prefix)]
+    if not same:
+        return [f'no open issue of {repo} names {prefix}: run again with --create to open one']
+    lines = [f'open issues of {repo} that name {prefix}:']
+    for number, text in same:
+        offer = f'  <- +1 offer, the exact signature: run again with --comment {number}' if text.strip() == title else ''
+        lines.append(f'#{number} {text}{offer}')
+    if all(text.strip() != title for _, text in same):
+        lines.append('no exact signature hit: propose a match from these titles, then run again with '
+                     '--comment <number> for a +1 or --create for a new issue')
+    return lines
+
+
+def issue_number(link):
+    found = ISSUE_LINK.fullmatch(link)
+    if found is None:
+        raise RecordError(f'{LABEL}: the issue link {link} has no issue number at its end')
+    return int(found[1])
+
+
+def run_defect(args, environ):
+    context = digest.context_from_args(args, environ, strict=True)
+    if gitrepo.plugin_repo(context.plugin_root, context.profile) is not None:
+        print(CHECKOUT_SET)
+        return 1
+    name = adapter_name(ports.resolve(context.home))
+    if name is None and (args.comment is not None or args.create):
+        raise RecordError(f'{LABEL}: the upstream port is on its core default, so there is no tool to call '
+                          '(set upstream_tool in the profile)')
+    anomalies = calibrate.writable(context)
+    anomaly = calibrate.find(anomalies, args.signature)
+    word = part_word(context, anomaly.target.strip())
+    fields = defect_fields(context, anomaly, word)
+    check_report(context, fields)
+    path, title, body = write_report(context.home, anomaly.signature, fields)
+    print(f'report: {path}')
+    repo = target_repository(context)
+    if repo is None:
+        print(NO_REPOSITORY)
+        return 1
+    prefix = PREFIX.format(part=word)
+    if name is None:
+        print(f'search: {search_link(repo, prefix)}')
+        return 0
+    tool = ADAPTERS[name]
+    if args.comment is not None:
+        version = dict(fields)['Installed version']
+        call(tool.comment_issue, repo, args.comment, f'+1: the same defect on the installed version {version}',
+             environ=environ)
+        number = args.comment
+        print(f'+1 added to #{number}')
+    elif args.create:
+        link = call(tool.create_issue, repo, title, body, environ=environ)
+        number = issue_number(link)
+        print(link)
+    else:
+        print('\n'.join(search_lines(repo, call(tool.list_issues, repo, environ=environ), title, prefix)))
+        return 0
+    addenda.log_line(anomaly, f'upstream {args.today.isoformat()} · {number}')
+    print(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
+                                 COMMIT_PREFIX + f'#{number} for {anomaly.signature}'))
+    return 0
+
+
+def register(commands, common):
+    command = commands.add_parser('upstream', help='report a plugin fault from an installed copy as a GitHub issue')
+    actions = command.add_subparsers(dest='action', required=True, metavar='action')
+    defect = actions.add_parser('defect', parents=[common, digest.folder_options()],
+                                help='write the defect report of an anomaly, then search, +1 or create its issue')
+    defect.add_argument('signature', help='the anomaly the report is about')
+    act = defect.add_mutually_exclusive_group()
+    act.add_argument('--comment', type=int, metavar='<number>',
+                     help="only after the user's yes: add a +1 comment to this issue")
+    act.add_argument('--create', action='store_true',
+                     help="only after the user's yes: open the issue from the report file")
+    defect.set_defaults(handler=run_defect)
