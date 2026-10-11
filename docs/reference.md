@@ -1406,10 +1406,11 @@ credential, key, token or password value.
 
 Run the bench from the branch build: set `CLAUDE_CODE_PLUGIN_DIRS` to the worktree's
 `plugins/anomaly` when you start the session, so the reviewer agents run live instead of
-emulated.
+emulated. Turn the installed `anomaly@anomaly-local` off for that session, so its agents cannot
+stand in for the branch build.
 
 ```
-CLAUDE_CODE_PLUGIN_DIRS=<worktree>/plugins/anomaly claude
+CLAUDE_CODE_PLUGIN_DIRS=<worktree>/plugins/anomaly claude --settings '{"enabledPlugins":{"anomaly@anomaly-local":false}}'
 ```
 
 `defects.json` is a JSON object with `fixture` (a name), `defects` and `decoys`. A defect has an
