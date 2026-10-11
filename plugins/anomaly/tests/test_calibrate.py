@@ -600,7 +600,9 @@ class FixAddendumTest(CalibrateCase):
                  ('empty-line', 'anomaly:observe', ' ', ()),
                  ('long-line', 'anomaly:observe', ('Ask first. ' * 30)[:constants.SIGHTING_MAX_CHARS + 1],
                   (str(constants.SIGHTING_MAX_CHARS),)),
-                 ('escape', 'anomaly:../../x escape', line, ()))
+                 ('escape', 'anomaly:../../x escape', line, ()),
+                 ('line-separator', 'anomaly:observe', 'Ask first. Then log.', ('printable',)),
+                 ('vertical-tab', 'anomaly:observe', 'Ask first.\x0bThen log.', ('printable',)))
         for signature, target, text, fragments in cases:
             with self.subTest(signature):
                 self.experiment_on(signature, target)

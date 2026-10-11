@@ -269,8 +269,8 @@ Addendum = namedtuple('Addendum', 'path unit line')   # the addenda file, the sk
 def checked_addendum(context, anomaly, label, line, environ):
     """The addendum `fix --addendum` writes for this anomaly, after its checks: no plugin checkout is set
     (gitrepo.plugin_repo; with one the skill itself is changed there), the target is one skill (not one in
-    addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text) that no live
-    deny rule fully matches (scans.deny_regex)."""
+    addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text) of printable
+    characters only (upstream.printable) that no live deny rule fully matches (scans.deny_regex)."""
     target = anomaly.target.strip()
     plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
     if plugin is not None:
@@ -285,6 +285,9 @@ def checked_addendum(context, anomaly, label, line, environ):
     if not line.strip():
         raise RecordError(f'{label}: --addendum is empty; give the rule in one line')
     privacy.check_text(label, 'addendum', line, SIGHTING_MAX_CHARS)
+    if upstream.printable(line) != line:
+        raise RecordError(f'{label}: the addendum holds a character that is not printable (a control character or '
+                          'a line or paragraph separator); write the rule as one plain line')
     line = line.strip()
     for rule in scans.deny_rules(scans.settings_files(environ, sys.platform, Path.home())):
         regex = scans.deny_regex(rule)

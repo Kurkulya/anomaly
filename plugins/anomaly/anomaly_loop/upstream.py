@@ -250,7 +250,7 @@ def search_link(repo, prefix):
 
 def printable(text):
     """`text` without its non-printable characters (control and escape codes), so a title from GitHub cannot steer
-    the terminal."""
+    the terminal; calibrate refuses an addendum that this would change."""
     return ''.join(character for character in text if character.isprintable())
 
 
