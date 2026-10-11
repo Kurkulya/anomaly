@@ -194,6 +194,7 @@ PORTS = (
     ('ui_check', REPLACE, 'verify_ui', ("built-in browser walkthrough of the ticket's UI ACs",)),
     ('key_line', REPLACE, 'key_line', (KEY_LINE_CORE,)),
     ('adr_folder', REPLACE, 'adr_folder', ('docs/adr/',)),
+    ('upstream', REPLACE, 'upstream_tool', ('write the GitHub issue text to a file and print the search link',)),
 )
 PER_STACK_PORTS = ('implementer', 'test_writer', 'conventions')
 MODELS_KEY = 'models'                # profile key: one `role: model [effort]` line per role
@@ -273,6 +274,7 @@ SEAM_REPLACES = 'replaces'           # the word before the old way; the parts ar
 # ---------- mr put, ready and show ----------
 
 MR_ADAPTERS = ('glab', 'gh')         # the `mr` profile values that name an MR tool wrapper (glab.py, gh.py)
+UPSTREAM_ADAPTERS = ('gh',)          # the `upstream` profile values that name an issue tool wrapper (gh.py)
 
 # ---------- ci watch and ci log ----------
 

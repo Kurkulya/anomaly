@@ -4,14 +4,18 @@
 A line is written as `<rule> [exp: <signature> · <stamp>]`. The stamp is 8 hex characters of sha256 over
 the text the line adds to: the sorted relative paths and bytes of every file in the skill folder, or the
 bytes of the one agent file, so it changes only when that skill or agent changes.
+
+Which part of the plugin a target is (plugin_part) lives here too, with the anomaly copies a writer
+changes (writable, find): calibrate and upstream both read them, and upstream does not import calibrate.
 """
+import copy
 import hashlib
 import re
 from collections import namedtuple
 from pathlib import Path
 
-from . import files, flags
-from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, SKILL_AGENTS
+from . import files, flags, privacy
+from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, PLUGIN_AGENTS_DIR, SKILL_AGENTS
 from .files import RecordError
 from .records import SLUG
 
@@ -103,6 +107,14 @@ def log_line(anomaly, line):
             anomaly.sections[number] = (name, '\n'.join([content, f'- {line}']).strip())
             return
     anomaly.sections.append((LOG_HEADING, f'- {line}'))
+
+
+def log_lines(anomaly):
+    """The lines of the anomaly's `## Addenda log` without their `- `; [] when it has none."""
+    for name, content in anomaly.sections:
+        if name.lower() == LOG_HEADING.lower():
+            return [line[2:].strip() for line in content.splitlines() if line.startswith('- ')]
+    return []
 
 
 def has_verdict(experiment):
@@ -202,3 +214,58 @@ def recheck_section(context):
                 then = f'no verdict yet, check by {(experiment.check_by if experiment else "") or "?"}'
             lines.append(f'  - {line[0]} · {then}')
     return [RECHECK_HEADING] + lines if lines else []
+
+
+# ---------- which plugin part a target is, and the anomalies a writer changes ----------
+
+PluginPart = namedtuple('PluginPart', 'name agent unit')   # unit: the skill folder or agent file, else None
+
+
+def plugin_part(context, target, plugin):
+    """The part of this plugin a target is, or None when it is not this plugin. A target is this plugin
+    when it is a path inside the plugin folder or its checkout's plugin folder (flags.target_path), or
+    `<plugin name>:...` (flags.names_this_plugin). The part is a skill (`<plugin>:<skill>` or a path inside
+    `skills/<skill>/`), an agent (`<plugin>:<agent>` or `agents/<agent>.md`), or else (name and unit None)
+    plugin code or docs, or a `<plugin>:...` that names no skill or agent. The qualifier ends at the first
+    `:` and is read before any path, and after it only the first word counts, so `anomaly:review step 10:
+    delta` and `anomaly:review asks and/or skips` are the review skill. `plugin` is gitrepo.plugin_repo's answer."""
+    target = target.strip()
+    if not target:
+        return None
+    root = Path(context.plugin_root)
+    qualifier, colon, rest = target.partition(':')   # flags.resolve_target reads a target differently (paths first)
+    if colon and flags.names_this_plugin(context, qualifier, plugin):
+        name = (rest.split() or [''])[0]
+        if not privacy.is_identifier(name) or ':' in name:
+            return PluginPart(None, False, None)
+        if (root / 'skills' / name / flags.SKILL_FILE).is_file():
+            return PluginPart(name, False, root / 'skills' / name)
+        if (root / PLUGIN_AGENTS_DIR / f'{name}.md').is_file():
+            return PluginPart(name, True, root / PLUGIN_AGENTS_DIR / f'{name}.md')
+        return PluginPart(None, False, None)
+    if flags.is_path(target):
+        found = flags.target_path(context, target, plugin)
+        folders = [root] + ([Path(plugin[1])] if plugin else [])
+        base = next((f for f in folders if found is not None and found.resolve().is_relative_to(f.resolve())), None)
+        if base is None:
+            return None
+        parts = found.resolve().relative_to(base.resolve()).parts
+        if len(parts) >= 2 and parts[0] == 'skills' and (base / 'skills' / parts[1] / flags.SKILL_FILE).is_file():
+            return PluginPart(parts[1], False, base / 'skills' / parts[1])
+        if len(parts) == 2 and parts[0] == PLUGIN_AGENTS_DIR and found.suffix == '.md' and found.is_file():
+            return PluginPart(found.stem, True, found)
+        return PluginPart(None, False, None)
+    return None
+
+
+def writable(context):
+    """signature -> Anomaly from a strict Context, for a command that reads the context and then
+    writes: home is read once, and the records are copied so the context itself is never changed."""
+    return {a.signature: copy.deepcopy(a) for a in context.anomalies}
+
+
+def find(anomalies, signature):
+    anomaly = anomalies.get(signature)
+    if anomaly is None:
+        raise RecordError(f'no anomaly {signature!r} in home')
+    return anomaly

@@ -338,17 +338,6 @@ def read_title_and_body(path, target):
     return title[1], '\n'.join(lines[2:]).strip()
 
 
-def adapter_name(resolution):
-    """The name of the MR tool the `mr` port names (checked against constants.MR_ADAPTERS), or None on the core default."""
-    adapter = ports.port(resolution, 'mr')
-    if adapter.is_default:
-        return None
-    if adapter.value not in constants.MR_ADAPTERS:
-        raise RecordError(f'profile key mr_tool: unknown MR adapter {adapter.value!r} '
-                          f'(accepted: {", ".join(constants.MR_ADAPTERS)})')
-    return adapter.value
-
-
 def project_of(repo, name):
     """The project of the `origin` remote for the adapter `name`, or None when there is no origin. An origin on
     another host than the adapter's (a self-hosted one too) is an error naming the host."""
@@ -359,14 +348,6 @@ def project_of(repo, name):
     if host != ADAPTERS[name].HOST:
         raise RecordError(f'the origin remote is on {host}, but the {name} adapter works with {ADAPTERS[name].HOST} only')
     return project
-
-
-def call(function, *args, **kwargs):
-    """function(*args, **kwargs), with the error of an MR tool as a RecordError."""
-    try:
-        return function(*args, **kwargs)
-    except ADAPTER_ERRORS as error:
-        raise RecordError(str(error)) from None
 
 
 def mr_number(link, state_file):
@@ -386,7 +367,7 @@ def check_same_mr(tool, project, number, link, repo, environ):
     """Refuse (before a change) an MR line that is not this repository's MR of the current branch: the MR the
     origin project answers for `number` must have the link of the MR line, and its source branch must be the
     current branch. A link of another project, or a stale or hand-written one, never changes another MR."""
-    shown, _, _, source = call(tool.view_mr, project, number, environ=environ)
+    shown, _, _, source = ports.call_tool(ADAPTER_ERRORS, tool.view_mr, project, number, environ=environ)
     if shown.rstrip('/').lower() != link.rstrip('/').lower():
         raise RecordError(f'the MR line names {link}, but merge request {number} of the origin project is {shown}; '
                           'it is not an MR of this repository')
@@ -401,7 +382,7 @@ def run_put(args, environ):
     found = locate(args.target)
     repo = gitrepo.repo_for(args.repo)
     resolution = ports.resolve(home, repo)
-    name = adapter_name(resolution)
+    name = ports.adapter_name(resolution, 'mr', constants.MR_ADAPTERS, 'MR')
     title, body = read_title_and_body(found.body, args.target)
     check_privacy('mr put', title, body)
     if name is None:
@@ -416,13 +397,13 @@ def run_put(args, environ):
     if MR_LABEL in state:
         number = mr_number(state[MR_LABEL], found.state)
         check_same_mr(tool, project, number, state[MR_LABEL], repo, environ)
-        call(tool.update_mr, project, number, body, environ=environ)
+        ports.call_tool(ADAPTER_ERRORS, tool.update_mr, project, number, body, environ=environ)
     else:
         branch = current_branch(repo)
         if not branch:
             raise RecordError('the head is detached: check out the branch of the work to open its MR')
-        state[MR_LABEL] = call(tool.create_mr, project, title, body, branch, resolution.layer.base.value,
-                               environ=environ)
+        state[MR_LABEL] = ports.call_tool(ADAPTER_ERRORS, tool.create_mr, project, title, body, branch,
+                                          resolution.layer.base.value, environ=environ)
         write_state(found.state, state)
     print(state[MR_LABEL])
     return 0
@@ -433,7 +414,7 @@ def existing_mr(args, environ):
     home = paths.resolve_home(args.home, environ)
     found = locate(args.target)
     repo = gitrepo.repo_for(args.repo)
-    name = adapter_name(ports.resolve(home, repo))
+    name = ports.adapter_name(ports.resolve(home, repo), 'mr', constants.MR_ADAPTERS, 'MR')
     if name is None:
         raise RecordError('the mr port is on its core default: there is no MR tool to call (set mr_tool in the profile)')
     link = read_state(found.state).get(MR_LABEL)
@@ -448,14 +429,14 @@ def existing_mr(args, environ):
 def run_ready(args, environ):
     tool, project, number, link, repo = existing_mr(args, environ)
     check_same_mr(tool, project, number, link, repo, environ)
-    call(tool.ready_mr, project, number, environ=environ)
+    ports.call_tool(ADAPTER_ERRORS, tool.ready_mr, project, number, environ=environ)
     print(f'{link}\nstate: ready for review')
     return 0
 
 
 def run_show(args, environ):
     tool, project, number, *_ = existing_mr(args, environ)
-    link, state, draft, _ = call(tool.view_mr, project, number, environ=environ)
+    link, state, draft, _ = ports.call_tool(ADAPTER_ERRORS, tool.view_mr, project, number, environ=environ)
     print(f'{link}\nstate: {state}{", draft" if draft else ""}')
     return 0
 

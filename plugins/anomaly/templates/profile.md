@@ -58,6 +58,12 @@ ci: <ci tool>
 key_line: <line name>
 # The repo folder ADR drafts are moved to. Core default: docs/adr/.
 adr_folder: <repo-relative folder>
+# The tool that searches and writes the plugin's GitHub issues for `upstream`: `gh`. Without it
+# `upstream` only writes the issue text to a file and prints the search link.
+upstream_tool: <gh>
+# The plugin's GitHub repository as owner/name, read only when the installed copy's marketplace
+# record names no GitHub source.
+# upstream_repo: <owner/name>
 # The model per dispatch role. One role per indented line; a value is `<model>` or `<model> <effort>`
 # (effort: low, medium, high, xhigh or max). A review_* role you leave out takes the value of review.
 models:

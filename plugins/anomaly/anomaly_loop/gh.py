@@ -1,11 +1,13 @@
-"""The one place the plugin runs `gh` (the `gh` adapter of the `mr` port), beside glab.py and gitrepo.py and in the
-same style: every call is a subprocess with an argument list (never a shell string), and a failure raises a
-GhError with the tool's own message, which `mr` turns into one `anomaly: <message>` line (exit 2).
+"""The one place the plugin runs `gh` (the `gh` adapter of the `mr` and `upstream` ports), beside glab.py and
+gitrepo.py and in the same style: every call is a subprocess with an argument list (never a shell string), and a
+failure raises a GhError with the tool's own message, which `mr` and `upstream` turn into one `anomaly: <message>`
+line (exit 2).
 
 The MR calls are `gh pr create --draft`, `gh api -X PATCH repos/<project>/pulls/<number>`, `gh pr ready` and
-`gh pr view --json`. The body goes to the tool on its standard input (`--body-file -`, or `-F body=@-` for the REST
+`gh pr view --json`. The issue calls of the `upstream` port are `gh issue list --json`, `gh issue comment` and
+`gh issue create`. The body goes to the tool on its standard input (`--body-file -`, or `-F body=@-` for the REST
 call), so it is never an argument and never a file left behind. A write is tried once: a repeat after a network error
-could make a second pull request.
+could make a second pull request, comment or issue.
 """
 import json
 import re
@@ -16,6 +18,7 @@ from . import glab
 HOST = 'github.com'                  # the only origin host this adapter works with
 LINK = re.compile(r'https?://\S+')
 PROJECT = re.compile(r'[^/\s]+/[^/\s]+')   # a GitHub project is `owner/name`; a longer path is a GitLab group shape
+ISSUE_LIST_LIMIT = 1000              # `gh issue list` answers 30 issues unless told more
 
 
 class GhError(Exception):
@@ -87,3 +90,36 @@ def view_mr(project, number, environ=None):
         return answer['url'], answer['state'].lower(), bool(answer['isDraft']), answer['headRefName']
     except (ValueError, KeyError, TypeError, AttributeError):
         raise GhError(f'gh answered pull request {number} in an unknown shape') from None
+
+
+def list_issues(project, prefix, environ=None):
+    """(number, title) of each open issue of `project` whose title the GitHub search finds `prefix` in, at most
+    ISSUE_LIST_LIMIT. The search is loose (words, not the exact text): the caller checks the titles itself."""
+    check_project(project)
+    out = call('issue', 'list', '--repo', project, '--state', 'open', '--search', f'in:title "{prefix}"',
+               '--limit', str(ISSUE_LIST_LIMIT), '--json', 'number,title', environ=environ)
+    try:
+        answer = json.loads(out)
+    except ValueError:
+        answer = None
+    if not isinstance(answer, list) or not all(
+            isinstance(item, dict) and isinstance(item.get('number'), int) and isinstance(item.get('title'), str)
+            for item in answer):
+        raise GhError(f'gh answered the issue list of {project} in an unknown shape')
+    return [(item['number'], item['title']) for item in answer]
+
+
+def comment_issue(project, number, body, environ=None):
+    """Add a comment with `body` to issue `number` of `project`."""
+    check_project(project)
+    call('issue', 'comment', str(number), '--repo', project, '--body-file', '-', environ=environ, input=body)
+
+
+def create_issue(project, title, body, environ=None):
+    """Open an issue in `project`; returns its link."""
+    check_project(project)
+    out = call('issue', 'create', '--repo', project, '--title', title, '--body-file', '-', environ=environ, input=body)
+    links = LINK.findall(out)
+    if not links:
+        raise GhError('gh issue create did not print the link of the issue')
+    return links[-1]

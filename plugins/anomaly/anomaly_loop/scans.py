@@ -1,10 +1,12 @@
-"""Scans of the environment that tests and runtime checks share: the deny-shape matcher and the profile's org markers."""
+"""Scans of the environment that tests and runtime checks share: the deny-shape matcher, the profile's org markers,
+their match rule and the repo-layer names."""
 import json
 import re
 from pathlib import Path
 from types import SimpleNamespace
 
 from . import flags, frontmatter
+from .constants import REPOS_DIR
 
 MANAGED_DIRS = {   # as the Claude Code documentation on managed settings gives them
     'win32': Path('C:/Program Files/ClaudeCode'),            # documented, and read on this machine
@@ -70,19 +72,33 @@ def profile_markers(values, plugin_root):
     """Identifiers that name agents, tools and skills, with each '-' part of an agent id: every
     agent id in `implementers` and `test_writers` (the stack name is left out; stack lines are read
     as frontmatter.nested reads them, so a line without a stack keeps its whole id), every item of
-    `build_skills`, `reviewers` and `gather`, only the first identifier of `mr_tool`, `verify_ui`
-    and `ci` (the rest is prose, such as "or the built-in browser"), and the first identifier of
-    each `conventions` value. A name qualified by this plugin's own name (`<plugin>:<skill>`) is
-    the plugin's, not an environment fact, so it is no marker."""
+    `build_skills`, `reviewers`, `gather` and `upstream_repo`, only the first identifier of `mr_tool`,
+    `verify_ui`, `ci` and `upstream_tool` (the rest is prose, such as "or the built-in browser"), and
+    the first identifier of each `conventions` value: 11 keys. An identifier holds a `-` or `:`, so of
+    `upstream_repo` only such an owner or name becomes a marker, and a plain `owner/plugin` gives none.
+    A name qualified by this plugin's own name (`<plugin>:<skill>`) is the plugin's, not an environment
+    fact, so it is no marker."""
     found = []
     for key in ('implementers', 'test_writers'):
         for line in stack_values(values.get(key, '')):
             found += IDENTIFIER.findall(line)
-    for key in ('build_skills', 'reviewers', 'gather'):
+    for key in ('build_skills', 'reviewers', 'gather', 'upstream_repo'):
         found += IDENTIFIER.findall(values.get(key, ''))
-    for key in ('mr_tool', 'verify_ui', 'ci'):
+    for key in ('mr_tool', 'verify_ui', 'ci', 'upstream_tool'):
         found += IDENTIFIER.findall(values.get(key, ''))[:1]
     for line in stack_values(values.get('conventions', '')):
         found += IDENTIFIER.findall(line)[:1]
     found = [identifier for identifier in found if not is_this_plugins(identifier, plugin_root)]
     return set(found) | {part for identifier in found for part in identifier.split(':') if '-' in part}
+
+
+def marker_hits(text, markers):
+    """The markers that `text` holds, sorted: a case-sensitive substring match, the one rule for the
+    neutrality test and the upstream report check."""
+    return [marker for marker in sorted(markers) if marker in text]
+
+
+def repo_layer_names(home):
+    """The names of the repositories that have a repo-layer file in home (`<home>/repos/<name>.md`): repository
+    names are environment facts too."""
+    return {path.stem for path in (Path(home) / REPOS_DIR).glob('*.md')}

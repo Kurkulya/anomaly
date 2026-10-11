@@ -57,5 +57,75 @@ class GhTest(unittest.TestCase):
                 gh.view_mr('owner/repo', 7)
 
 
+ISSUE_LINK = 'https://example.com/owner/repo/issues/42'
+
+
+class GhIssueTest(unittest.TestCase):
+    """The issue calls of the `upstream` port (ticket 05). Names this file chooses: `list_issues(project, prefix)`
+    answers a list of (number, title); `comment_issue(project, number, body)`; `create_issue(project, title, body)`
+    answers the link of the new issue."""
+
+    def test_open_issues_are_listed_with_an_argument_list_and_read_as_number_and_title(self):
+        answer = '[{"number": 3, "title": "[anomaly:observe] a"}, {"number": 5, "title": "[anomaly:facts] b"}]'
+        with mock.patch('subprocess.run', return_value=done(answer)) as run:
+            found = gh.list_issues('owner/repo', '[anomaly:observe]')
+        self.assertEqual(found, [(3, '[anomaly:observe] a'), (5, '[anomaly:facts] b')])
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ['gh', 'issue', 'list'])
+        self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
+        self.assertEqual(command[command.index('--search') + 1], 'in:title "[anomaly:observe]"')   # M3: narrowed
+        self.assertEqual(command[command.index('--state') + 1], 'open')
+        self.assertFalse(run.call_args.kwargs.get('shell'))
+
+    def test_an_answer_that_is_not_a_list_of_issues_is_an_error(self):
+        for answer in ('{}', '[1]', '[{"number": 3}]', 'not json'):
+            with self.subTest(answer=answer):
+                with mock.patch('subprocess.run', return_value=done(answer)):
+                    with self.assertRaises(gh.GhError):
+                        gh.list_issues('owner/repo', '[anomaly:observe]')
+
+    def test_a_comment_names_the_issue_and_the_project_and_carries_the_body_without_a_shell(self):
+        with mock.patch('subprocess.run', return_value=done()) as run:
+            gh.comment_issue('owner/repo', 12, '+1 from another user')
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ['gh', 'issue', 'comment'])
+        self.assertIn('12', command)
+        self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
+        self.assertEqual(command[command.index('--body-file') + 1], '-')
+        self.assertNotIn('+1 from another user', command)
+        self.assertEqual(run.call_args.kwargs['input'], '+1 from another user')
+        self.assertFalse(run.call_args.kwargs.get('shell'))
+
+    def test_a_new_issue_is_created_from_a_body_file_and_answers_its_link(self):
+        """D-18: `gh issue create --body-file`; the body is never an argument."""
+        with mock.patch('subprocess.run', return_value=done(ISSUE_LINK + '\n')) as run:
+            link = gh.create_issue('owner/repo', '[anomaly:observe] a', 'line one\nline two')
+        self.assertEqual(link, ISSUE_LINK)
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ['gh', 'issue', 'create'])
+        self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
+        self.assertEqual(command[command.index('--title') + 1], '[anomaly:observe] a')
+        self.assertEqual(command[command.index('--body-file') + 1], '-')
+        self.assertNotIn('line one\nline two', command)
+        self.assertEqual(run.call_args.kwargs['input'], 'line one\nline two')
+        self.assertFalse(run.call_args.kwargs.get('shell'))
+
+    def test_a_create_that_prints_no_link_is_an_error(self):
+        with mock.patch('subprocess.run', return_value=done('created\n')):
+            with self.assertRaises(gh.GhError):
+                gh.create_issue('owner/repo', 'a title', 'a body')
+
+    def test_a_failed_issue_call_is_one_error_with_the_message_of_the_tool_and_is_not_repeated(self):
+        calls = (lambda: gh.list_issues('owner/repo', '[anomaly:observe]'),
+                 lambda: gh.comment_issue('owner/repo', 12, '+1'),
+                 lambda: gh.create_issue('owner/repo', 'a title', 'a body'))
+        for call in calls:
+            with self.subTest(call=call):
+                with mock.patch('subprocess.run', return_value=done(code=1, stderr='HTTP 502: bad gateway')) as run:
+                    with self.assertRaisesRegex(gh.GhError, 'HTTP 502: bad gateway'):
+                        call()
+                self.assertEqual(run.call_count, 1)
+
+
 if __name__ == '__main__':
     unittest.main()
