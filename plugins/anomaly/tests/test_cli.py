@@ -307,6 +307,7 @@ class SkillFileTest(unittest.TestCase):
         text = self.REVIEW_SKILL.read_text(encoding='utf-8')
         section = text.split('## Delta rounds', 1)[1].split('\n## ', 1)[0]
         self.assertIn('worklog start', section)
+        self.assertIn('docs-only included', section)   # calibrate-fixes-1 ticket 05: every fix round gets a delta round
 
     def test_the_delta_row_gives_every_agent_whose_finding_was_fixed_a_delta_round_after_any_fix_round(self):
         """Calibrate-fixes-1 ticket 05, AC-16 (D-11)."""
