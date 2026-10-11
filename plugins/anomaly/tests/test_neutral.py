@@ -12,9 +12,10 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from anomaly_loop import flags, paths, profile
+from anomaly_loop import addenda, flags, paths, profile
 from anomaly_loop.scans import marker_hits, profile_markers
-from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli, write_anomaly_with, write_text
+from tests.fixtures import (BENCH, PLUGIN, GitFixture, plugin_files, run_cli, write_anomaly_with,
+                            write_experiment_anomaly, write_text)
 
 HOST = re.compile(r'https?://([A-Za-z0-9.-]+)')
 RESERVED_HOST = re.compile(r'(?:.+\.)?(?:example(?:\.com|\.net|\.org)?|test|invalid|localhost)')
@@ -141,7 +142,17 @@ class EmptyProfileTest(unittest.TestCase):
     def run_command(self, *argv):
         return run_cli(*argv, '--home', str(self.home), '--data', str(self.data))
 
+    def keep_an_addendum(self, signature):
+        """A kept experiment whose fix is a tagged line in the addenda file of the installed `observe` skill."""
+        addenda.append_line(addenda.addendum_path(self.home, 'observe'), 'Ask which repo before logging.', signature,
+                            addenda.stamp(self.installed / 'skills' / 'observe'))
+        write_experiment_anomaly(self.home, signature, target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
+                                 check_by='2026-10-01', result='keep', status='fixed',
+                                 summary='The check runs every test twice.')
+
     def test_every_subcommand_runs_on_core_defaults_without_a_profile(self):
+        self.keep_an_addendum('slow-tune')
         commands = [
             ('measure', '--projects', str(self.projects)),
             ('index',),
@@ -174,6 +185,8 @@ class EmptyProfileTest(unittest.TestCase):
             ('worklog', 'start', 'a-feature', 'build'),
             ('worklog', 'add', '--feature', 'a-feature', '--stage', 'build', '--session', 's1'),
             ('upstream', 'defect', 'slow-check', '--plugin-root', str(self.installed),
+             '--user-config', str(self.config)),
+            ('upstream', 'tuning', 'slow-tune', '--plugin-root', str(self.installed),
              '--user-config', str(self.config)),
         ]
         for command in commands:

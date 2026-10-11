@@ -868,6 +868,62 @@ class BatchTest(CalibrateCase):
             self.assertIn('upstream defect', line, target)
             self.assertNotRegex(line, r'addenda[/\\]', target)
 
+    def kept_addendum(self, signature, name='observe', result='keep', line=True, **fields):
+        """An experiment with this result whose fix is the addenda file of the skill `name`, holding the tagged
+        line of `signature` unless `line` is False."""
+        if line:
+            addenda.append_line(addenda.addendum_path(self.home, name), f'Rule of {signature}.', signature,
+                                addenda.stamp(self.plugin / 'skills' / name))
+        write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', metric='active minutes',
+                                 guard='rework sightings', fixed_by=f'2026-09-20 · addenda/{name}.md',
+                                 check_by='2026-10-25', result=result, status='fixed', **fields)
+
+    @staticmethod
+    def offers(out):
+        """The offer lines of the plan output: `upstream: tuning <signature>` and `upstream: defect <signature>`."""
+        return sorted(line.strip() for line in out.splitlines() if 'upstream: ' in line)
+
+    def plan_offers(self):
+        code, out, err = self.cli('plan')
+        self.assertEqual((code, err), (0, ''))
+        return self.offers(out)
+
+    def test_without_a_checkout_the_plan_offers_a_tuning_report_for_each_kept_or_unproven_addenda_line_not_yet_sent(self):
+        """AC-29 (D-57, D-11)."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        self.kept_addendum('unproven-one', 'research', 'unproven')
+        self.kept_addendum('reverted-one', result='revert')
+        self.kept_addendum('inconclusive-one', 'research', 'inconclusive')
+        self.kept_addendum('in-flight-one', 'review', '')
+        self.kept_addendum('dropped-one', line=False)   # kept, but its line left the file
+        self.kept_addendum('sent-one', 'review', sections=[(addenda.LOG_HEADING, '- upstream 2026-10-02 · 7')])
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one', 'upstream: tuning unproven-one'])
+
+    def test_without_a_checkout_the_plan_offers_a_defect_report_for_each_target_upstream_defect_accepts_and_keeps_its_mark(self):
+        """AC-29 (D-57): a skill target, a `<plugin>:...` that names no skill and a target outside the plugin get
+        none; the mark of the problem line stays beside the offer (Amended 2026-10-11, conduct wave 6)."""
+        self.lay_out_plugin()
+        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md'),
+                                  ('no-such-skill', 'anomaly:nosuchskill frontier'), ('in-skill', 'anomaly:observe'),
+                                  ('elsewhere', 'deploy-script')):
+            write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
+        write_anomaly_with(self.home, 'sent-code', target='anomaly_loop/calibrate.py', scope='repo:demo',
+                           sections=[(addenda.LOG_HEADING, '- upstream 2026-10-02 · 7')])
+        self.assertEqual(self.plan_offers(), ['upstream: defect in-code', 'upstream: defect in-docs'])
+        self.assertIn(calibrate.UPSTREAM_DEFECT, self.plan_line('in-code'))
+
+    def test_with_a_checkout_the_plan_prints_no_offer_line(self):
+        """AC-29 (D-35): the same backlog offers both reports without a checkout, none with one."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        write_anomaly_with(self.home, 'in-code', target='anomaly_loop/calibrate.py', scope='repo:demo')
+        self.assertEqual(self.plan_offers(), ['upstream: defect in-code', 'upstream: tuning kept-one'])
+        self.checkout()
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_text(self.plugin / 'anomaly_loop' / 'calibrate.py', '# code\n')
+        self.assertEqual(self.plan_offers(), [])
+
     def test_with_a_checkout_the_plan_is_what_it_was_before_addenda(self):
         self.checkout()
         write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
