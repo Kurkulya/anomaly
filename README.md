@@ -1342,7 +1342,7 @@ later unit. The sonnet decoy hits are X4 and X5, rejected call sites in answer l
 `anomaly:build` takes one ticket from a red acceptance test to a reviewed, verified commit merged
 `--no-ff` into the integration branch, and closes the ticket through the CLI. The model may call
 it, but it acts only on an explicit request from you or from `conduct`. Its text is
-`plugins/anomaly/skills/build/SKILL.md` (9 KB or less); four docs are loaded only when used: the
+`plugins/anomaly/skills/build/SKILL.md` (9229 bytes or less); four docs are loaded only when used: the
 implementer brief `BRIEFS.md` and the test-writer brief `TEST-WRITER.md` at dispatch (3 KB and 2 KB
 or less), the worktree commit recipe `WORKTREE.md` (2 KB or less) inside a worktree, and the UI
 walkthrough `UI-CHECK.md` (3 KB or less) only when the UI step of the verify runs (`Tests:`
@@ -1392,7 +1392,7 @@ never the spec or stories file.
 `anomaly:review` reviews one diff in a named mode by dispatching the reviewer agents (next
 section), and gives their findings back per axis: one heading per agent, as each agent reported
 them, never merged or re-ranked. The `build` and `conduct` skills call it, and you may too. Its
-text is `plugins/anomaly/skills/review/SKILL.md` (8 KB or less); the per-agent brief it fills,
+text is `plugins/anomaly/skills/review/SKILL.md` (8216 bytes or less); the per-agent brief it fills,
 `BRIEFS.md` (3 KB or less), is loaded at dispatch; its last section is for the main window.
 Its only pre-approved tool is the CLI.
 
@@ -2276,7 +2276,8 @@ pipeline (every skill except the four loop skills, its extra docs, the agent fil
 under `docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
-  `SKILL.md` is 8 KB or less (build and conduct: 9 KB) and an agent file is 6 KB or less.
+  `SKILL.md` is 8 KB or less (build: 9229 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
+  file is 6 KB or less.
 - The `allowed-tools` of `build` and `review` is the one CLI pattern, defined once as
   `CLI_PATTERN` in `anomaly_loop/constants.py`, and every call of the CLI in their text uses that
   exact command and is never chained.
