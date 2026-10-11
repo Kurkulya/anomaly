@@ -377,8 +377,10 @@ def judge(primary, guard, time=None, kind=''):
     return 'inconclusive', f'{primary.name} is {trends.NOT_MOVED}'
 
 
-def verdict(context, anomaly):
-    """The Verdict for the anomaly's experiment; RecordError when it cannot be measured."""
+def verdict_inputs(anomaly):
+    """(fix day, primary, guard) of the anomaly's experiment, its metric and guard as resolve_metric names them: the
+    refusals a verdict makes before its readings. RecordError when the anomaly has no experiment, its fixed_by has
+    no fix date or resolve_metric refuses its metric or guard."""
     experiment = anomaly.experiment
     if experiment is None:
         raise RecordError(f'anomaly {anomaly.signature} has no experiment')
@@ -386,7 +388,13 @@ def verdict(context, anomaly):
     if fix_day is None:
         raise RecordError(f'anomaly {anomaly.signature}: fixed_by {anomaly.fixed_by!r} has no fix date, so '
                           'there is no before and after; the user decides')
-    primary, guard = resolve_metric(experiment.metric), resolve_metric(experiment.guard)
+    return fix_day, resolve_metric(experiment.metric), resolve_metric(experiment.guard)
+
+
+def verdict(context, anomaly):
+    """The Verdict for the anomaly's experiment; RecordError when it cannot be measured (verdict_inputs)."""
+    fix_day, primary, guard = verdict_inputs(anomaly)
+    experiment = anomaly.experiment
     metrics = [primary, guard] + ([REGISTRY[TIME]] if is_token_metric(primary.name) and guard.name != TIME else [])
     before, after = trends.fix_windows(context, fix_day, experiment.kind, experiment.skill)
     before_days, after_days = trends.fix_window_days(fix_day, context.today, experiment.skill)
