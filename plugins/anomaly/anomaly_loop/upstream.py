@@ -258,10 +258,16 @@ def printable(text):
     return ''.join(character for character in text if character.isprintable())
 
 
+def starts_with_prefix(title, prefix):
+    """Whether an issue title from GitHub, after printable() and a strip, starts with the report's `prefix`: the one
+    title test of the search lines and of the --comment check."""
+    return printable(title).strip().startswith(prefix)
+
+
 def search_lines(repo, issues, title, prefix):
-    """The open issues whose title starts with `prefix`, an exact title hit marked as the +1 offer; each title is
-    printed as printable() leaves it."""
-    same = [(number, printable(text)) for number, text in issues if printable(text).strip().startswith(prefix)]
+    """The open issues whose title starts with `prefix` (starts_with_prefix), an exact title hit marked as the +1
+    offer; each title is printed as printable() leaves it."""
+    same = [(number, printable(text)) for number, text in issues if starts_with_prefix(text, prefix)]
     if not same:
         return [f'no open issue of {repo} names {prefix}: run again with --create to open one']
     lines = [f'open issues of {repo} that name {prefix}:']
@@ -329,7 +335,7 @@ def run_report(args, environ, action):
         issue_title, state, link = ports.call_tool(ADAPTER_ERRORS, tool.view_issue, repo, args.comment,
                                                    environ=environ)
         if (state != 'open' or ISSUE_LINK.fullmatch(link) is None   # a pull request link is not an issue
-                or not printable(issue_title).strip().startswith(prefix)):
+                or not starts_with_prefix(issue_title, prefix)):
             raise RecordError(f'{label}: issue #{args.comment} of {repo} is not an open issue whose title starts with '
                               f'{prefix}; nothing was posted')
         ports.call_tool(ADAPTER_ERRORS, tool.comment_issue, repo, args.comment, report.plus_one, environ=environ)
