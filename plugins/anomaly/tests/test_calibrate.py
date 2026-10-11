@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import calibrate, constants, records, trends
+from anomaly_loop import addenda, calibrate, constants, files, records, trends
 from tests.fixtures import (NOW, GitFixture, assert_cli_error, context, metrics_row, run_cli, write_anomaly_with,
                             write_build_skills_profile, write_experiment_anomaly, write_metrics_rows, write_text)
 
@@ -31,6 +31,19 @@ def no_managed_settings(test):
     patch = mock.patch.dict('anomaly_loop.scans.MANAGED_DIRS', {}, clear=True)
     patch.start()
     test.addCleanup(patch.stop)
+
+
+def seed_addenda_file(home, plugin, name, signature):
+    """The addenda file of the skill `name`, built with the addenda owner: a tagged line of another experiment,
+    the tagged line of `signature`, then a hand-written line without a tag. Returns the file's path and the
+    text it holds once the line of `signature` is gone."""
+    path = addenda.addendum_path(home, name)
+    stamp = addenda.stamp(Path(plugin) / 'skills' / name)
+    other = addenda.append_line(path, 'Ask which repo before logging.', 'earlier-one', stamp)
+    addenda.append_line(path, 'Name the file first.', signature, stamp)
+    by_hand = 'Keep  it short.'
+    files.write_lines(path, addenda.read_lines(path) + [by_hand])
+    return path, f'{other}\n{by_hand}\n'
 
 
 class CalibrateCase(unittest.TestCase):
@@ -623,6 +636,79 @@ class FixAddendumTest(CalibrateCase):
         self.assertEqual(len(path.read_text(encoding='utf-8').splitlines()), 2)
 
 
+class AddendumRemovalTest(CalibrateCase):
+    """A line leaves its addenda file at a revert result (AC-9) and at `calibrate drop` (AC-32, D-52). The file
+    holds the line of the experiment under test, a line of another experiment and a line written by hand."""
+
+    def setUp(self):
+        super().setUp()
+        self.plugin = self.lay_out_plugin()
+
+    def experiment(self, signature, name, **fields):
+        """An experiment on the skill `name` whose fix is its addenda file, due since 1 October."""
+        values = dict(target=f'anomaly:{name}', metric='active minutes', guard='rework sightings', kind='build',
+                      fixed_by=f'2026-09-20 · addenda/{name}.md', check_by='2026-10-01', status='fixed')
+        values.update(fields)
+        write_experiment_anomaly(self.home, signature, **values)
+
+    def drop(self, signature, reason='folded into the core text'):
+        return self.cli('drop', signature, '--reason', reason)
+
+    def test_a_revert_from_verify_removes_the_line_tagged_with_that_signature_and_no_other(self):
+        self.baseline_and_after(before_active=10, after_active=20)
+        path, rest = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe')
+        code, out, err = self.cli('verify', '--signature', 'slow-check')
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('result: revert', out)
+        self.assertEqual(path.read_bytes(), rest.encode('utf-8'))
+
+    def test_a_revert_from_decide_removes_the_line_tagged_with_that_signature_and_no_other(self):
+        path, rest = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', metric='minutes per build')
+        code, _, err = self.cli('decide', '--signature', 'slow-check', '--result', 'revert')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(path.read_bytes(), rest.encode('utf-8'))
+
+    def test_drop_removes_the_line_keeps_the_result_and_logs_the_reason_under_the_addenda_log(self):
+        path, rest = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', result='keep')
+        code, _, err = self.drop('slow-check', 'folded into the core text')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(path.read_bytes(), rest.encode('utf-8'))
+        anomaly = self.anomaly('slow-check')
+        self.assertEqual(anomaly.experiment.result, 'keep')
+        self.assertIn(f'dropped {TODAY.isoformat()} · folded into the core text',
+                      dict(anomaly.sections).get('Addenda log', ''))
+
+    def test_drop_is_refused_for_a_signature_with_no_line_in_the_file(self):
+        path = addenda.addendum_path(self.home, 'observe')
+        addenda.append_line(path, 'Ask which repo before logging.', 'earlier-one',
+                            addenda.stamp(self.plugin / 'skills' / 'observe'))
+        self.experiment('slow-check', 'observe', result='keep')
+        file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'slow-check').read_bytes()
+        assert_cli_error(self, self.drop('slow-check'), 'slow-check')
+        self.assertEqual(path.read_bytes(), file_before)
+        self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
+
+    def test_drop_is_refused_while_the_experiment_has_no_result_and_names_verify_and_the_check_date(self):
+        path, _ = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', check_by='2026-10-25')
+        file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'slow-check').read_bytes()
+        assert_cli_error(self, self.drop('slow-check'), 'calibrate verify', '2026-10-25')
+        self.assertEqual(path.read_bytes(), file_before)
+        self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
+
+    def test_without_git_a_revert_and_a_drop_say_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
+        seed_addenda_file(self.home, self.plugin, 'observe', 'reverted-one')
+        self.experiment('reverted-one', 'observe', metric='minutes per build')
+        seed_addenda_file(self.home, self.plugin, 'research', 'dropped-one')
+        self.experiment('dropped-one', 'research', result='keep')
+        for out in (self.cli('decide', '--signature', 'reverted-one', '--result', 'revert')[1],
+                    self.drop('dropped-one')[1]):
+            self.assertGreaterEqual(out.count('home is not in a git repository'), 2, out)
+
+
 # ---------- batches and housekeeping ----------
 
 class BatchTest(CalibrateCase):
@@ -879,6 +965,38 @@ class CommitTest(unittest.TestCase):
         [commit] = self.repo.git('log', '--format=%H', '--', addendum).split()
         self.assertEqual(self.repo.git('show', '--name-only', '--format=', commit).split(), [addendum])
         self.assertEqual(self.repo.status(), [' M README.md'])
+
+    def test_a_revert_and_a_drop_keep_the_anomaly_commit_and_add_one_commit_holding_only_the_addenda_file(self):
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
+        cases = (('reverted-one', 'observe', dict(metric='minutes per build'),
+                  ('decide', '--signature', 'reverted-one', '--result', 'revert')),
+                 ('dropped-one', 'research', dict(result='keep'),
+                  ('drop', 'dropped-one', '--reason', 'folded into the core text')))
+        seeded = []
+        for signature, name, fields, _ in cases:
+            write_text(self.plugin / 'skills' / name / 'SKILL.md', f'# {name}\n')
+            seed_addenda_file(self.home, self.plugin, name, signature)
+            write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', guard='rework sightings',
+                                     kind='build', fixed_by=f'2026-09-20 · addenda/{name}.md', check_by='2026-10-01',
+                                     status='fixed', **fields)
+            seeded += [f'anomaly-home/addenda/{name}.md', f'anomaly-home/anomalies/{signature}.md']
+        self.repo.commit(seeded, 'chore: seed', TODAY)
+        self.repo.write('README.md', 'edited elsewhere\n')
+        for signature, name, _, argv in cases:
+            with self.subTest(signature):
+                code, out, err = run_cli('calibrate', argv[0], '--home', str(self.home), '--data', str(self.data),
+                                         '--plugin-root', str(self.plugin), *argv[1:])
+                self.assertEqual((code, err), (0, ''))
+                self.assertNotIn('not in a git repository', out)
+                addendum, anomaly = f'anomaly-home/addenda/{name}.md', f'anomaly-home/anomalies/{signature}.md'
+                addendum_commit = self.repo.git('log', '-1', '--format=%H', '--', addendum).strip()
+                anomaly_commit = self.repo.git('log', '-1', '--format=%H', '--', anomaly).strip()
+                self.assertEqual(self.repo.git('show', '--name-only', '--format=', addendum_commit).split(),
+                                 [addendum])
+                self.assertEqual(sorted(self.repo.git('show', '--name-only', '--format=', anomaly_commit).split()),
+                                 ['anomaly-home/INDEX.md', anomaly])
+                self.assertNotEqual(addendum_commit, anomaly_commit)
+                self.assertEqual(self.repo.status(), [' M README.md'])
 
 
 class RegistrationTest(unittest.TestCase):
