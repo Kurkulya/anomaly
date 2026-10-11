@@ -7,15 +7,18 @@ Needs-rework. Candidates are the distinct, non-blank `target` values of all anom
 A target is flagged when it has CHURN_MIN_COMMITS or more commits in the last CHURN_WINDOW_DAYS
 days in its git repository, or REWORK_MIN_OPEN_PROBLEMS or more open or reopened problems. A target
 without a repository counts only the problems. Where the repository is:
+  - a target whose qualifier (up to the first `:`, split_target) is this plugin's name, matched in
+    any case (names_this_plugin), is read first, before the path test: it is the skill of this
+    plugin that the first word after the `:` names, so `plugin:skill <prose>` holds any prose;
   - a path (it has a separator, starts with `~`, or is absolute) is the repository that holds it;
     a relative path is looked up under the user config folder, then the plugin folder, then the
     root of the plugin's checkout (target_path);
-  - `plugin:skill` is that plugin's skill (the name matched in any case, names_this_plugin),
-    `skill` a skill of this plugin (checked first) or of
-    the user config folder; a plugin skill's repository comes from gitrepo.plugin_repo, a user
-    skill's from the user config folder, and the history counted is that skill's folder;
+  - `skill` is a skill of this plugin (checked first) or of the user config folder; a plugin
+    skill's repository comes from gitrepo.plugin_repo, a user skill's from the user config folder,
+    and the history counted is that skill's folder;
   - a bare file name that exists under the user config or plugin folder is a path.
-Anything else (free text, another plugin's skill) has no repository.
+Anything else (free text, another plugin's skill, a first word that names no skill of this
+plugin) has no repository.
 
 Grace: a target is exempt from the commit criterion when it was created or rewritten in the last
 CHURN_GRACE_DAYS days. This is read from the commit days of its history alone: the newest run of
@@ -53,7 +56,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from . import gitrepo, metrics, paths, records, trends
+from . import gitrepo, metrics, paths, privacy, records, trends
 from .constants import (CHURN_GRACE_DAYS, CHURN_MIN_COMMITS, CHURN_RUN_GAP_DAYS, CHURN_WINDOW_DAYS,
                         FLAGS_SHOW, NEAR_DUPLICATE_MIN_OVERLAP, NEAR_DUPLICATE_MIN_TEXT_OVERLAP,
                         REWORK_MIN_OPEN_PROBLEMS, STALE_DAYS, UNUSED_DAYS)
@@ -125,19 +128,35 @@ def names_this_plugin(context, qualifier, plugin):
     return qualifier.strip().lower() == plugin_name(context.plugin_root, folder).lower()
 
 
+def split_target(target):
+    """(qualifier, name) of a target that holds a `:`, else None. The qualifier ends at the first `:`,
+    and after it only the first word counts, so `anomaly:review step 10: delta` is ('anomaly', 'review');
+    the name is None when that word is not an identifier (privacy.is_identifier) or holds a `:`, so
+    `anomaly:../x` names no part of the plugin. The one owner of this split and of the name rule."""
+    qualifier, colon, rest = target.partition(':')
+    if not colon:
+        return None
+    word = (rest.split() or [''])[0]
+    return (qualifier, word if privacy.is_identifier(word) and ':' not in word else None)
+
+
 def resolve_target(context, target, plugin):
     """(repository, path to count) for a target, or None. `plugin` is gitrepo.plugin_repo's answer."""
     plugin_skill = Path(context.plugin_root) / 'skills'
     user_skill = Path(context.user_config) / 'skills'
+    split = split_target(target)
+    if split and names_this_plugin(context, split[0], plugin):
+        name = split[1]
+        if plugin is None or name is None:
+            return None
+        return (plugin[0], plugin[1] / 'skills' / name) if (plugin_skill / name / SKILL_FILE).is_file() else None
     if is_path(target):
         path = target_path(context, target, plugin)
         repo = gitrepo.find_repo(path) if path else None
         return (repo, path) if repo else None
-    qualifier, colon, name = target.rpartition(':')
-    if colon:
-        if plugin is None or not names_this_plugin(context, qualifier, plugin):
-            return None
-        return (plugin[0], plugin[1] / 'skills' / name) if (plugin_skill / name / SKILL_FILE).is_file() else None
+    if split:
+        return None
+    name = target
     if (plugin_skill / name / SKILL_FILE).is_file():
         return (plugin[0], plugin[1] / 'skills' / name) if plugin else None
     if is_user_skill(context, name):
