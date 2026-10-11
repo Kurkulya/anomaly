@@ -56,7 +56,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from . import gitrepo, metrics, paths, records, trends
+from . import gitrepo, metrics, paths, privacy, records, trends
 from .constants import (CHURN_GRACE_DAYS, CHURN_MIN_COMMITS, CHURN_RUN_GAP_DAYS, CHURN_WINDOW_DAYS,
                         FLAGS_SHOW, NEAR_DUPLICATE_MIN_OVERLAP, NEAR_DUPLICATE_MIN_TEXT_OVERLAP,
                         REWORK_MIN_OPEN_PROBLEMS, STALE_DAYS, UNUSED_DAYS)
@@ -129,11 +129,15 @@ def names_this_plugin(context, qualifier, plugin):
 
 
 def split_target(target):
-    """(qualifier, first word) of a target that holds a `:`, else None. The qualifier ends at the first
-    `:`, and after it only the first word counts ('' when there is none), so `anomaly:review step 10:
-    delta` is ('anomaly', 'review'). The one owner of this split."""
+    """(qualifier, name) of a target that holds a `:`, else None. The qualifier ends at the first `:`,
+    and after it only the first word counts, so `anomaly:review step 10: delta` is ('anomaly', 'review');
+    the name is None when that word is not an identifier (privacy.is_identifier) or holds a `:`, so
+    `anomaly:../x` names no part of the plugin. The one owner of this split and of the name rule."""
     qualifier, colon, rest = target.partition(':')
-    return (qualifier, (rest.split() or [''])[0]) if colon else None
+    if not colon:
+        return None
+    word = (rest.split() or [''])[0]
+    return (qualifier, word if privacy.is_identifier(word) and ':' not in word else None)
 
 
 def resolve_target(context, target, plugin):
@@ -143,7 +147,7 @@ def resolve_target(context, target, plugin):
     split = split_target(target)
     if split and names_this_plugin(context, split[0], plugin):
         name = split[1]
-        if plugin is None:
+        if plugin is None or name is None:
             return None
         return (plugin[0], plugin[1] / 'skills' / name) if (plugin_skill / name / SKILL_FILE).is_file() else None
     if is_path(target):

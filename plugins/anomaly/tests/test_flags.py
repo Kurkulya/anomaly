@@ -140,7 +140,10 @@ class NeedsReworkTest(FlagsCase):
 
     def test_a_plugin_word_whose_first_word_names_no_skill_has_no_repository(self):
         resolve, _ = self.resolver()
-        self.assertIsNone(resolve('demo:nosuch asks twice'))
+        write_text(self.plugin / 'x' / 'SKILL.md', '# x\n')
+        for target in ('demo:nosuch asks twice', 'demo:../x'):
+            with self.subTest(target=target):
+                self.assertIsNone(resolve(target))
 
     def test_an_installed_copy_uses_the_checkout_named_by_the_profile(self):
         self.plugin_checkout()

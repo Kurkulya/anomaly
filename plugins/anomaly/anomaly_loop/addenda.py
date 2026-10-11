@@ -15,7 +15,7 @@ import re
 from collections import namedtuple
 from pathlib import Path
 
-from . import files, flags, privacy
+from . import files, flags
 from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, FIXED_BY_SEPARATOR, PLUGIN_AGENTS_DIR, SKILL_AGENTS
 from .files import RecordError
 from .records import SLUG
@@ -256,7 +256,7 @@ def plugin_part(context, target, plugin):
     split = flags.split_target(target)   # flags.resolve_target reads a `<plugin>:` target the same way
     if split and flags.names_this_plugin(context, split[0], plugin):
         name = split[1]
-        if not privacy.is_identifier(name) or ':' in name:
+        if name is None:
             return PluginPart(None, False, None)
         skill, agent = unit_of(root, name, False), unit_of(root, name, True)
         if (skill / flags.SKILL_FILE).is_file():
