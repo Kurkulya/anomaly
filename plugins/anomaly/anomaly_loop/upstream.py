@@ -192,7 +192,8 @@ def tuning_checked(context, anomaly):
     when verdict.verdict would refuse it before its readings (verdict.verdict_inputs)."""
     word, rule = tuning_source(context, anomaly)
     experiment, version = anomaly.experiment, installed_version(context)
-    names = tuple(metric.name for metric in verdict.verdict_inputs(anomaly)[1:])   # the metric and the guard
+    _, primary, guard = verdict.verdict_inputs(anomaly)
+    names = (primary.name, guard.name)
     heading = f'Readings as of {context.today.isoformat()}'
     fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', experiment.result),
               ('Reason', experiment.reason or '(none recorded)'), (VERSION_FIELD, version),
