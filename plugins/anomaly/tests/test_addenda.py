@@ -7,6 +7,7 @@ Signatures this file pins:
   stamp(target) -> str                       target: a skill folder or one agent file
   read_lines(path) -> list[str]              the lines of the file; [] when it is missing
   append_line(path, line, signature, stamp)  -> str, the tagged line it wrote; RecordError past the cap
+  log_line(anomaly, line) -> None            appends `- <line>` under the anomaly's `## Addenda log`
   print_addenda(home, skill) -> None         prints to stdout the addenda of `skill` and of the agents it dispatches
   constants.SKILL_AGENTS                     dict: skill name -> the agent names it dispatches (D-39)
 """
@@ -17,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from anomaly_loop import addenda, constants
+from anomaly_loop import addenda, constants, records
 from anomaly_loop.files import RecordError
 from tests.fixtures import PLUGIN, write_text
 
@@ -123,6 +124,16 @@ class AppendTest(AddendaCase):
         self.assertRegex(str(refused.exception), rf'\b{constants.ADDENDA_MAX_LINES}\b')
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(len(addenda.read_lines(self.path)), constants.ADDENDA_MAX_LINES)
+
+
+class LogTest(unittest.TestCase):
+    def test_a_log_line_goes_last_in_the_existing_addenda_log_whatever_the_heading_case_and_no_other_section(self):
+        anomaly = records.Anomaly(signature='slow-check', sections=[
+            ('addenda log', '- dropped 2026-10-01 · first'), ('Merged', 'Merged into other on 2026-10-02.')])
+        addenda.log_line(anomaly, 'dropped 2026-10-04 · second')
+        self.assertEqual(anomaly.sections, [
+            ('addenda log', '- dropped 2026-10-01 · first\n- dropped 2026-10-04 · second'),
+            ('Merged', 'Merged into other on 2026-10-02.')])
 
 
 class PrintTest(AddendaCase):
