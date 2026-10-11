@@ -94,7 +94,7 @@ def profile_markers(values, plugin_root):
 
 def marker_hits(text, markers):
     """The markers that `text` holds, sorted: a case-sensitive substring match, the one rule for the
-    neutrality test and the upstream report check."""
+    neutrality test and the upstream report check (which lowers the text and the markers first)."""
     return [marker for marker in sorted(markers) if marker in text]
 
 

@@ -268,11 +268,13 @@ class SecondRunTest(UpstreamCase):
 
 class RefusalTest(UpstreamCase):
     def test_text_that_fails_check_text_or_holds_a_profile_marker_or_a_repo_layer_name_is_refused_and_no_file_is_written(self):
-        """AC-22 (D-12): an email address, a marker from the profile, a file name from `<home>/repos`."""
+        """AC-22 (D-12): an email address, a marker from the profile, a file name from `<home>/repos`; a marker or
+        a repo-layer name in any case (D-12 Amended, cumulative review)."""
         write_text(self.home / 'repos' / 'acme-shop.md', '---\nverify: run-all\n---\n')
-        self.write_profile('mr_tool: acme-kit:open-mr')
+        self.write_profile('mr_tool: acme-kit:open-mr', 'reviewers: acme-bot')
         self.report(self.run_ok(), title_of('observe'))   # a clean text passes the same check and is written
-        for summary in ('write to jane.doe@example.com', 'the acme-kit:open-mr call fails', 'it fails in acme-shop.md'):
+        for summary in ('write to jane.doe@example.com', 'the acme-kit:open-mr call fails', 'it fails in acme-shop.md',
+                        'Acme-Bot skips the check', 'it fails in ACME-SHOP.md'):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 before = self.tree()

@@ -952,9 +952,10 @@ python plugins/anomaly/scripts/anomaly.py upstream tuning <signature> --home <di
 - Both titles are `[anomaly:<skill or agent>] <signature>`, or `[anomaly:<path from the plugin
   root>] <signature>` for plugin code. Every field passes the privacy checks; the text that does
   not come from the CLI (the symptom, rule, reason, an agent name in a reading, the version folder
-  and the signature) also may not name a profile value, a repo-layer name, a local path or your
-  OS user name (a generic account name such as `root`, `runner` or `ubuntu`, or a name under 3
-  characters, is not checked). A hit refuses the report: nothing is redacted and no file is written.
+  and the signature) also may not name a profile value or a repo-layer name (in any case), a
+  local path or your OS user name (a generic account name such as `root`, `runner` or `ubuntu`,
+  or a name under 3 characters, is not checked). A hit refuses the report: nothing is redacted
+  and no file is written.
 - The command writes `upstream/<signature>.defect.md` or `upstream/<signature>.tuning.md` in
   home (a `Title:` line, a blank line, the body) and prints `report: <path>`. The target
   repository is the GitHub source of the installed copy's marketplace record, else the profile
