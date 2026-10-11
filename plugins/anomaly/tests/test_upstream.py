@@ -320,7 +320,8 @@ class RefusalTest(UpstreamCase):
         self.assertEqual(code, 0, (out, err))
         for summary in ('the check reads /home/jdoe/notes.txt twice', 'it reads ~/notes.txt twice',
                         r'it reads C:\Users\notes.txt twice', 'JDoe sees the check run twice',
-                        'it reads "/srv/x/app" twice', 'it sets dir=/opt/x twice'):
+                        'it reads "/srv/x/app" twice', 'it sets dir=/opt/x twice',
+                        'it reads file:///srv/x/notes.txt twice', r'it reads \\host\share\notes.txt twice'):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 before = self.tree()
