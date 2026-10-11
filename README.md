@@ -755,12 +755,12 @@ Marks on a problem:
 - `fix home: addenda/<skill>.md` (or `addenda/agents/<agent>.md`): only with no plugin checkout,
   for a target that is one skill or agent of this plugin. The fix is one line in that addenda
   file, written with `fix --addendum`. `fix home: none, measure takes no addenda` means that skill
-  takes none.
+  takes none. `fix home: none, names no skill or agent of the plugin` marks an `anomaly:<name>`
+  target whose name is no skill or agent: there is no addenda file to fix and no upstream offer,
+  since `upstream defect` refuses it.
 - `upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream`:
-  only with no plugin checkout, for a target in the plugin's other code or docs, or an
-  `anomaly:<name>` that names no skill or agent. It cannot be fixed here; the upstream section
-  offers it when `upstream defect` takes it (a file of the plugin; a name of no skill or agent is
-  refused).
+  only with no plugin checkout, for a target in the plugin's other code or docs. It cannot be
+  fixed here; the upstream section offers it when `upstream defect` takes it.
 
 **Declare, then change, then record.** `declare` writes the experiment before the change: the
 expected effect, exactly one primary metric, exactly one guard, the session kind, `declared_on`

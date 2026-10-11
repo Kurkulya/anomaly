@@ -25,7 +25,8 @@ as waiting and adds nothing to the sum. A problem whose target already had a rev
 says so, and a target that a win with 2 or more sightings is about is marked as protected
 from removal (flags.protected_by_win). With no plugin checkout (gitrepo.plugin_repo is None), a problem
 whose target is a skill or agent of this plugin names its addenda file as the fix home (fix_home); a
-skill in addenda.NO_ADDENDA has none, and any other part of the plugin is an upstream defect. The plan
+skill in addenda.NO_ADDENDA has none, a `<plugin>:...` that names no skill or agent has none (NO_PART), and
+the plugin's other code and docs are an upstream defect. The plan
 then lists one offer line per upstream report not yet sent (upstream_offers): a kept addenda line, and
 a plugin-code problem that `upstream defect` takes.
 
@@ -51,6 +52,7 @@ MERGED_HEADING = 'Merged'
 WHOLE_SCOPES = ('repo:', 'plugin:')   # scopes that are one batch each; any other scope is split by target
 UNTARGETED = 'untargeted'
 UPSTREAM_DEFECT = 'upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream'
+NO_PART = 'fix home: none, names no skill or agent of the plugin'
 UPSTREAM_HEADING = "## Upstream reports not yet sent (offer each; send one only after the user's yes)"
 ADDENDUM_CHECKOUT_SET = 'a plugin checkout is set: change the skill there'
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): calibrate '
@@ -232,11 +234,17 @@ def takes_no_addenda(part):
 
 def fix_home(context, target, plugin):
     """The plan's fix-home mark of a target with no plugin checkout (ADR-0021), or None: the addenda file
-    (relative to home), or why there is none. With a checkout (`plugin` set) there is no mark."""
+    (relative to home), or why there is none: UPSTREAM_DEFECT for plugin code or docs, NO_PART for a
+    `<plugin>:...` that names no skill or agent (upstream.part_word refuses it, so no report has a title for it).
+    With a checkout (`plugin` set) there is no mark."""
     part = None if plugin is not None else addenda.plugin_part(context, target, plugin)
     if part is None:
         return None
     if part.unit is None:
+        try:
+            upstream.part_word(context, target)
+        except RecordError:
+            return NO_PART
         return UPSTREAM_DEFECT
     if takes_no_addenda(part):
         return f'fix home: none, {part.name} takes no addenda'

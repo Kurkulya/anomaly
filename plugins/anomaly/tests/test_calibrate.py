@@ -869,9 +869,7 @@ class BatchTest(CalibrateCase):
 
     def test_without_a_checkout_plugin_code_and_docs_are_an_upstream_defect_not_an_addenda_fix(self):
         self.lay_out_plugin()
-        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md'),
-                                  ('prose-no-such-skill', 'anomaly:nosuchskill frontier'),
-                                  ('prose-escape', 'anomaly:../../x escape')):
+        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md')):
             write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
             line = self.plan_line(signature)
             self.assertIn('upstream defect', line, target)
@@ -911,16 +909,22 @@ class BatchTest(CalibrateCase):
 
     def test_without_a_checkout_the_plan_offers_a_defect_report_for_each_target_upstream_defect_accepts_and_keeps_its_mark(self):
         """AC-29 (D-57): a skill target, a `<plugin>:...` that names no skill and a target outside the plugin get
-        none; the mark of the problem line stays beside the offer (Amended 2026-10-11, conduct wave 6)."""
+        none; the mark of the problem line stays beside the offer (Amended 2026-10-11, conduct wave 6), and a
+        `<plugin>:...` that names no skill is marked as such, not as an upstream defect (Amended 2026-10-11,
+        cumulative review)."""
         self.lay_out_plugin()
         for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md'),
                                   ('no-such-skill', 'anomaly:nosuchskill frontier'), ('in-skill', 'anomaly:observe'),
-                                  ('elsewhere', 'deploy-script')):
+                                  ('escape', 'anomaly:../../x escape'), ('elsewhere', 'deploy-script')):
             write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
         write_anomaly_with(self.home, 'sent-code', target='anomaly_loop/calibrate.py', scope='repo:demo',
                            sections=[(addenda.LOG_HEADING, '- upstream 2026-10-02 · 7')])
         self.assertEqual(self.plan_offers(), ['upstream: defect in-code', 'upstream: defect in-docs'])
         self.assertIn(calibrate.UPSTREAM_DEFECT, self.plan_line('in-code'))
+        for signature in ('no-such-skill', 'escape'):
+            line = self.plan_line(signature)
+            self.assertIn('fix home: none, names no skill or agent of the plugin', line)
+            self.assertNotIn('upstream defect', line)
 
     def test_with_a_checkout_the_plan_prints_no_offer_line(self):
         """AC-29 (D-35): the same backlog offers both reports without a checkout, none with one."""
