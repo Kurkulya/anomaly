@@ -284,10 +284,14 @@ class RefusalTest(UpstreamCase):
     def test_a_local_path_or_the_user_name_in_the_symptom_is_refused_and_no_file_is_written(self):
         """D-12 Amended: an absolute path, a `~/` start or the OS user name; a slash inside a word is no path."""
         user = {'USER': 'jdoe'}
-        self.write_anomaly(summary='the check fails for owner/name and/or its forks')
-        self.report(self.run_ok(), title_of('observe'))
+        for summary in ('the check fails for owner/name and/or its forks', 'it runs after /compact twice',
+                        'it runs /anomaly:review twice'):   # a slash inside a word or a slash command is no path
+            with self.subTest(summary=summary):
+                self.write_anomaly(summary=summary)
+                self.report(self.run_ok(), title_of('observe'))
         for summary in ('the check reads /home/jdoe/notes.txt twice', 'it reads ~/notes.txt twice',
-                        r'it reads C:\Users\notes.txt twice', 'JDoe sees the check run twice'):
+                        r'it reads C:\Users\notes.txt twice', 'JDoe sees the check run twice',
+                        'it reads "/srv/x/app" twice', 'it sets dir=/opt/x twice'):
             with self.subTest(summary=summary):
                 self.write_anomaly(summary=summary)
                 before = self.tree()

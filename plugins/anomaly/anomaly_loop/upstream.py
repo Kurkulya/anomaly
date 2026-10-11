@@ -47,7 +47,7 @@ MARKETPLACES = Path('plugins') / 'known_marketplaces.json'   # in the Claude Cod
 PREFIX = '[anomaly:{part}]'              # the start of a title: `<prefix> <signature>`
 LABEL = 'upstream defect'
 USER_FIELDS = ('Symptom', 'Signature')   # the report fields the user wrote; the CLI writes the others
-LOCAL_PATH = re.compile(r'(?<!\S)(?:/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # absolute, `~/` or drive path
+LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
 NO_REPOSITORY = ('no target repository is known: the marketplace record of this copy names no GitHub source and '
@@ -81,8 +81,9 @@ def check_report(context, fields, environ):
     """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text, or when a field of
     the user's text (USER_FIELDS: the symptom and the signature, not the lines the CLI writes) holds a profile marker
     (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path
-    (LOCAL_PATH: `/x` or `~/` at the start of a word, or a drive `X:\\` or `X:/`; a slash inside a word such as
-    `and/or` is none) or the OS user name (user_names)."""
+    (LOCAL_PATH: `/x/y` or `~/` not right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or
+    `=`, or a drive `X:\\` or `X:/`; a slash inside a word such as `and/or`, a one-segment slash command such as
+    `/compact` and the `//` of a link are none) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
     users = user_names(environ)
     for key, value in fields:
