@@ -110,21 +110,21 @@ def check_report(context, fields, environ, label=LABEL):
     agent name of a per-dispatch reading, the installed version folder and the signature, not the title and target
     the CLI composes; an installed version that is a commit id, privacy.COMMIT_ID, holds no name and is skipped, so
     a short repo-layer name such as `add` cannot match its hex) holds a profile marker (scans.profile_markers) or a
-    repo-layer name (scans.repo_layer_names) in any case, by scans.marker_hits on the text and the names in lower
-    case (marker_hits itself and the neutrality test stay case-sensitive: plugin files are text the plugin's own
+    repo-layer name (scans.repo_layer_names) in any case, by scans.marker_hits on the text and the names case-folded
+    (marker_hits itself and the neutrality test stay case-sensitive: plugin files are text the plugin's own
     author writes, a report holds the user's words), a local path (LOCAL_PATH: `/x/y` or `~/` not right after a
     letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, a drive `X:\\` or `X:/`, a `file://`
     link in any case, or a UNC path `\\\\host\\share\\...` or `//host/share/...` with no `scheme:` right before it;
     a slash inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash
     command such as `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
-    lowered = {name.lower(): name for name in names}
+    folded = {name.casefold(): name for name in names}
     users = user_names(environ)
     for key, value in fields:
         privacy.check_text(label, key, value)
         if key not in OUTSIDE_FIELDS or (key == VERSION_FIELD and privacy.COMMIT_ID.fullmatch(value)):
             continue
-        found = sorted(lowered[hit] for hit in scans.marker_hits(value.lower(), lowered))
+        found = sorted(folded[hit] for hit in scans.marker_hits(value.casefold(), folded))
         if found:
             raise RecordError(f'{label}: {key} names {", ".join(found)}, from the profile or the repo layer in home; '
                               'describe it in your own words')
