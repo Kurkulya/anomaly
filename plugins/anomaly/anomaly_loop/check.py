@@ -628,6 +628,50 @@ SUBAGENT_BASH_REASON = ('A subagent writes files with the Write and Edit tools, 
                         'Use Write to create or replace a file and Edit to change one.')
 
 
+def backtick_end(text, index):
+    """The index of the backtick that closes a backtick body starting at `index`, or len(text)."""
+    while index < len(text) and text[index] != '`':
+        index += 2 if text[index] == '\\' else 1
+    return min(index, len(text))
+
+
+def substitution_end(text, index):
+    """The index of the `)` that closes a `$(` whose body starts at `index`, or len(text). A quoted `)`
+    does not count, and a `"` inside the body opens a double-quoted string of its own."""
+    depth = 1
+    while index < len(text):
+        char = text[index]
+        if char == '\\':
+            index += 1
+        elif char == "'":
+            index = text.find("'", index + 1)
+            if index < 0:
+                return len(text)
+        elif char == '"':
+            index = double_quote_end(text, index + 1)
+        elif char in '()':
+            depth += 1 if char == '(' else -1
+            if depth == 0:
+                return index
+        index += 1
+    return len(text)
+
+
+def double_quote_end(text, index):
+    """The index of the `"` that closes a double-quoted string whose text starts at `index`, or len(text).
+    A `"` inside a `$(...)` or backticks of the string does not close it."""
+    while index < len(text) and text[index] != '"':
+        if text[index] == '\\':
+            index += 2
+        elif text.startswith('$(', index):
+            index = substitution_end(text, index + 2) + 1
+        elif text[index] == '`':
+            index = backtick_end(text, index + 1) + 1
+        else:
+            index += 1
+    return min(index, len(text))
+
+
 def command_substitutions(text):
     """The bodies of the `$(...)` and backtick substitutions in the text of a double-quoted string: they run
     even inside the quotes. An unclosed one runs to the end of the text."""
@@ -636,16 +680,11 @@ def command_substitutions(text):
         if text[index] == '\\':
             index += 2
         elif text.startswith('$(', index):
-            depth, end = 1, index + 2
-            while end < len(text) and depth:
-                depth += (text[end] == '(') - (text[end] == ')')
-                end += 1
-            bodies.append(text[index + 2:end - 1 if depth == 0 else end])
-            index = end
+            end = substitution_end(text, index + 2)
+            bodies.append(text[index + 2:end])
+            index = end + 1
         elif text[index] == '`':
-            end = index + 1
-            while end < len(text) and text[end] != '`':
-                end += 2 if text[end] == '\\' else 1
+            end = backtick_end(text, index + 1)
             bodies.append(text[index + 1:end])
             index = end + 1
         else:
@@ -679,7 +718,7 @@ def shell_tokens(command):
         if char in '\'"' or ansi:
             quote, start = command[index + ansi], index + 1 + ansi
             escapes = quote == '"' or ansi   # a backslash escapes the next character
-            end = start
+            end = double_quote_end(command, start) if quote == '"' else start
             while end < len(command) and command[end] != quote:
                 end += 2 if escapes and command[end] == '\\' else 1
             if end >= len(command):

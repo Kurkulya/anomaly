@@ -1073,10 +1073,12 @@ class SubagentBashVerdictTest(unittest.TestCase):
 
     def test_a_substitution_inside_double_quotes_and_an_ansi_c_string_are_read(self):
         """AC-21, AC-23: `$(...)` and backticks run inside double quotes; `$'...'` has backslash escapes."""
-        for command in ('echo "$(cat x > f)"', 'echo "`tee f`"', "echo $'a\\'b' > f"):
+        for command in ('echo "$(cat x > f)"', 'echo "`tee f`"', "echo $'a\\'b' > f", 'echo "$(echo "a" > f)"',
+                        'x="$(cat a > "f")"', 'out="$(curl -o "f" url)"', 'echo "$(echo ")" > f)"'):
             with self.subTest(command=command):
                 self.assert_denied(command)
-        for command in ('echo "$(date)"', 'echo "\\$(tee f)"', "echo $'a>b'", 'echo "a > $(date)"'):
+        for command in ('echo "$(date)"', 'echo "\\$(tee f)"', "echo $'a>b'", 'echo "a > $(date)"',
+                        'echo "$(echo "a > b")"', 'echo "$(echo ")")"'):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
