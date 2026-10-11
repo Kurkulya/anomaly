@@ -161,9 +161,16 @@ def search_link(repo, prefix):
     return f'https://{gh.HOST}/{repo}/issues?q=' + quote_plus(f'is:issue is:open in:title "{prefix}"')
 
 
+def printable(text):
+    """`text` without its non-printable characters (control and escape codes), so a title from GitHub cannot steer
+    the terminal."""
+    return ''.join(character for character in text if character.isprintable())
+
+
 def search_lines(repo, issues, title, prefix):
-    """The open issues whose title starts with `prefix`, an exact title hit marked as the +1 offer."""
-    same = [(number, text) for number, text in issues if text.strip().startswith(prefix)]
+    """The open issues whose title starts with `prefix`, an exact title hit marked as the +1 offer; each title is
+    printed as printable() leaves it."""
+    same = [(number, printable(text)) for number, text in issues if printable(text).strip().startswith(prefix)]
     if not same:
         return [f'no open issue of {repo} names {prefix}: run again with --create to open one']
     lines = [f'open issues of {repo} that name {prefix}:']

@@ -18,7 +18,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import addenda, records
+from anomaly_loop import addenda, records, upstream
 from tests.fixtures import NOW, GitFixture, assert_cli_error, run_cli, write_anomaly_with, write_text
 from tests.test_mr import TOOL_FAILURE, FakeGh, PutSetup, finished, record
 
@@ -310,6 +310,23 @@ class GhFailureTest(UpstreamCase):
             with self.subTest(flags=flags):
                 assert_cli_error(self, self.run_defect(*flags), TOOL_FAILURE)
                 self.assertEqual(self.anomaly_path.read_bytes(), before)
+
+
+class SearchLinesTest(unittest.TestCase):
+    """upstream.search_lines, the lines the gh search prints."""
+    PREFIX = '[anomaly:observe]'
+
+    def lines(self, issues):
+        return upstream.search_lines(REPO, issues, title_of('observe'), self.PREFIX)
+
+    def test_a_title_is_printed_without_its_non_printable_characters_and_a_normal_title_unchanged(self):
+        """M9: a title from GitHub cannot move the terminal cursor or ring it."""
+        other = title_of('observe', 'another-signature')
+        out = '\n'.join(self.lines([(12, f'{self.PREFIX} a\x1b[2Jred\x07 one'), (13, other)]))
+        self.assertIn(f'#12 {self.PREFIX} a[2Jred one', out)
+        self.assertIn(f'#13 {other}', out)
+        self.assertNotIn('\x1b', out)
+        self.assertNotIn('\x07', out)
 
 
 if __name__ == '__main__':
