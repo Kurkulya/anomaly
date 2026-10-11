@@ -1538,7 +1538,8 @@ never the spec or stories file.
   `.anomaly/adhoc/`, and its file name without `.md` is the work-unit key. `build` branches from the
   current head with the `branch` port, then follows the same red step and invariants, with one
   `anomaly:review` in combined mode, one verify and a `--no-ff` merge back into the starting
-  branch. It writes no seam ledger lines. If the `branch` or `commit` port needs a `<key>`, it asks
+  branch. It writes no seam ledger lines. If the `branch` or `commit` port needs a `<key>`, it uses
+  the port's no-ticket fallback (such as the word `no-ticket`) when the port defines one, else asks
   you for it and never guesses.
 - **Red first.** The `test_writer` port, never the implementer, writes the acceptance test,
   extending an existing test first. The skill runs it, confirms it fails for the right reason,

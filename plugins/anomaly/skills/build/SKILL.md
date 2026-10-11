@@ -45,7 +45,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" observe apply --home '${user_c
 
 Start as above, but:
 1. `ticket adhoc` prints the ticket's path. Work-unit key = that file name without `.md`. `worklog start`/`add` take no `--ticket` or `--docs`. Resume by that path.
-2. A `branch` or `commit` value that holds `<key>`: ask the user; never guess. [I2]
+2. A `branch` or `commit` value that holds `<key>`: as Start step 2. [I2]
 3. Start branch = the head's branch; read it for the integration branch, `<integration>` and `<checkout>` below (no step 6). Detached head, head on the base branch, or (resuming) off the start branch: ask the user. [I8] Ticket-branch slug and merge subject use the adhoc stem.
 4. Red first, Implement and the Shared close, with a combined review and no `seams prune` or `seams add`.
 
