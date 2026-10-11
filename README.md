@@ -619,12 +619,13 @@ problems. Where a target's repository is found:
   relative path is looked up under the user config folder, then the plugin folder, then the root
   of the plugin's checkout (so `plugins/anomaly/skills/measure/SKILL.md` works too); a bare
   file name that exists under the user config or plugin folder is treated as a path;
-- `plugin:skill` is a skill of that plugin (the plugin name is matched in any case), read before
+- `plugin:skill` is a skill of this plugin (the plugin name is matched in any case), read before
   the path test; only the first word after the first `:` names the skill, so prose may follow
-  (`anomaly:review step 10: delta` and `anomaly:review asks and/or skips` are the review skill); a
-  bare `skill` is a skill of this plugin or, if there is none, of the user config folder. The commits
-  counted are those that touched the skill's folder. A plugin skill uses the plugin's repository (the checkout, or the profile's
-  `plugin_repo` for an installed copy); a user skill uses the user config repository;
+  (`anomaly:review step 10: delta` and `anomaly:review asks and/or skips` are the review skill);
+  a bare `skill` is a skill of this plugin or, if there is none, of the user config folder. The
+  commits counted are those that touched the skill's folder. A plugin skill uses the plugin's
+  repository (the checkout, or the profile's `plugin_repo` for an installed copy); a user skill
+  uses the user config repository;
 - anything else (free text, another plugin's skill, a first word that names no skill) has no
   repository, and only its open problems are counted. When the plugin's repository cannot be
   found, the digest says so once and skips the plugin-skill checks.
