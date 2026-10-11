@@ -620,9 +620,11 @@ FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
 INPUT_REDIRECTS = frozenset({'<', '<&', '<<<'})
 SHELL_KEYWORDS = frozenset({'!', '{', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'})
 # wrapper -> (its short options, its long options) that take the next word as their value. The long ones are
-# those whose `--help` shows a required `--name=VALUE` or `--name <VALUE>` (getopt and clap accept the value
-# as the next word); an optional `--name[=VALUE]` takes it attached only and is left out: `xargs --help`,
-# `env --help`, `nice --help`, `timeout --help`, `sudo --help` and `/usr/bin/time --help` (sudo 1.9, coreutils).
+# those shown with a required `--name=VALUE` or `--name <VALUE>` (getopt and clap accept the value as the next
+# word); an optional `--name[=VALUE]` takes it attached only and is left out. Sources, as read on one machine:
+# `env`, `nice` and `timeout` from `--help` of uutils coreutils 0.8.0; `xargs` from `--help` of GNU findutils
+# 4.10.0; `time` from `/usr/bin/time --help` (GNU Time); `sudo` from the sudo(8) man page of sudo 1.9 (the local
+# `sudo --help` is sudo-rs and lists fewer options). `command`, `exec` and `nohup` have no long options.
 SHELL_WRAPPERS = {
     'command': ('', ()), 'exec': ('a', ()), 'nohup': ('', ()),
     'env': ('uCSfa', ('chdir', 'file', 'unset', 'split-string', 'argv0')),
