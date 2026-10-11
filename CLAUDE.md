@@ -1,7 +1,8 @@
 # anomaly
 
 A Claude Code plugin marketplace with one plugin, `plugins/anomaly/`: skills, agents, hooks and a
-Python CLI (`scripts/anomaly.py` → `anomaly_loop/`). The README is the full reference.
+Python CLI (`scripts/anomaly.py` → `anomaly_loop/`). `docs/reference.md` is the full reference;
+the README is the short landing page.
 
 ## Commands
 
