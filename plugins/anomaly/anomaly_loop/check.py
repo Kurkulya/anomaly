@@ -617,7 +617,7 @@ SUBAGENT_BASH_EXEMPT = 'anomaly:survey'   # its brief allows shell writes (ADR-0
 SHELL_OPERATOR_CHARS = ';&|<>()`'
 SHELL_OPERATOR = re.compile(r'&>>|&>|>>|>\||>&|<<<|<<|<&|&&|\|\||\|&|.')
 FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
-INPUT_REDIRECTS = frozenset({'<', '<&', '<>', '<<<'})
+INPUT_REDIRECTS = frozenset({'<', '<&', '<<<'})
 SHELL_KEYWORDS = frozenset({'!', '{', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'})
 SHELL_WRAPPERS = {'command': '', 'env': 'uCS', 'exec': 'a', 'nice': 'n', 'nohup': '', 'sudo': 'ughpCDRTU', 'time': 'fo',
                   'timeout': 'sk', 'xargs': 'nIiLPsdEaJ'}   # wrapper -> its short options that take the next word
