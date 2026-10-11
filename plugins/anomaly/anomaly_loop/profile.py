@@ -17,7 +17,7 @@ from .files import RecordError, read_input
 PROFILE_KEYS = ('tracker', 'glossary_file', 'ticket_key', 'branch_pattern', 'commit_style',
                 'implementers', 'mr_tool', 'verify_ui', 'issue_source')
 OPTIONAL_KEYS = ('build_skills', 'plugin_repo', 'test_writers', 'conventions', 'reviewers', 'gather', 'ci',
-                 'models', 'key_line', 'adr_folder')
+                 'models', 'key_line', 'adr_folder', 'upstream_tool', 'upstream_repo')
 PLACEHOLDER_LINE = re.compile(r'(?:[^:<>]+:\s*)?<[^<>]*>')
 
 
