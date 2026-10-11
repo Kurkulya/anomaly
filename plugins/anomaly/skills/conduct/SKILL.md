@@ -67,6 +67,6 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 ## Finish: `frontier` says the unit is finished
 
 17. `anomaly:review` cumulative on `<base>...<branch>` in `<wt>`, "last review: yes". One ticket: skip. [O36c, AC-38]
-18. One fix branch off the tip (`branch` port, slug `<key>-fixes`), the `implementer` port on the `implement_wide` role, effort: every fix, and every open Low and Nit whose fix needs no decision; list the others to the user. Merge `--no-ff`; the message goes through a scratchpad file and `-F`. [O38, N9, AC-39]
+18. One fix branch off the tip (`branch` port, slug `<key>-fixes`), the `implementer` port on the `implement_wide` role, effort: every fix, and every open Low and Nit whose fix needs no decision; list the others to the user. Merge `--no-ff`; the message goes through a scratchpad file and `-F`. [O38, N9, AC-39] After the merge, a delta round goes to every reviewer whose finding was fixed, warm by SendMessage.
 19. One full `command verify` in `<wt>`, foreground; the `ui_check` port (`browse` model and effort, the `app` lines) for UI ACs. With no Blocker or High open and green: `mr reviewed`, `mr verified` on the tip; else stop and report. [O39, AC-40]
 20. `anomaly:ship` for the ready gate, with the integration branch checked out in `<wt>`; list every proof that cannot run here to the user in chat. This run wrote no `worklog add` yet: write it now. Stop: ship offers `/anomaly:observe`. [O41, N15, O42, AC-32, AC-41]

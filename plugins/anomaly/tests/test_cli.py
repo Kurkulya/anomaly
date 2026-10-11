@@ -1741,6 +1741,14 @@ class ConductSkillTest(unittest.TestCase):
         self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
         self.assertLessEqual(self.PARALLEL.stat().st_size, self.PARALLEL_MAX_BYTES)
 
+    def test_the_finish_fix_branch_step_sends_a_warm_delta_round_to_every_reviewer_whose_finding_was_fixed(self):
+        """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge."""
+        step = ' '.join(next(line for line in self.text().splitlines() if 'One fix branch off the tip' in line).split())
+        after_merge = step.split('Merge `--no-ff`', 1)[-1]
+        for token in ('delta round', 'whose finding was fixed', 'warm'):
+            with self.subTest(token=token):
+                self.assertIn(token, after_merge)
+
     def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
         """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
         heading above it says "chip". The check is on the text of the line, so the skill's step layout stays free."""
