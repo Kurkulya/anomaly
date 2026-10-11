@@ -239,7 +239,8 @@ def record_lenses(home, lens_records):
         change = lens_change(current, record)
         if change == 'smaller':
             raise RecordError(f'lens {name}: session {record["session_id"]} already has a line with a larger '
-                              f'accepted, rejected or revised count than {counts}; a tally sum only grows')
+                              f'accepted, rejected or revised count than {counts}; a later record of the same '
+                              f'session and lens with a smaller count is refused')
         if change == 'same':
             lines.append(f'skipped: lens {name} already logged for this session')
             continue
