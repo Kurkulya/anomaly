@@ -654,9 +654,10 @@ The second hook in `plugins/anomaly/hooks/hooks.json` is a `PreToolUse` hook on 
 check on every Bash call, with the same `python` command and no shell as the nudge. It reads the hook
 JSON on standard input and, for a subagent that is not `anomaly:survey`, denies a command that writes
 a file through the shell, so the rule of the build briefs (edit files only with Edit or Write) is
-enforced and not only asked. The deny reason names Write and Edit. What counts as a write is in The
-pre-merge check and the seam ledger. The main window is never checked, and the check uses no model
-([ADR-0022](docs/adr/0022-subagent-bash-write-check.md)).
+enforced and not only asked, but only for the shell forms listed in The pre-merge check and the
+seam ledger; other file writes, such as `cp` or `mv`, are not checked (the Accepted risks of
+ADR-0022). The deny reason names Write and Edit. The main window is never checked, and the check
+uses no model ([ADR-0022](docs/adr/0022-subagent-bash-write-check.md)).
 
 ### calibrate
 
@@ -1015,13 +1016,13 @@ python plugins/anomaly/scripts/anomaly.py ticket amend      <file> [--after AC-n
   line goes at the end of the file (a ticket, or any markdown file). With `--after AC-n` (in
   `stories.md`, or a ticket's checkbox line `- [ ] AC-n:` or `- [x] AC-n:`) or `--after D-n` (in
   `decisions.md`) it goes right below that list item, and below the `Amended` lines already under
-  it, so the dated lines stay in order; it is indented like those lines, else by two spaces under a `D-n` and not at all under an `AC-n`. An id matches whole
-  (`AC-1` is not the line of `AC-10`), and the first match outside a fenced code block is used. The
-  text must be one line and pass the privacy check (no email address, credential, URL with a query,
-  pasted program output or long opaque identifier). It has no length limit, because real `Amended`
-  lines are long. An id that is not in the file, an id that is no `AC-n` or `D-n`, or a text that
-  fails a check is an error (exit 2) and the file is left byte for byte as it was. This action does
-  not need a `Status:` line.
+  it, so the dated lines stay in order; it is indented like those lines, else by two spaces under a
+  `D-n` and not at all under an `AC-n`. An id matches whole (`AC-1` is not the line of `AC-10`),
+  and the first match outside a fenced code block is used. The text must be one line and pass the
+  privacy check (no email address, credential, URL with a query, pasted program output or long
+  opaque identifier). It has no length limit, because real `Amended` lines are long. An id that is
+  not in the file, an id that is no `AC-n` or `D-n`, or a text that fails a check is an error
+  (exit 2) and the file is left byte for byte as it was. This action does not need a `Status:` line.
 
 ## Frontier
 
@@ -1342,7 +1343,7 @@ later unit. The sonnet decoy hits are X4 and X5, rejected call sites in answer l
 `anomaly:build` takes one ticket from a red acceptance test to a reviewed, verified commit merged
 `--no-ff` into the integration branch, and closes the ticket through the CLI. The model may call
 it, but it acts only on an explicit request from you or from `conduct`. Its text is
-`plugins/anomaly/skills/build/SKILL.md` (9 KB or less); four docs are loaded only when used: the
+`plugins/anomaly/skills/build/SKILL.md` (9229 bytes or less); four docs are loaded only when used: the
 implementer brief `BRIEFS.md` and the test-writer brief `TEST-WRITER.md` at dispatch (3 KB and 2 KB
 or less), the worktree commit recipe `WORKTREE.md` (2 KB or less) inside a worktree, and the UI
 walkthrough `UI-CHECK.md` (3 KB or less) only when the UI step of the verify runs (`Tests:`
@@ -1392,7 +1393,7 @@ never the spec or stories file.
 `anomaly:review` reviews one diff in a named mode by dispatching the reviewer agents (next
 section), and gives their findings back per axis: one heading per agent, as each agent reported
 them, never merged or re-ranked. The `build` and `conduct` skills call it, and you may too. Its
-text is `plugins/anomaly/skills/review/SKILL.md` (8 KB or less); the per-agent brief it fills,
+text is `plugins/anomaly/skills/review/SKILL.md` (8216 bytes or less); the per-agent brief it fills,
 `BRIEFS.md` (3 KB or less), is loaded at dispatch; its last section is for the main window.
 Its only pre-approved tool is the CLI.
 
@@ -1597,10 +1598,10 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   `anomaly:survey`, it prints `{"hookSpecificOutput": {"hookEventName": "PreToolUse",
   "permissionDecision": "deny", "permissionDecisionReason": "..."}}` for a `tool_input.command`
   that holds, outside quotes: a heredoc `<<` or `<<-` (whatever it feeds, `python3 - <<'EOF'`
-  included), `sed -i`, `tee`, a `>`, `>>`, `>|` or `&>` redirection to anything but `/dev/null`,
-  `curl -o` or `wget -O` (not when the target is `-` or `/dev/null`, attached as in `-qO-` or the next
-  argument: `wget -O - url` and `curl -s -o /dev/null url` write no file). The reason names Write and
-  Edit. Allowed: `2>&1`, `>/dev/null`,
+  included), `sed -i`, `tee`, a `>`, `>>`, `>|`, `&>`, `&>>` or `>&file` redirection to anything
+  but `/dev/null`, `curl -o` or `wget -O` (not when the target is `-` or `/dev/null`, attached as
+  in `-qO-` or the next argument: `wget -O - url` and `curl -s -o /dev/null url` write no file).
+  The reason names Write and Edit. Allowed: `2>&1`, `>/dev/null`,
   `2>/dev/null`, a copy of one stream to another (`>&2`), a here-string `<<<`, a `>` or `<<` inside
   a quoted argument (a `$(...)` or backtick substitution inside double quotes runs, so its body is
   checked as a command), inline code with `-c` or `-e`, pipes and chains. The check returns before it
@@ -2276,7 +2277,8 @@ pipeline (every skill except the four loop skills, its extra docs, the agent fil
 under `docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
-  `SKILL.md` is 8 KB or less (build and conduct: 9 KB) and an agent file is 6 KB or less.
+  `SKILL.md` is 8 KB or less (build: 9229 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
+  file is 6 KB or less.
 - The `allowed-tools` of `build` and `review` is the one CLI pattern, defined once as
   `CLI_PATTERN` in `anomaly_loop/constants.py`, and every call of the CLI in their text uses that
   exact command and is never chained.

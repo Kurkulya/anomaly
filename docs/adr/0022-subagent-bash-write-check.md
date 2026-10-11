@@ -2,7 +2,7 @@
 
 Status: Proposed · Date: 2026-10-11 · Owner: VK · Revisit-by: 2027-01-11
 
-Decision: the plugin adds a second hook beside the ADR-0004 nudge: `PreToolUse` on Bash runs `anomaly.py check subagent-bash`. When the hook input has `agent_id` and the agent is not `anomaly:survey`, the check denies a heredoc, `sed -i`, `tee`, a `>` or `>>` redirection to a file, `curl -o` and `wget -O`. Everything else is allowed.
+Decision: the plugin adds a second hook beside the ADR-0004 nudge: `PreToolUse` on Bash runs `anomaly.py check subagent-bash`. When the hook input has `agent_id` and the agent is not `anomaly:survey`, the check denies a heredoc, `sed -i`, `tee`, a `>`, `>>`, `>|` or `&>` redirection to a file, `curl -o` and `wget -O` (not with the target `-` or `/dev/null`). Everything else is allowed.
 Why: brief text alone did not hold: in 6 build sessions an implementer or test writer wrote files through the shell although its brief forbade it (anomaly implementer-ignored-no-heredoc-rule).
 Revisit: when a subagent needs shell writes the check refuses, or 2027-01-11.
 
@@ -33,3 +33,5 @@ A hook enforces what a brief only asks, and it needs no implementer agent of the
 - [ ] In other projects, a subagent's `cmd > out.txt` is refused and it must use Write. Owner: VK · Revisit: 2027-01-11.
 - [ ] Python starts on every Bash call of every session with the plugin on, because a matcher cannot test `agent_id`. Owner: VK · Revisit: 2027-01-11.
 - [ ] Inline code and chains in subagents stay possible. Owner: VK · Revisit: 2027-01-11.
+- [ ] Deep `"$(` nesting past Python's recursion limit raises RecursionError, which the fail-open catch turns into an allow. Accepted because the hook guards against a model breaking its brief, not against an attacker. Owner: VK · Revisit: 2027-01-11.
+- [ ] Other file-writing commands are not checked: `cp`, `mv`, `dd of=`, `install`, `truncate`, `perl -i`, `awk -i inplace`, `patch` and `git apply`. Owner: VK · Revisit: 2027-01-11.

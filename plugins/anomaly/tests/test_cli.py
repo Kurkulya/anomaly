@@ -906,7 +906,7 @@ class PlanReviewerTest(unittest.TestCase):
         self.assertRegex(item, r'`implement`(?!_)')
 
     def test_both_plan_modes_flag_an_unsettled_rule_pair_as_a_blocker_only_with_a_concrete_case(self):
-        """Calibrate-fixes ticket 04 (AC-13, AC-14, AC-15): one numbered check item per mode doc carries the
+        """Calibrate-fixes-1 ticket 04 (AC-13, AC-14, AC-15): one numbered check item per mode doc carries the
         unsettled-pair rule, the Blocker severity, the one concrete case, and the no-case-no-Blocker line."""
         pairs = {self.SPEC: ('two rules', 'brief', 'stories', 'decisions'),
                  self.TICKETS: ('two tickets', 'its brief')}
@@ -1740,6 +1740,14 @@ class ConductSkillTest(unittest.TestCase):
         self.assertLessEqual(self.SKILL.stat().st_size, self.SKILL_MAX_BYTES)
         self.assertLessEqual(self.KICKOFF.stat().st_size, self.KICKOFF_MAX_BYTES)
         self.assertLessEqual(self.PARALLEL.stat().st_size, self.PARALLEL_MAX_BYTES)
+
+    def test_the_finish_fix_branch_step_sends_a_warm_delta_round_to_every_reviewer_whose_finding_was_fixed(self):
+        """Calibrate-fixes-1 cumulative review (D-11, as the review skill's delta row): after the fix merge."""
+        step = ' '.join(next(line for line in self.text().splitlines() if 'One fix branch off the tip' in line).split())
+        after_merge = step.split('Merge `--no-ff`', 1)[-1]
+        for token in ('delta round', 'whose finding was fixed', 'warm'):
+            with self.subTest(token=token):
+                self.assertIn(token, after_merge)
 
     def test_the_kickoff_doc_is_named_once_and_only_in_the_chip_mode_step(self):
         """AC-60, KICKOFF half: one line of SKILL.md names it, outside the frontmatter, and that line or the
