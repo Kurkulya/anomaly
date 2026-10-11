@@ -67,7 +67,7 @@ VERSION_FIELD = 'Installed version'
 READING_FIELD = 'Reading'                # the agent name of a per-dispatch reading, as check_report reads it
 OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', READING_FIELD, VERSION_FIELD, 'Signature')   # see check_report
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]'
-                        r'|(?i:\bfile://)|(?<![\w\\])\\\\[^\s\\]+\\[^\s\\]'
+                        r'|(?i:\b(?:file|smb|nfs|afp|cifs)://)|(?<![\w\\])\\\\[^\s\\]+\\[^\s\\]'
                         r'|(?<![\w:/])//[^\s/]+/[^\s/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 GENERIC_USERS = frozenset({'root', 'user', 'admin', 'ubuntu', 'runner', 'vscode', 'codespace', 'node', 'docker',
@@ -113,8 +113,8 @@ def check_report(context, fields, environ, label=LABEL):
     repo-layer name (scans.repo_layer_names) in any case, by scans.marker_hits on the text and the names case-folded
     (marker_hits itself and the neutrality test stay case-sensitive: plugin files are text the plugin's own
     author writes, a report holds the user's words), a local path (LOCAL_PATH: `/x/y` or `~/` not right after a
-    letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, a drive `X:\\` or `X:/`, a `file://`
-    link in any case, or a UNC path `\\\\host\\share\\...` or `//host/share/...` with no `scheme:` right before it;
+    letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, a drive `X:\\` or `X:/`, a `file://`,
+    `smb://`, `nfs://`, `afp://` or `cifs://` link in any case, or a UNC path `\\\\host\\share\\...` or `//host/share/...` with no `scheme:` right before it;
     a slash inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash
     command such as `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
