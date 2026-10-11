@@ -370,8 +370,10 @@ def run_declare(args, environ):
     if gate:
         raise RecordError(f'{label}: {anomaly.category} is a workflow category, score {anomaly.score}; {gate}')
     current = anomaly.experiment
+    in_flight = (f'{label}: an experiment is in flight since {anomaly.fixed_by}; verify it (`calibrate verify`, '
+                 'or `calibrate decide`) first')
     if current is not None and not current.result and anomaly.fixed_by.strip():
-        raise RecordError(f'{label}: an experiment is in flight since {anomaly.fixed_by}; verify it (or decide) first')
+        raise RecordError(in_flight)
     if changes_this_plugin(context, anomaly.target) and not args.approved:
         raise RecordError(f'{label}: {anomaly.target} is part of this plugin; change it only after the '
                           "user's explicit yes, then pass --approved")
@@ -409,6 +411,8 @@ def run_declare(args, environ):
     if (current is not None and current.result) or anomaly.fixed_by.strip():
         path = addendum_file(home, anomaly)
         if path is not None and addenda.tagged_line(path, anomaly.signature) is not None:
+            if not addenda.has_verdict(current):
+                raise RecordError(in_flight)
             raise RecordError(f'{label}: {home_relative(home, path)} still holds the line of the last experiment; '
                               f"remove it first with `calibrate drop {anomaly.signature} --reason '<text>'`")
         records.archive_experiment(anomaly)
