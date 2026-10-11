@@ -253,9 +253,9 @@ def plugin_part(context, target, plugin):
     if not target:
         return None
     root = Path(context.plugin_root)
-    qualifier, colon, rest = target.partition(':')   # flags.resolve_target reads a target differently (paths first)
-    if colon and flags.names_this_plugin(context, qualifier, plugin):
-        name = (rest.split() or [''])[0]
+    split = flags.split_target(target)   # flags.resolve_target reads a `<plugin>:` target the same way
+    if split and flags.names_this_plugin(context, split[0], plugin):
+        name = split[1]
         if not privacy.is_identifier(name) or ':' in name:
             return PluginPart(None, False, None)
         skill, agent = unit_of(root, name, False), unit_of(root, name, True)
