@@ -620,7 +620,7 @@ FILE_REDIRECTS = frozenset({'>', '>>', '>|', '&>', '&>>'})
 INPUT_REDIRECTS = frozenset({'<', '<&', '<<<'})
 SHELL_KEYWORDS = frozenset({'!', '{', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'})
 SHELL_WRAPPERS = {'command': '', 'env': 'uCS', 'exec': 'a', 'nice': 'n', 'nohup': '', 'sudo': 'ughpCDRTU', 'time': 'fo',
-                  'timeout': 'sk', 'xargs': 'nIiLPsdEaJ'}   # wrapper -> its short options that take the next word
+                  'timeout': 'sk', 'xargs': 'nILPsdEaJ'}   # wrapper -> its short options that take the next word
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
 NO_FILE_TARGETS = ('-', '/dev/null')

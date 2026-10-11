@@ -1027,7 +1027,7 @@ class SubagentBashVerdictTest(unittest.TestCase):
         """AC-21: the command name is found past `do`, `then`, `!`, `{`, `sudo -u root` and the like."""
         for command in ("for f in *.py; do sed -i 's/a/b/' \"$f\"; done", 'if [ -f x ]; then tee x; fi', '{ tee f; }',
                         '! tee f', 'sudo -u root tee f', 'nice -n 10 tee f', 'xargs -n 1 sed -i s/a/b/',
-                        'timeout 5 tee f', 'sudo tee f', 'FOO=1 sed -i s/a/b/ f'):
+                        'timeout 5 tee f', 'sudo tee f', 'FOO=1 sed -i s/a/b/ f', "xargs -i sed -i 's/a/b/' {}"):
             with self.subTest(command=command):
                 self.assert_denied(command)
 
