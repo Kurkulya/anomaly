@@ -25,8 +25,9 @@ NO_ADDENDA = ('measure',)  # skills that take no addenda file
 STAMP_CHARS = 8
 TAG_OPEN, TAG_SEPARATOR, TAG_CLOSE = '[exp: ', ' · ', ']'   # the tag `[exp: <signature> · <stamp>]`
 TAG_SHAPE = f'{TAG_OPEN}<signature>{TAG_SEPARATOR}<stamp>{TAG_CLOSE}'
-TAGGED = re.compile(rf'.*\S {re.escape(TAG_OPEN)}(?P<signature>{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
-                    rf'(?P<stamp>[0-9a-f]{{{STAMP_CHARS}}}){re.escape(TAG_CLOSE)}')   # a rule, then its tag, as one line
+TAGGED = re.compile(   # a rule, then its tag, as one line
+    rf'(?P<rule>.*\S) {re.escape(TAG_OPEN)}(?P<signature>{SLUG.pattern}){re.escape(TAG_SEPARATOR)}'
+    rf'(?P<stamp>[0-9a-f]{{{STAMP_CHARS}}}){re.escape(TAG_CLOSE)}')
 HEADER = 'Extra rules for {skill}. They add or narrow; the core rules and invariants win on a clash.'
 HAND_OVER = 'add these lines to the brief of `anomaly:{agent}`'
 LOG_HEADING = 'Addenda log'   # the anomaly section that records what happened to its addenda line
