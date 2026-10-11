@@ -128,9 +128,9 @@ class RecheckSectionTest(DigestCase):
     def test_an_addenda_file_whose_skill_or_agent_is_gone_is_listed_naming_the_missing_target(self):
         self.line('gone-skill', 'Ask which repo first.', 'skill-line', self.STALE, result='keep')
         self.line('gone-agent', 'Name the file first.', 'agent-line', self.STALE, agent=True, result='keep')
-        lines = self.section()
-        self.assertTrue(any('gone-skill' in line for line in lines), lines)
-        self.assertTrue(any('gone-agent' in line for line in lines), lines)
+        out = '\n'.join(self.section())
+        self.assertIn('the skill gone-skill is gone from the plugin', out)
+        self.assertIn('the agent gone-agent is gone from the plugin', out)
 
 
 class DigestCommandTest(DigestCase):
