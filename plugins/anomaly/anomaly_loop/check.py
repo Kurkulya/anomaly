@@ -623,8 +623,7 @@ SHELL_WRAPPERS = {'command': '', 'env': 'uCS', 'exec': 'a', 'nice': 'n', 'nohup'
                   'timeout': 'sk', 'xargs': 'nIiLPsdEaJ'}   # wrapper -> its short options that take the next word
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 SED_IN_PLACE = re.compile(r'-[A-Za-z]*i|--in-place')
-CURL_OUTPUT = re.compile(r'-[A-Za-z]*o|-o.+|--output(=.*)?')
-WGET_OUTPUT = re.compile(r'-[A-Za-z]*O|--output-document(=.*)?')
+NO_FILE_TARGETS = ('-', '/dev/null')
 SUBAGENT_BASH_REASON = ('A subagent writes files with the Write and Edit tools, not through the shell ({what}). '
                         'Use Write to create or replace a file and Edit to change one.')
 
@@ -690,6 +689,19 @@ def command_words(words):
     return []
 
 
+def writes_output(args, flag, long_option):
+    """True when `args` of curl or wget name an output file: `-<flag>` (also last in a bundle such as
+    `-qO`) or `long_option`, with a target other than `-` or /dev/null, attached (`-ofile`, `--output=file`)
+    or the next argument."""
+    for index, arg in enumerate(args):
+        found = re.fullmatch(rf'-[A-Za-z]*{flag}(.*)', arg) or re.fullmatch(rf'{long_option}(?:=(.*))?', arg)
+        if found:
+            target = found.group(1) or (args[index + 1] if index + 1 < len(args) else '-')
+            if target not in NO_FILE_TARGETS:
+                return True
+    return False
+
+
 def segment_write(words):
     """What one simple command (its words) writes through the shell, as a short name, or None."""
     words = command_words(words)
@@ -700,9 +712,9 @@ def segment_write(words):
         return 'tee'
     if name == 'sed' and any(SED_IN_PLACE.match(arg) for arg in args):
         return 'sed -i'
-    if name == 'curl' and any(CURL_OUTPUT.fullmatch(arg) for arg in args):
+    if name == 'curl' and writes_output(args, 'o', '--output'):
         return 'curl -o'
-    if name == 'wget' and any(WGET_OUTPUT.match(arg) for arg in args):
+    if name == 'wget' and writes_output(args, 'O', '--output-document'):
         return 'wget -O'
     return None
 

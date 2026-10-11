@@ -1042,6 +1042,18 @@ class SubagentBashVerdictTest(unittest.TestCase):
                 self.assert_allowed(command)
         self.assert_denied('cmd >&f')
 
+    def test_curl_and_wget_output_to_stdout_or_dev_null_is_allowed_and_to_a_file_is_denied(self):
+        """AC-21 Amended: the target `-` or /dev/null, attached or the next argument, writes no file."""
+        for command in ('wget -qO- http://host', 'wget -O - http://host', 'wget -O/dev/null http://host',
+                        "curl -s -o /dev/null -w '%{http_code}' http://host", 'curl -o- http://host',
+                        'curl --output - http://host', 'curl --output=/dev/null http://host'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        for command in ('curl -o f http://host', 'wget -O f http://host', 'wget -qOf http://host',
+                        'curl -sSLo f http://host', 'curl --output f http://host', 'curl --output=f http://host'):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
     def test_a_write_command_name_as_an_argument_is_allowed(self):
         """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
         for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f'):
