@@ -74,8 +74,7 @@ class GhIssueTest(unittest.TestCase):
         self.assertEqual(command[:3], ['gh', 'issue', 'list'])
         self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
         self.assertEqual(command[command.index('--search') + 1], 'in:title "[anomaly:observe]"')   # M3: narrowed
-        if '--state' in command:
-            self.assertEqual(command[command.index('--state') + 1], 'open')
+        self.assertEqual(command[command.index('--state') + 1], 'open')
         self.assertFalse(run.call_args.kwargs.get('shell'))
 
     def test_an_answer_that_is_not_a_list_of_issues_is_an_error(self):
@@ -92,7 +91,9 @@ class GhIssueTest(unittest.TestCase):
         self.assertEqual(command[:3], ['gh', 'issue', 'comment'])
         self.assertIn('12', command)
         self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
-        self.assertTrue('+1 from another user' in command or run.call_args.kwargs.get('input') == '+1 from another user')
+        self.assertEqual(command[command.index('--body-file') + 1], '-')
+        self.assertNotIn('+1 from another user', command)
+        self.assertEqual(run.call_args.kwargs['input'], '+1 from another user')
         self.assertFalse(run.call_args.kwargs.get('shell'))
 
     def test_a_new_issue_is_created_from_a_body_file_and_answers_its_link(self):
@@ -104,8 +105,9 @@ class GhIssueTest(unittest.TestCase):
         self.assertEqual(command[:3], ['gh', 'issue', 'create'])
         self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
         self.assertEqual(command[command.index('--title') + 1], '[anomaly:observe] a')
-        self.assertIn('--body-file', command)
+        self.assertEqual(command[command.index('--body-file') + 1], '-')
         self.assertNotIn('line one\nline two', command)
+        self.assertEqual(run.call_args.kwargs['input'], 'line one\nline two')
         self.assertFalse(run.call_args.kwargs.get('shell'))
 
     def test_a_create_that_prints_no_link_is_an_error(self):
