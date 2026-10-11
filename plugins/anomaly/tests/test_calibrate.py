@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import addenda, calibrate, constants, files, records, trends
+from anomaly_loop import addenda, calibrate, constants, files, index, records, trends
 from tests.fixtures import (NOW, GitFixture, assert_cli_error, context, metrics_row, run_cli, write_anomaly_with,
                             write_build_skills_profile, write_experiment_anomaly, write_metrics_rows, write_text)
 
@@ -692,12 +692,16 @@ class AddendumRemovalTest(CalibrateCase):
         self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
 
     def test_drop_is_refused_while_the_experiment_has_no_result_and_names_verify_and_the_check_date(self):
-        path, _ = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
-        self.experiment('slow-check', 'observe', check_by='2026-10-25')
-        file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'slow-check').read_bytes()
-        assert_cli_error(self, self.drop('slow-check'), 'calibrate verify', '2026-10-25')
-        self.assertEqual(path.read_bytes(), file_before)
-        self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
+        cases = (('blank-result', 'observe', ''), ('inconclusive-result', 'research', 'inconclusive'))
+        for signature, name, result in cases:
+            with self.subTest(signature):   # an inconclusive result is no verdict, like a blank one
+                path, _ = seed_addenda_file(self.home, self.plugin, name, signature)
+                self.experiment(signature, name, check_by='2026-10-25', result=result)
+                file_before = path.read_bytes()
+                record_before = records.anomaly_path(self.home, signature).read_bytes()
+                assert_cli_error(self, self.drop(signature), 'calibrate verify', '2026-10-25')
+                self.assertEqual(path.read_bytes(), file_before)
+                self.assertEqual(records.anomaly_path(self.home, signature).read_bytes(), record_before)
 
     def test_without_git_a_revert_and_a_drop_say_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
         seed_addenda_file(self.home, self.plugin, 'observe', 'reverted-one')
@@ -980,8 +984,11 @@ class CommitTest(unittest.TestCase):
                                      kind='build', fixed_by=f'2026-09-20 · addenda/{name}.md', check_by='2026-10-01',
                                      status='fixed', **fields)
             seeded += [f'anomaly-home/addenda/{name}.md', f'anomaly-home/anomalies/{signature}.md']
-        self.repo.commit(seeded, 'chore: seed', TODAY)
+        index.write_index(self.home, TODAY)
+        self.repo.commit(seeded + ['anomaly-home/INDEX.md'], 'chore: seed', TODAY)
         self.repo.write('README.md', 'edited elsewhere\n')
+        # a revert reopens the anomaly, which the index shows; a drop changes nothing the index shows
+        index_changes = {'reverted-one': ['anomaly-home/INDEX.md'], 'dropped-one': []}
         for signature, name, _, argv in cases:
             with self.subTest(signature):
                 code, out, err = run_cli('calibrate', argv[0], '--home', str(self.home), '--data', str(self.data),
@@ -994,7 +1001,7 @@ class CommitTest(unittest.TestCase):
                 self.assertEqual(self.repo.git('show', '--name-only', '--format=', addendum_commit).split(),
                                  [addendum])
                 self.assertEqual(sorted(self.repo.git('show', '--name-only', '--format=', anomaly_commit).split()),
-                                 ['anomaly-home/INDEX.md', anomaly])
+                                 sorted(index_changes[signature] + [anomaly]))
                 self.assertNotEqual(addendum_commit, anomaly_commit)
                 self.assertEqual(self.repo.status(), [' M README.md'])
 
