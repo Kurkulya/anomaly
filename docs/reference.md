@@ -1394,6 +1394,14 @@ Line numbers in `defects.json` are those of the reviewed state. No fixture file 
 `test*.py`, so `python -m unittest discover` never runs them. The security fixture plants no
 credential, key, token or password value.
 
+Run the bench from the branch build: set `CLAUDE_CODE_PLUGIN_DIRS` to the worktree's
+`plugins/anomaly` when you start the session, so the reviewer agents run live instead of
+emulated.
+
+```
+CLAUDE_CODE_PLUGIN_DIRS=<worktree>/plugins/anomaly claude
+```
+
 `defects.json` is a JSON object with `fixture` (a name), `defects` and `decoys`. A defect has an
 `id`, a `min_severity` (`Blocker`, `High` or `Medium`) and `places`
 (`{"file": <path>, "lines": [first, last]}`), a `rule` id, or both. It may have `category` (an
