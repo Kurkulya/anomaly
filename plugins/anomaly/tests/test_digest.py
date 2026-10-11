@@ -127,6 +127,12 @@ class RecheckSectionTest(DigestCase):
         self.assertTrue(any('in-flight' in line and '2026-10-25' in line for line in lines), lines)
         self.assertNotIn('calibrate drop', '\n'.join(lines))
 
+    def test_a_target_that_cannot_be_read_is_listed_with_why_and_does_not_stop_the_section(self):
+        self.line('observe', 'Ask which repo first.', 'stale-one', self.STALE, result='keep')
+        with mock.patch.object(addenda, 'stamp', side_effect=PermissionError(13, 'Permission denied')):
+            out = '\n'.join(self.section())
+        self.assertIn('the skill observe not read (Permission denied)', out)
+
     def test_an_addenda_file_whose_skill_or_agent_is_gone_is_listed_naming_the_missing_target(self):
         write_text(self.plugin / 'skills' / 'gone-skill' / 'notes.md', 'left over\n')   # a folder without SKILL.md
         self.line('gone-skill', 'Ask which repo first.', 'skill-line', self.STALE, result='keep')
