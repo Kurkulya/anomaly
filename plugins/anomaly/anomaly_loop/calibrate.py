@@ -6,11 +6,14 @@ module ranks, records and judges, so the numbers never depend on the conversatio
   effort   set the effort of one or more anomalies (`--set signature=S`)
   declare  write the experiment BEFORE the change: expect, one metric, one guard, check_by, kind,
            and for a switch-over the new skill (ADR-0013)
-  fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed
+  fix      record the change AFTER it landed: `fixed_by` = `YYYY-MM-DD · <ref>`, status fixed; with
+           `--addendum` the CLI makes the change itself, a line in an addenda file in home (ADR-0023); refused
+           when a plugin checkout is set (ADDENDUM_CHECKOUT_SET)
   verify   judge a due experiment from the numbers and write its result
   decide   the user's result for an experiment the numbers could not judge
   close    mark anomalies wontfix (stale ones)
   merge    fold a near-duplicate into the anomaly that stays
+  drop     remove the addenda line of an experiment that has a verdict, keep the result, log why
 
 Batches. Open and reopened problems are grouped: a `repo:` or `plugin:` scope is one batch;
 any other scope (`global` and the like) is split by target, and problems without a target share one
@@ -20,7 +23,12 @@ workflow-category problem can be fixed only with score WORKFLOW_MIN_SCORE or mor
 highest impact (workflow_gate): below that it is shown
 as waiting and adds nothing to the sum. A problem whose target already had a reverted experiment
 says so, and a target that a win with 2 or more sightings is about is marked as protected
-from removal (flags.protected_by_win).
+from removal (flags.protected_by_win). With no plugin checkout (gitrepo.plugin_repo is None), a problem
+whose target is a skill or agent of this plugin names its addenda file as the fix home (fix_home); a
+skill in addenda.NO_ADDENDA has none, a `<plugin>:...` that names no skill or agent has none (NO_PART), and
+the plugin's other code and docs are an upstream defect. The plan
+then lists one offer line per upstream report not yet sent (upstream_offers): a kept addenda line, and
+a problem on plugin code or docs, or on a skill that takes no addenda, that `upstream defect` takes.
 
 Declaring (ADR-0002). An experiment is declared before the change: one metric, one guard from
 QUALITY_GUARDS, and `declared_on` = today; `fix` refuses a fix dated before it, and sets a blank
@@ -29,20 +37,24 @@ any case, or a path inside the plugin folder or its checkout) needs --approved.
 
 The metric registry and the verdict live in verdict.py.
 """
-import copy
+import sys
 from collections import Counter, namedtuple
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import digest, flags, gitrepo, observe, privacy, profile, records, trends, verdict
+from . import addenda, digest, flags, gitrepo, observe, privacy, profile, records, scans, trends, upstream, verdict
 from .constants import (BASELINE_DAYS, COMMIT_SCOPE, EFFORTS, EXPERIMENT_CHECK_DAYS, EXPERIMENT_CHECK_SESSIONS,
-                        GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS, SIGHTING_MAX_CHARS,
-                        WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
+                        GUARD_HELP, IMPACT_RANGE, QUALITY_GUARDS, SESSION_KINDS,
+                        SIGHTING_MAX_CHARS, WORKFLOW_CATEGORIES, WORKFLOW_MIN_SCORE)
 from .files import RecordError
 
 MERGED_HEADING = 'Merged'
 WHOLE_SCOPES = ('repo:', 'plugin:')   # scopes that are one batch each; any other scope is split by target
 UNTARGETED = 'untargeted'
+UPSTREAM_DEFECT = 'upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream'
+NO_PART = 'fix home: none, names no skill or agent of the plugin'
+UPSTREAM_HEADING = "## Upstream reports not yet sent (offer each; send one only after the user's yes)"
+ADDENDUM_CHECKOUT_SET = 'a plugin checkout is set: change the skill there'
 COMMIT_PREFIX = f'chore({COMMIT_SCOPE}): calibrate '
 
 
@@ -105,7 +117,8 @@ def tried_before(anomalies, anomaly):
             if other.signature == anomaly.signature or (target and other.target.strip() == target)]
 
 
-def problem_line(context, anomaly):
+def problem_line(context, anomaly, plugin):
+    """The plan's line of one problem; `plugin` is gitrepo.plugin_repo's answer."""
     marks = []
     gate = workflow_gate(anomaly)
     if gate:
@@ -119,9 +132,45 @@ def problem_line(context, anomaly):
     if wins:
         marks.append(f'protected: a win with {wins} sightings is about this target; never remove it '
                      'without an explicit override')
+    home = fix_home(context, target, plugin)
+    if home:
+        marks.append(home)
     head = (f'  - {anomaly.score} {anomaly.signature} · {anomaly.category} · effort {anomaly.effort or "?"}'
             f' · {anomaly.target or "no target"}')
     return ' · '.join([head] + marks)
+
+
+def upstream_offer(context, anomaly, action, environ):
+    """The offer line `upstream: <action> <signature>` when `upstream <action>` would take the anomaly's report
+    (upstream.checked_report, its outside-text check included) and it was not sent yet (upstream.sent_lines); None
+    when it is refused or sent. A file the report needs that cannot be read gives a `warning:` line instead, so the
+    plan still prints; an error that names no file is named by the anomaly's addenda file (addenda.addendum_file)."""
+    if upstream.sent_lines(anomaly):
+        return None
+    try:
+        upstream.checked_report(context, anomaly, action, environ)
+    except RecordError:
+        return None
+    except OSError as error:
+        path = error.filename or addenda.addendum_file(context.home, anomaly) or 'a file'
+        return f'warning: {path}: {addenda.not_read(path, error)}; no {action} offer for {anomaly.signature}'
+    return f'upstream: {action} {anomaly.signature}'
+
+
+def upstream_offers(context, found, plugin, environ):
+    """The plan's offer lines with no plugin checkout (`plugin` is gitrepo.plugin_repo's answer; with one there are
+    none): upstream_offer of `tuning` for each anomaly, then of `defect` for each problem of the batches `found`
+    whose target is a part of the plugin with no addenda file to fix it in: plugin code or docs (UPSTREAM_DEFECT), or
+    a skill that takes no addenda (takes_no_addenda), which keeps its fix-home mark too."""
+    if plugin is not None:
+        return []
+    parts = ((problem, addenda.plugin_part(context, problem.target.strip(), plugin))
+             for batch in found for problem in batch.problems)
+    problems = [problem for problem, part in parts
+                if part is not None and (part.unit is None or takes_no_addenda(part))]
+    offers = [upstream_offer(context, anomaly, 'tuning', environ) for anomaly in context.anomalies]
+    offers += [upstream_offer(context, anomaly, 'defect', environ) for anomaly in problems]
+    return [offer for offer in offers if offer is not None]
 
 
 HOUSEKEEPING = (flags.near_duplicates, flags.stale, trends.experiments_due_section, flags.unused_skills)
@@ -133,18 +182,24 @@ def recent_sessions_by_kind(context):
     return Counter(trends.context_session_kind(context, row) for _, row in trends.rows_in_window(context, since))
 
 
-def plan_lines(context):
+def plan_lines(context, environ=None):
+    """The plan's lines; `environ` is the environment the upstream offers check the OS user name in (none: no
+    user name)."""
     lines = ['## Housekeeping']
     tidy = digest.render(context, HOUSEKEEPING)
     lines += [f'#{line}' if line.startswith('## ') else line for line in tidy] or ['- nothing to tidy']
     lines += ['', '## Batches (summed score of the problems that can be fixed now)']
     found = batches(context)
+    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
     for number, batch in enumerate(found, start=1):
         count = flags.plural(len(batch.problems), 'problem')
         lines.append(f'{number}. {batch.scope} · score {batch.total} · {count}')
-        lines += [problem_line(context, a) for a in batch.problems]
+        lines += [problem_line(context, a, plugin) for a in batch.problems]
     if not found:
         lines.append('- no open problems')
+    offers = upstream_offers(context, found, plugin, environ or {})
+    if offers:
+        lines += ['', UPSTREAM_HEADING] + offers
     counts = recent_sessions_by_kind(context)
     lines += ['', 'metrics: ' + ', '.join(verdict.METRIC_NAMES), 'guards: ' + ', '.join(QUALITY_GUARDS),
               f'sessions in the last {BASELINE_DAYS} days: '
@@ -153,13 +208,6 @@ def plan_lines(context):
 
 
 # ---------- writing ----------
-
-def find(anomalies, signature):
-    anomaly = anomalies.get(signature)
-    if anomaly is None:
-        raise RecordError(f'no anomaly {signature!r} in home')
-    return anomaly
-
 
 def check_date(label, value, today):
     if not records.is_date(value):
@@ -177,18 +225,34 @@ def only_one(values, what):
 
 
 def changes_this_plugin(context, target):
-    """True when the target is this plugin: a path inside the plugin folder or its checkout's plugin
-    folder (flags.target_path), or `<plugin name>:...` (flags.names_this_plugin)."""
-    target = target.strip()
-    if not target:
+    """True when the target is this plugin (addenda.plugin_part)."""
+    if not target.strip():
         return False
-    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
-    if flags.is_path(target):
-        found = flags.target_path(context, target, plugin)
-        folders = [Path(context.plugin_root)] + ([Path(plugin[1])] if plugin else [])
-        return found is not None and any(found.resolve().is_relative_to(f.resolve()) for f in folders)
-    qualifier, colon, _ = target.rpartition(':')
-    return bool(colon) and flags.names_this_plugin(context, qualifier, plugin)
+    return addenda.plugin_part(context, target, gitrepo.plugin_repo(context.plugin_root, context.profile)) is not None
+
+
+def takes_no_addenda(part):
+    return not part.agent and part.name in addenda.NO_ADDENDA
+
+
+def fix_home(context, target, plugin):
+    """The plan's fix-home mark of a target with no plugin checkout (ADR-0023), or None: the addenda file
+    (relative to home), or why there is none: UPSTREAM_DEFECT for plugin code or docs, NO_PART for a
+    `<plugin>:...` that names no skill or agent (upstream.part_word refuses it, so no report has a title for it).
+    With a checkout (`plugin` set) there is no mark."""
+    part = None if plugin is not None else addenda.plugin_part(context, target, plugin)
+    if part is None:
+        return None
+    if part.unit is None:
+        try:
+            upstream.part_word(context, target)
+        except RecordError:
+            return NO_PART
+        return UPSTREAM_DEFECT
+    if takes_no_addenda(part):
+        return f'fix home: none, {part.name} takes no addenda'
+    path = addenda.addendum_path(context.home, part.name, part.agent)
+    return f'fix home: {addenda.home_relative(context.home, path)}'
 
 
 def switch_over_text(kind, skill):
@@ -199,10 +263,66 @@ def switch_over_text(kind, skill):
             'in neither')
 
 
-def writable(context):
-    """signature -> Anomaly from a strict Context, for a command that reads the context and then
-    writes: home is read once, and the records are copied so the context itself is never changed."""
-    return {a.signature: copy.deepcopy(a) for a in context.anomalies}
+Addendum = namedtuple('Addendum', 'path unit line')   # the addenda file, the skill folder or agent file, the rule
+
+
+def checked_addendum(context, anomaly, label, line, environ):
+    """The addendum `fix --addendum` writes for this anomaly, after its checks: no plugin checkout is set
+    (gitrepo.plugin_repo; with one the skill itself is changed there), the target is one skill (not one in
+    addenda.NO_ADDENDA) or agent of this plugin, and the line is one clean line (privacy.check_text) of printable
+    characters only (upstream.printable) that no live deny rule fully matches (scans.deny_regex)."""
+    target = anomaly.target.strip()
+    plugin = gitrepo.plugin_repo(context.plugin_root, context.profile)
+    if plugin is not None:
+        raise RecordError(f'{label}: {ADDENDUM_CHECKOUT_SET}')
+    part = addenda.plugin_part(context, target, plugin)
+    if part is None or part.unit is None:
+        raise RecordError(f'{label}: an addendum adds to one skill or agent of this plugin; the target '
+                          f'{target or "(none)"} is not `<plugin>:<skill>`, `<plugin>:<agent>` or a path inside one '
+                          'skill folder or agent file')
+    if takes_no_addenda(part):
+        raise RecordError(f'{label}: {part.name} takes no addenda')
+    if not line.strip():
+        raise RecordError(f'{label}: --addendum is empty; give the rule in one line')
+    privacy.check_text(label, 'addendum', line, SIGHTING_MAX_CHARS)
+    if upstream.printable(line) != line:
+        raise RecordError(f'{label}: the addendum holds a character that is not printable (a control character or '
+                          'a line or paragraph separator); write the rule as one plain line')
+    line = line.strip()
+    for rule in scans.deny_rules(scans.settings_files(environ, sys.platform, Path.home())):
+        regex = scans.deny_regex(rule)
+        if regex is not None and regex.fullmatch(line):
+            raise RecordError(f'{label}: the addendum is a whole command that the deny rule {rule} denies; '
+                              'write the rule in words')
+    return Addendum(addenda.addendum_path(context.home, part.name, part.agent), part.unit, line)
+
+
+def check_record(anomaly):
+    """Validate the changed anomaly record as observe.write_anomalies does, before an addenda file changes, so a
+    record that cannot be saved leaves the addenda file as it was."""
+    problems = records.validate_anomaly(anomaly)
+    if problems:
+        raise RecordError(f'anomaly {anomaly.signature}: ' + '; '.join(problems))
+
+
+def write_addendum(home, anomaly, addendum):
+    """Append the tagged line to its addenda file and commit that file alone; returns the lines to print.
+    The fixed anomaly record is validated first (check_record)."""
+    check_record(anomaly)
+    tagged = addenda.append_line(addendum.path, addendum.line, anomaly.signature, addenda.stamp(addendum.unit))
+    return [f'addendum: {tagged}',
+            observe.commit_home(home, [addendum.path], COMMIT_PREFIX + f'addendum for {anomaly.signature}')]
+
+
+def remove_addendum(home, anomaly, path):
+    """Remove the anomaly's tagged line from the addenda file `path` and commit that file alone; returns the lines
+    to print, [] when the file holds no such line. The changed anomaly record is validated first (check_record)."""
+    check_record(anomaly)
+    removed = addenda.remove_line(path, anomaly.signature)
+    if removed is None:
+        return []
+    return [f'removed: {removed}',
+            observe.commit_home(home, [path], COMMIT_PREFIX + f'remove the addendum of {anomaly.signature}')]
 
 
 # ---------- the subcommands ----------
@@ -210,20 +330,21 @@ def writable(context):
 def run_plan(args, environ):
     context = digest.context_from_args(args, environ)
     message = profile.missing_message(context.profile)
-    lines = ([message] if message else []) + [f'profile file: {context.profile.path}', ''] + plan_lines(context)
+    lines = (([message] if message else []) + [f'profile file: {context.profile.path}', '']
+             + plan_lines(context, environ))
     print('\n'.join(lines))
     return 0
 
 
 def run_effort(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, anomalies = context.home, writable(context)
+    home, anomalies = context.home, addenda.writable(context)
     changed = []
     for pair in args.set:
         signature, equals, effort = pair.partition('=')
         if not equals or effort not in EFFORTS:
             raise RecordError(f'--set {pair!r}: write signature=effort, the effort one of {", ".join(EFFORTS)}')
-        find(anomalies, signature).effort = effort
+        addenda.find(anomalies, signature).effort = effort
         changed.append(signature)
     print('\n'.join(f'effort: {s} is {anomalies[s].effort}' for s in dict.fromkeys(changed)))
     print(observe.save_anomalies(home, args.today, anomalies, changed, COMMIT_PREFIX + 'set effort'))
@@ -233,8 +354,8 @@ def run_effort(args, environ):
 def run_declare(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
     home, today = context.home, args.today
-    anomalies = writable(context)
-    anomaly = find(anomalies, args.signature)
+    anomalies = addenda.writable(context)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'experiment for {anomaly.signature}'
     if anomaly.kind != 'problem':
         raise RecordError(f'{label}: only a problem gets a fix; {anomaly.signature} is a {anomaly.kind}')
@@ -244,8 +365,10 @@ def run_declare(args, environ):
     if gate:
         raise RecordError(f'{label}: {anomaly.category} is a workflow category, score {anomaly.score}; {gate}')
     current = anomaly.experiment
+    in_flight = (f'{label}: an experiment is in flight since {anomaly.fixed_by}; verify it (`calibrate verify`, '
+                 'or `calibrate decide`) first')
     if current is not None and not current.result and anomaly.fixed_by.strip():
-        raise RecordError(f'{label}: an experiment is in flight since {anomaly.fixed_by}; verify it (or decide) first')
+        raise RecordError(in_flight)
     if changes_this_plugin(context, anomaly.target) and not args.approved:
         raise RecordError(f'{label}: {anomaly.target} is part of this plugin; change it only after the '
                           "user's explicit yes, then pass --approved")
@@ -281,6 +404,13 @@ def run_declare(args, environ):
         anomaly.effort = args.effort
     earlier = tried_before(anomalies.values(), anomaly)
     if (current is not None and current.result) or anomaly.fixed_by.strip():
+        path = addenda.addendum_file(home, anomaly)
+        if path is not None and addenda.tagged_line(path, anomaly.signature) is not None:
+            if not addenda.has_verdict(current):
+                raise RecordError(in_flight)
+            held = addenda.home_relative(home, path)
+            raise RecordError(f'{label}: {held} still holds the line of the last experiment; '
+                              f"remove it first with `calibrate drop {anomaly.signature} --reason '<text>'`")
         records.archive_experiment(anomaly)
     anomaly.experiment = records.Experiment(expect=expect, metric=metric, guard=guard, kind=kind, skill=skill,
                                             declared_on=today.isoformat(), check_by=check_by)
@@ -316,8 +446,8 @@ def run_declare(args, environ):
 
 def run_fix(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, today, anomalies = context.home, args.today, writable(context)
-    anomaly = find(anomalies, args.signature)
+    home, today, anomalies = context.home, args.today, addenda.writable(context)
+    anomaly = addenda.find(anomalies, args.signature)
     label = f'fix for {anomaly.signature}'
     experiment = anomaly.experiment
     if experiment is None or experiment.result:
@@ -338,11 +468,14 @@ def run_fix(args, environ):
     if day < date.fromisoformat(experiment.declared_on):
         raise RecordError(f'{label}: --date {day} is before the experiment was declared '
                           f'({experiment.declared_on}); a fix is declared before the change')
-    privacy.check_text(label, 'ref', args.ref.strip(), SIGHTING_MAX_CHARS)
-    anomaly.fixed_by = records.fixed_by_text(day, args.ref)
+    addendum = None if args.addendum is None else checked_addendum(context, anomaly, label, args.addendum, environ)
+    ref = args.ref if addendum is None else addenda.home_relative(home, addendum.path)
+    privacy.check_text(label, 'ref', ref.strip(), SIGHTING_MAX_CHARS)
+    anomaly.fixed_by = records.fixed_by_text(day, ref)
     anomaly.status = 'fixed'
     if not records.is_date(experiment.check_by):
         experiment.check_by = (day + timedelta(days=EXPERIMENT_CHECK_DAYS)).isoformat()
+    written = [] if addendum is None else write_addendum(home, anomaly, addendum)
     if experiment.skill:
         lines = [f'fixed: {anomaly.signature} · fixed_by {anomaly.fixed_by} · due after '
                  f'{EXPERIMENT_CHECK_SESSIONS} {experiment.skill} sessions (the check date alone does not make a '
@@ -352,20 +485,25 @@ def run_fix(args, environ):
                  + (f' or after {EXPERIMENT_CHECK_SESSIONS} {experiment.kind} sessions' if experiment.kind else '')]
     lines.append(observe.save_anomalies(home, today, anomalies, [anomaly.signature],
                                         COMMIT_PREFIX + f'fix {anomaly.signature}'))
-    print('\n'.join(lines))
+    print('\n'.join(written + lines))
     return 0
 
 
-def write_result(anomaly, result, reason):
+def write_result(home, anomaly, result, reason):
+    """Write the experiment's result; a revert also reopens the anomaly and removes its line from the addenda file
+    its fix names (remove_addendum). Returns the lines to print."""
     anomaly.experiment.result = result
     anomaly.experiment.reason = reason
-    if result == 'revert':
-        anomaly.status = 'reopened'
+    if result != 'revert':
+        return []
+    anomaly.status = 'reopened'
+    path = addenda.addendum_file(home, anomaly)
+    return [] if path is None else remove_addendum(home, anomaly, path)
 
 
 def run_verify(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    anomalies = writable(context)
+    anomalies = addenda.writable(context)
     seen = next((a for a in context.anomalies if a.signature == args.signature), None)
     if seen is None:
         raise RecordError(f'no anomaly {args.signature!r} in home')
@@ -373,11 +511,10 @@ def run_verify(args, environ):
     if reason is None:
         raise RecordError(f'the experiment of {seen.signature} is not due')
     found = verdict.verdict(context, seen)
-    roles = ('primary', 'guard', 'time before tokens')
     lines = [f'verify: {seen.signature} ({reason})']
     if seen.experiment.skill:
         lines.append(f'switch-over: {switch_over_text(seen.experiment.kind, seen.experiment.skill)}')
-    lines += [verdict.reading_line(r, role) for r, role in zip(found.readings, roles)]
+    lines += verdict.reading_lines(found)
     if found.fall_backs is not None:
         lines.append(f'- fall-backs: {found.fall_backs} (in neither side)')
     if found.no_factor:
@@ -392,16 +529,16 @@ def run_verify(args, environ):
     lines.append(f'result: {found.result} ({found.reason})')
     anomaly = anomalies[seen.signature]
     if found.result != 'inconclusive':
-        write_result(anomaly, found.result, found.reason)
+        removed = write_result(context.home, anomaly, found.result, found.reason)
         reopened = '; the anomaly is reopened' if found.result == 'revert' else ''
-        lines.append(f'written: result {found.result}{reopened}')
+        lines += [f'written: result {found.result}{reopened}'] + removed
     elif reason == trends.DUE_FOR_DECISION:
         lines.append('still inconclusive after the moved check date: the user decides '
                      f'(`calibrate decide --signature {seen.signature} --result keep|revert`)')
         print('\n'.join(lines))
         return 0
     else:
-        write_result(anomaly, 'inconclusive', found.reason)
+        write_result(context.home, anomaly, 'inconclusive', found.reason)
         anomaly.experiment.check_by = (args.today + timedelta(days=EXPERIMENT_CHECK_DAYS)).isoformat()
         lines.append(f'written: result inconclusive; check date moved once, to {anomaly.experiment.check_by}')
     lines.append(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
@@ -421,15 +558,16 @@ def measurable(anomaly):
 
 def run_decide(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    anomalies = writable(context)
-    anomaly = find(anomalies, args.signature)
+    anomalies = addenda.writable(context)
+    anomaly = addenda.find(anomalies, args.signature)
     reason = trends.experiment_due(context, anomaly)
     if reason is None:
         raise RecordError(f'the experiment of {anomaly.signature} is not due')
     if reason != trends.DUE_FOR_DECISION and measurable(anomaly):
         raise RecordError(f'the numbers can still judge {anomaly.signature}: run `calibrate verify` first')
-    write_result(anomaly, args.result, 'decided by the user')
-    print(f'decided: {anomaly.signature} result {args.result}' + ('; reopened' if args.result == 'revert' else ''))
+    removed = write_result(context.home, anomaly, args.result, 'decided by the user')
+    print('\n'.join([f'decided: {anomaly.signature} result {args.result}'
+                     + ('; reopened' if args.result == 'revert' else '')] + removed))
     print(observe.save_anomalies(context.home, args.today, anomalies, [anomaly.signature],
                                  COMMIT_PREFIX + f'decide {anomaly.signature}'))
     return 0
@@ -437,9 +575,9 @@ def run_decide(args, environ):
 
 def run_close(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, anomalies = context.home, writable(context)
+    home, anomalies = context.home, addenda.writable(context)
     for signature in args.signature:
-        anomaly = find(anomalies, signature)
+        anomaly = addenda.find(anomalies, signature)
         if not anomaly.active:
             raise RecordError(f'anomaly {signature} is already {anomaly.status}')
         anomaly.status = 'wontfix'
@@ -451,8 +589,8 @@ def run_close(args, environ):
 
 def run_merge(args, environ):
     context = digest.context_from_args(args, environ, strict=True)
-    home, anomalies = context.home, writable(context)
-    kept, folded = find(anomalies, args.into), find(anomalies, args.source)
+    home, anomalies = context.home, addenda.writable(context)
+    kept, folded = addenda.find(anomalies, args.into), addenda.find(anomalies, args.source)
     if kept.signature == folded.signature or kept.kind != folded.kind or not (kept.active and folded.active):
         raise RecordError('merge needs two different open or reopened anomalies of the same kind')
     merged = records.merge_anomalies(kept, folded)
@@ -463,6 +601,33 @@ def run_merge(args, environ):
     print(f'merged: {folded.signature} into {kept.signature} (seen {kept.occurrences} times, score {kept.score})')
     print(observe.save_anomalies(home, args.today, anomalies, [kept.signature, folded.signature],
                                  COMMIT_PREFIX + f'merge {folded.signature} into {kept.signature}'))
+    return 0
+
+
+def run_drop(args, environ):
+    context = digest.context_from_args(args, environ, strict=True)
+    home, today, anomalies = context.home, args.today, addenda.writable(context)
+    anomaly = addenda.find(anomalies, args.signature)
+    label = f'drop for {anomaly.signature}'
+    path = addenda.addendum_file(home, anomaly)
+    if path is None or addenda.tagged_line(path, anomaly.signature) is None:
+        raise RecordError(f'{label}: no addenda line is tagged with {anomaly.signature} in the file its fix names '
+                          f'({anomaly.fixed_by or "none"})')
+    experiment = anomaly.experiment
+    if not addenda.has_verdict(experiment):
+        check_by = (experiment.check_by if experiment else '') or '?'
+        raise RecordError(f'{label}: the experiment has no verdict yet; an experiment ends with a verdict, so judge '
+                          f'it with `calibrate verify` once its check date {check_by} has come')
+    reason = args.reason.strip()
+    if not reason:
+        raise RecordError(f'{label}: --reason is empty; say why the line goes, in one line')
+    privacy.check_text(label, 'reason', reason, SIGHTING_MAX_CHARS)
+    addenda.log_line(anomaly, f'dropped {today.isoformat()} · {reason}')
+    lines = remove_addendum(home, anomaly, path)
+    lines.append(f'dropped: {anomaly.signature}; the result {experiment.result} stays')
+    lines.append(observe.save_anomalies(home, today, anomalies, [anomaly.signature],
+                                        COMMIT_PREFIX + f'drop the addendum of {anomaly.signature}'))
+    print('\n'.join(lines))
     return 0
 
 
@@ -495,7 +660,10 @@ def register(commands, common):
                          help="only after the user's explicit yes to changing this plugin")
     fix = action('fix', run_fix, 'record the change after it landed')
     fix.add_argument('--signature', required=True)
-    fix.add_argument('--ref', required=True, help='the commit or file that holds the change')
+    change = fix.add_mutually_exclusive_group(required=True)
+    change.add_argument('--ref', help='the commit or file that holds the change')
+    change.add_argument('--addendum', help="the rule line to append to the target skill's or agent's addenda file "
+                                           'in home; that file becomes the ref')
     fix.add_argument('--date', help='the day it landed (default today)')
     verify = action('verify', run_verify, 'judge a due experiment and write its result')
     verify.add_argument('--signature', required=True)
@@ -507,4 +675,8 @@ def register(commands, common):
     merge = action('merge', run_merge, 'fold a near-duplicate into the anomaly that stays')
     merge.add_argument('--into', required=True, help='the anomaly that stays')
     merge.add_argument('--from', dest='source', required=True, help='the anomaly folded in (becomes wontfix)')
+    drop = action('drop', run_drop, 'remove the addenda line of an experiment that has a verdict; the result stays')
+    drop.add_argument('signature', help='the experiment whose line goes')
+    drop.add_argument('--reason', required=True, help="why the line goes, one line; logged under the anomaly's "
+                                                      f'## {addenda.LOG_HEADING}')
 

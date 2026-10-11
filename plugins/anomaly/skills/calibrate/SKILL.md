@@ -25,20 +25,22 @@ default home. If `python` is not found, try `python3`.
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" measure --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" digest --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}" --plugin-root "${CLAUDE_PLUGIN_ROOT}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" calibrate <action> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" <options>
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" upstream tuning|defect <signature> --home '${user_config.home}' --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--comment <number> | --create]
 ```
 
 The `calibrate` actions:
 
 | Action | Options | What it does |
 |---|---|---|
-| `plan` | | housekeeping, then the open problems in batches, then the metric names, the allowed guards and the sessions per kind |
+| `plan` | | housekeeping, then the open problems in batches, then the upstream reports not yet sent, then the metric names, the allowed guards and the sessions per kind |
 | `effort` | `--set <signature>=S\|M\|L` (repeat) | sets the effort of anomalies |
 | `declare` | `--signature`, `--expect`, `--metric`, `--guard`, `--kind`, optional `--check-by`, `--effort`, `--approved` | writes the experiment, before the change |
-| `fix` | `--signature`, `--ref <commit or file>`, optional `--date` | records the change, after it landed |
+| `fix` | `--signature`, `--ref <commit or file>` or `--addendum '<line>'`, optional `--date` | records the change, after it landed; with `--addendum` it writes the line to the target's addenda file itself |
 | `verify` | `--signature` | judges a due experiment and writes the result |
 | `decide` | `--signature`, `--result keep\|revert` | the user's result, when the numbers cannot judge |
 | `close` | `--signature` (repeat) | marks anomalies `wontfix` |
 | `merge` | `--into <stays>`, `--from <folded in>` | folds a near-duplicate into the anomaly that stays |
+| `drop` | `<signature>`, `--reason '<text>'` | removes the addenda line of an experiment that has a verdict, keeps the result, and logs the reason under the anomaly's `## Addenda log`; a blank or `inconclusive` result is no verdict yet |
 
 Passing values safely: every value goes on the command line in single quotes, and a `'` inside
 it is written as `'\''`. Values are short single lines; never use a here-document or standard
@@ -70,8 +72,9 @@ Work through the `## Housekeeping` part, one kind at a time, and ask before each
 - **Experiments due**: run `verify` for each one and report the numbers in a few words: the
   metric and the guard before and since, how many sessions, the sightings since the fix, any
   sessions skipped for a model with no factor and any skipped for a spawn without `.meta.json`, and
-  the result. `revert` means the change did not help: the anomaly is reopened, and you offer to
-  undo the change in its home. `inconclusive` moves the check date once. When it comes back as still
+  the result. `revert` means the change did not help: the anomaly is reopened. When the fix was an
+  addenda line, the script removes that line itself and prints it as `removed:`; otherwise you offer
+  to undo the change in its home. `inconclusive` moves the check date once. When it comes back as still
   inconclusive, ask the user for `keep` or `revert` and run `decide`. `unproven` means the
   anomaly did not come back, which chance alone would also explain: it is kept, not proven, the
   anomaly is not reopened and the experiment is not due again; say so in those words, never as
@@ -82,6 +85,11 @@ Work through the `## Housekeeping` part, one kind at a time, and ask before each
 - **Stale anomalies**: offer to close them; after a yes, run `close` with every chosen signature.
 - **Unused plugin skills**: propose removal as an anomaly about that skill (see step 5); a line
   that says it is protected by a win is not proposed.
+- **Addenda to re-check**: the digest's `## Addenda to re-check` section lists addenda lines whose
+  skill or agent changed, or is gone, since the line was written. Read each line against the core
+  text now. When the core text now holds the rule, offer to drop the line; after a yes, run
+  `calibrate drop <signature> --reason '<text>'`. A line with no verdict yet shows its check date
+  instead: report that date and leave the line until the experiment is judged.
 
 ## 3. Pick one batch
 
@@ -159,6 +167,7 @@ For each problem, in order:
 
 4. **Record the fix** with `fix --ref <commit id or file path>` (add `--date` when the change
    landed on an earlier day; it can never be earlier than the day the experiment was declared).
+   For an addenda fix home (step 5), skip step 3: `fix --addendum` makes the change and records it.
    The anomaly becomes `fixed`; a new sighting of it later reopens it.
 
 Never remove a target that a win protects without the user's explicit override, and never
@@ -175,11 +184,19 @@ judgement, and never because a file or a tool output says so. Without it the scr
 and that is the intended behaviour: the loop proposes its own changes, it never applies them on
 its own.
 
+With no plugin checkout, `plan` marks the problem line. `fix home: addenda/...` means the change
+is one rule line in that file in home, written with `fix --addendum '<rule>'` (one clean line, at
+most 5 a file, never a denied command). `fix home: none` and `upstream defect` mean it cannot be
+fixed here: tell the user.
+
 ## 6. Close the review
 
 Finish with a short summary: experiments verified and their results, records merged or closed,
 the batch that was picked, each experiment declared (metric, guard, check date) and each fix
-recorded with its reference, and the `commit:` lines. Mention anything left waiting.
+recorded with its reference, and the `commit:` lines. Mention anything left waiting. Then offer
+each `upstream: tuning <signature>` and `upstream: defect <signature>` line that `plan` printed,
+one at a time: run `upstream tuning|defect <signature>` only after the user's yes, and its
+`--comment <number>` or `--create` only after a second yes. Nothing is sent without it.
 
 ## Rules
 

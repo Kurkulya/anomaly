@@ -1,10 +1,14 @@
+import contextlib
+import json
+import re
 import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest import mock
 
-from anomaly_loop import calibrate, constants, records, trends
-from tests.fixtures import (NOW, GitFixture, context, metrics_row, run_cli, write_anomaly_with,
+from anomaly_loop import addenda, calibrate, constants, files, index, records, trends
+from tests.fixtures import (NOW, GitFixture, assert_cli_error, context, metrics_row, run_cli, write_anomaly_with,
                             write_build_skills_profile, write_experiment_anomaly, write_metrics_rows, write_text)
 
 TODAY = NOW.date()
@@ -21,6 +25,26 @@ def spread(centre, n):
     if isinstance(centre, (list, tuple)):
         return list(centre)
     return [centre * (1 + SPREAD * (i - (n - 1) / 2)) for i in range(n)]
+
+
+def no_managed_settings(test):
+    """run_cli runs in-process, so no managed settings file of the host may add a deny rule to the test."""
+    patch = mock.patch.dict('anomaly_loop.scans.MANAGED_DIRS', {}, clear=True)
+    patch.start()
+    test.addCleanup(patch.stop)
+
+
+def seed_addenda_file(home, plugin, name, signature):
+    """The addenda file of the skill `name`, built with the addenda owner: a tagged line of another experiment,
+    the tagged line of `signature`, then a hand-written line without a tag. Returns the file's path and the
+    text it holds once the line of `signature` is gone."""
+    path = addenda.addendum_path(home, name)
+    stamp = addenda.stamp(Path(plugin) / 'skills' / name)
+    other = addenda.append_line(path, 'Ask which repo before logging.', 'earlier-one', stamp)
+    addenda.append_line(path, 'Name the file first.', signature, stamp)
+    by_hand = 'Keep  it short.'
+    files.write_lines(path, addenda.read_lines(path) + [by_hand])
+    return path, f'{other}\n{by_hand}\n'
 
 
 class CalibrateCase(unittest.TestCase):
@@ -40,9 +64,33 @@ class CalibrateCase(unittest.TestCase):
     def anomaly(self, signature):
         return records.read_anomaly(records.anomaly_path(self.home, signature))
 
-    def cli(self, *argv):
+    def cli(self, *argv, environ=None):
         return run_cli('calibrate', *argv[:1], '--home', str(self.home), '--data', str(self.data),
-                       '--user-config', str(self.user_config), '--plugin-root', str(self.plugin), *argv[1:])
+                       '--user-config', str(self.user_config), '--plugin-root', str(self.plugin), *argv[1:],
+                       environ=environ)
+
+    def checkout(self):
+        """Move the plugin into a git checkout at plugins/anomaly; returns the checkout."""
+        checkout = GitFixture(self.root / 'checkout')
+        self.plugin = checkout.root / 'plugins' / 'anomaly'
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
+        write_text(self.plugin / 'skills' / 'calibrate' / 'SKILL.md', '# calibrate\n')
+        return checkout
+
+    def lay_out_plugin(self):
+        """The plugin folder as an installed copy: no git checkout, so a fix goes to an addenda file in home.
+        Three skills and two agents, `measure` (which takes no addenda), and code and docs outside any of them."""
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
+        for name, steps in (('observe', 'references/steps.md'), ('research', 'references/notes.md'),
+                            ('review', 'references/modes.md'), ('measure', 'references/numbers.md')):
+            write_text(self.plugin / 'skills' / name / 'SKILL.md', f'# {name}\n')
+            write_text(self.plugin / 'skills' / name / steps, f'{name} steps\n')
+        for name in ('facts', 'digest'):
+            write_text(self.plugin / 'agents' / f'{name}.md', f'You are the {name} agent.\n')
+        write_text(self.plugin / 'anomaly_loop' / 'calibrate.py', '# code\n')
+        write_text(self.plugin / 'docs' / 'notes.md', '# notes\n')
+        write_text(self.root / 'x' / 'SKILL.md', '# x\n')   # the skill folder that `skills/../../x` reaches from the plugin
+        return self.plugin
 
     def rows(self, days, active=10.0, weighted=1000.0, skills=('implement',), prefix='s'):
         """A row per day in `days`; `active` and `weighted` are one value for every row, or a list of
@@ -361,7 +409,9 @@ class DeclareCommandTest(CalibrateCase):
     def test_the_plugin_name_is_matched_in_any_case_and_a_path_inside_the_plugin_counts(self):
         write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
         write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
-        targets = ('Anomaly:Observe', str(self.plugin / 'skills' / 'observe' / 'SKILL.md'), 'skills/observe/SKILL.md')
+        write_text(self.plugin / 'skills' / 'review' / 'SKILL.md', '# review\n')
+        targets = ('Anomaly:Observe', str(self.plugin / 'skills' / 'observe' / 'SKILL.md'), 'skills/observe/SKILL.md',
+                   'anomaly:review step 10: delta')
         for number, target in enumerate(targets):
             signature = f'loop-step-{number}'
             write_anomaly_with(self.home, signature, category='automated-checks', target=target, impact=2,
@@ -369,14 +419,6 @@ class DeclareCommandTest(CalibrateCase):
             code, _, err = self.declare(signature=signature)
             self.assertEqual(code, 2, target)
             self.assertIn('--approved', err, target)
-
-    def checkout(self):
-        """Move the plugin into a git checkout at plugins/anomaly; returns the checkout."""
-        checkout = GitFixture(self.root / 'checkout')
-        self.plugin = checkout.root / 'plugins' / 'anomaly'
-        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
-        write_text(self.plugin / 'skills' / 'calibrate' / 'SKILL.md', '# calibrate\n')
-        return checkout
 
     def needs_approval(self, target, signature='loop-step'):
         write_anomaly_with(self.home, signature, category='automated-checks', target=target, impact=2,
@@ -489,6 +531,222 @@ class FixCommandTest(CalibrateCase):
         self.assertEqual(self.anomaly('slow-check').fixed_by, '')
 
 
+class FixAddendumTest(CalibrateCase):
+    """`calibrate fix --addendum`: with no plugin checkout the change is a line in an addenda file in home.
+    The cap is the addenda owner's (test_addenda.py); a fix without a declared experiment is refused
+    by FixCommandTest above, whatever the option."""
+
+    def setUp(self):
+        super().setUp()
+        self.plugin = self.lay_out_plugin()
+        self.settings = self.root / 'settings'   # CLAUDE_CONFIG_DIR: the live deny rules are these and the managed ones
+        no_managed_settings(self)
+
+    def experiment_on(self, signature, target):
+        """An experiment declared on 1 October, with the change not yet made."""
+        write_experiment_anomaly(self.home, signature, target=target, metric='active minutes',
+                                 guard='rework sightings', fixed_by='', check_by='2026-10-25',
+                                 declared_on='2026-10-01')
+
+    def fix_addendum(self, signature, line, *extra):
+        return self.cli('fix', '--signature', signature, '--addendum', line, *extra,
+                        environ={'CLAUDE_CONFIG_DIR': str(self.settings)})
+
+    def tagged(self, line, signature, unit):
+        """The line as the owner of the stamp tags it: `unit` is the skill folder or the agent file."""
+        from anomaly_loop import addenda
+        return f'{line} [exp: {signature} · {addenda.stamp(unit)}]'
+
+    def test_the_tagged_line_is_appended_to_the_file_of_the_skill_or_agent_and_that_file_is_the_ref(self):
+        line = 'Ask which repo before logging.'
+        cases = (('skill-by-name', 'anomaly:observe', 'observe.md', self.plugin / 'skills' / 'observe'),
+                 ('agent-by-name', 'anomaly:facts', 'agents/facts.md', self.plugin / 'agents' / 'facts.md'),
+                 ('inside-a-skill', 'skills/research/references/notes.md', 'research.md',
+                  self.plugin / 'skills' / 'research'),
+                 ('agent-file', 'agents/digest.md', 'agents/digest.md', self.plugin / 'agents' / 'digest.md'))
+        for signature, target, file_name, unit in cases:
+            self.experiment_on(signature, target)
+            code, out, err = self.fix_addendum(signature, line)
+            self.assertEqual((code, err), (0, ''), target)
+            path = self.home / 'addenda' / Path(file_name)
+            self.assertEqual(path.read_text(encoding='utf-8'), self.tagged(line, signature, unit) + '\n', target)
+            anomaly = self.anomaly(signature)
+            self.assertEqual((anomaly.fixed_by, anomaly.status), (f'{TODAY.isoformat()} · addenda/{file_name}', 'fixed'), target)
+            self.assertIn(f'fixed: {signature}', out)
+
+    def test_without_git_the_output_says_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
+        self.experiment_on('slow-check', 'anomaly:observe')
+        _, out, _ = self.fix_addendum('slow-check', 'Ask which repo before logging.')
+        self.assertGreaterEqual(out.count('home is not in a git repository'), 2, out)
+
+    def test_measure_takes_no_addenda_so_a_fix_on_it_is_refused(self):
+        self.experiment_on('slow-measure', 'anomaly:measure')
+        assert_cli_error(self, self.fix_addendum('slow-measure', 'Round the numbers.'), 'measure takes no addenda')
+        self.assertFalse((self.home / 'addenda').exists())
+        self.assertEqual(self.anomaly('slow-measure').fixed_by, '')
+
+    def test_with_a_plugin_checkout_an_addendum_is_refused_and_nothing_is_written(self):
+        self.checkout()
+        self.experiment_on('slow-check', 'anomaly:calibrate')
+        assert_cli_error(self, self.fix_addendum('slow-check', 'Ask which repo before logging.'),
+                         'a plugin checkout is set: change the skill there')
+        self.assertFalse((self.home / 'addenda').exists())
+        self.assertEqual(self.anomaly('slow-check').fixed_by, '')
+
+    def test_a_target_that_is_no_skill_or_agent_or_a_line_that_is_empty_or_too_long_is_refused_and_writes_nothing(self):
+        line = 'Ask which repo before logging.'
+        cases = (('not-the-plugin', 'repo:demo', line, ()),
+                 ('plugin-code', 'anomaly_loop/calibrate.py', line, ()),
+                 ('empty-line', 'anomaly:observe', ' ', ()),
+                 ('long-line', 'anomaly:observe', ('Ask first. ' * 30)[:constants.SIGHTING_MAX_CHARS + 1],
+                  (str(constants.SIGHTING_MAX_CHARS),)),
+                 ('escape', 'anomaly:../../x escape', line, ()),
+                 ('line-separator', 'anomaly:observe', 'Ask first.\N{LINE SEPARATOR}Then log.', ('printable',)),
+                 ('vertical-tab', 'anomaly:observe', 'Ask first.\x0bThen log.', ('printable',)))
+        for signature, target, text, fragments in cases:
+            with self.subTest(signature):
+                self.experiment_on(signature, target)
+                assert_cli_error(self, self.fix_addendum(signature, text), *fragments)
+                self.assertFalse((self.home / 'addenda').exists())
+                self.assertEqual(list(self.root.glob('*.md')), [])   # nothing beside home either
+                self.assertEqual(self.anomaly(signature).fixed_by, '')
+
+    def test_ref_and_addendum_together_are_refused(self):
+        self.experiment_on('slow-check', 'anomaly:observe')
+        assert_cli_error(self, self.fix_addendum('slow-check', 'Ask which repo before logging.', '--ref', 'abc1234'),
+                         '--ref', '--addendum')
+        self.assertFalse((self.home / 'addenda').exists())
+        self.assertEqual(self.anomaly('slow-check').fixed_by, '')
+
+    def seeded_file(self):
+        """The addenda file of `observe` with one line in it; returns (path, its bytes)."""
+        path = self.home / 'addenda' / 'observe.md'
+        write_text(path, 'Ask first. [exp: older-one · 0a1b2c3d]\n')
+        return path, path.read_bytes()
+
+    def test_a_line_that_fails_the_privacy_check_is_refused_and_the_file_stays(self):
+        self.experiment_on('slow-check', 'anomaly:observe')
+        path, before = self.seeded_file()
+        code, _, err = self.fix_addendum('slow-check', 'Mail me at someone@example.com first.')
+        self.assertEqual(code, 2)
+        self.assertIn('email', err)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.anomaly('slow-check').fixed_by, '')
+
+    def test_a_line_that_is_a_whole_denied_command_is_refused_and_the_file_stays(self):
+        write_text(self.settings / 'settings.json', json.dumps({'permissions': {'deny': ['Bash(rm -rf *)']}}))
+        self.experiment_on('slow-check', 'anomaly:observe')
+        path, before = self.seeded_file()
+        code, _, err = self.fix_addendum('slow-check', 'rm -rf build')
+        self.assertEqual(code, 2)
+        self.assertRegex(err, r'(?i)den(y|ied|ies)')
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.anomaly('slow-check').fixed_by, '')
+        code, _, err = self.fix_addendum('slow-check', 'Never run rm -rf build before the check.')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(len(path.read_text(encoding='utf-8').splitlines()), 2)
+
+
+class AddendumRemovalTest(CalibrateCase):
+    """A line leaves its addenda file at a revert result (AC-9) and at `calibrate drop` (AC-32, D-52). The file
+    holds the line of the experiment under test, a line of another experiment and a line written by hand."""
+
+    def setUp(self):
+        super().setUp()
+        self.plugin = self.lay_out_plugin()
+
+    def experiment(self, signature, name, **fields):
+        """An experiment on the skill `name` whose fix is its addenda file, due since 1 October."""
+        values = dict(target=f'anomaly:{name}', metric='active minutes', guard='rework sightings', kind='build',
+                      fixed_by=f'2026-09-20 · addenda/{name}.md', check_by='2026-10-01', status='fixed')
+        values.update(fields)
+        write_experiment_anomaly(self.home, signature, **values)
+
+    def drop(self, signature, reason='folded into the core text'):
+        return self.cli('drop', signature, '--reason', reason)
+
+    def test_a_revert_from_verify_removes_the_line_tagged_with_that_signature_and_no_other(self):
+        self.baseline_and_after(before_active=10, after_active=20)
+        path, rest = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe')
+        code, out, err = self.cli('verify', '--signature', 'slow-check')
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('result: revert', out)
+        self.assertEqual(path.read_bytes(), rest.encode('utf-8'))
+
+    def test_a_revert_from_decide_removes_the_line_tagged_with_that_signature_and_no_other(self):
+        path, rest = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', metric='minutes per build')
+        code, _, err = self.cli('decide', '--signature', 'slow-check', '--result', 'revert')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(path.read_bytes(), rest.encode('utf-8'))
+
+    def test_drop_removes_the_line_keeps_the_result_and_logs_the_reason_under_the_addenda_log(self):
+        path, rest = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', result='keep')
+        code, _, err = self.drop('slow-check', 'folded into the core text')
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(path.read_bytes(), rest.encode('utf-8'))
+        anomaly = self.anomaly('slow-check')
+        self.assertEqual(anomaly.experiment.result, 'keep')
+        self.assertIn(f'dropped {TODAY.isoformat()} · folded into the core text',
+                      dict(anomaly.sections).get('Addenda log', ''))
+
+    def test_drop_is_refused_for_a_signature_with_no_line_in_the_file(self):
+        path = addenda.addendum_path(self.home, 'observe')
+        addenda.append_line(path, 'Ask which repo before logging.', 'earlier-one',
+                            addenda.stamp(self.plugin / 'skills' / 'observe'))
+        self.experiment('slow-check', 'observe', result='keep')
+        file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'slow-check').read_bytes()
+        assert_cli_error(self, self.drop('slow-check'), 'slow-check')
+        self.assertEqual(path.read_bytes(), file_before)
+        self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
+
+    def test_drop_is_refused_while_the_experiment_has_no_result_and_names_verify_and_the_check_date(self):
+        cases = (('blank-result', 'observe', ''), ('inconclusive-result', 'research', 'inconclusive'))
+        for signature, name, result in cases:
+            with self.subTest(signature):   # an inconclusive result is no verdict, like a blank one
+                path, _ = seed_addenda_file(self.home, self.plugin, name, signature)
+                self.experiment(signature, name, check_by='2026-10-25', result=result)
+                file_before = path.read_bytes()
+                record_before = records.anomaly_path(self.home, signature).read_bytes()
+                assert_cli_error(self, self.drop(signature), 'calibrate verify', '2026-10-25')
+                self.assertEqual(path.read_bytes(), file_before)
+                self.assertEqual(records.anomaly_path(self.home, signature).read_bytes(), record_before)
+
+    def test_declare_is_refused_while_the_last_experiments_line_is_in_its_file_and_works_after_drop(self):
+        path, _ = seed_addenda_file(self.home, self.plugin, 'observe', 'slow-check')
+        self.experiment('slow-check', 'observe', result='keep', status='reopened')
+        declare = ('declare', '--signature', 'slow-check', '--expect', 'fewer slow checks', '--metric',
+                   'active minutes', '--guard', 'rework sightings', '--approved')
+        file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'slow-check').read_bytes()
+        assert_cli_error(self, self.cli(*declare), 'addenda/observe.md', "calibrate drop slow-check --reason '<text>'")
+        self.assertEqual(path.read_bytes(), file_before)
+        self.assertEqual(records.anomaly_path(self.home, 'slow-check').read_bytes(), record_before)
+        self.assertEqual(self.drop('slow-check')[0], 0)
+        code, _, err = self.cli(*declare)
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(self.anomaly('slow-check').experiment.declared_on, TODAY.isoformat())
+        with self.subTest('inconclusive'):   # no verdict, so drop would refuse too: the error points to verify
+            path, _ = seed_addenda_file(self.home, self.plugin, 'research', 'unjudged')
+            self.experiment('unjudged', 'research', result='inconclusive', status='reopened')
+            file_before, record_before = path.read_bytes(), records.anomaly_path(self.home, 'unjudged').read_bytes()
+            result = self.cli('declare', '--signature', 'unjudged', *declare[3:])
+            assert_cli_error(self, result, 'calibrate verify')
+            self.assertNotIn('calibrate drop', result[2])
+            self.assertEqual(path.read_bytes(), file_before)
+            self.assertEqual(records.anomaly_path(self.home, 'unjudged').read_bytes(), record_before)
+
+    def test_without_git_a_revert_and_a_drop_say_home_is_not_in_a_git_repository_for_the_addenda_file_too(self):
+        seed_addenda_file(self.home, self.plugin, 'observe', 'reverted-one')
+        self.experiment('reverted-one', 'observe', metric='minutes per build')
+        seed_addenda_file(self.home, self.plugin, 'research', 'dropped-one')
+        self.experiment('dropped-one', 'research', result='keep')
+        for out in (self.cli('decide', '--signature', 'reverted-one', '--result', 'revert')[1],
+                    self.drop('dropped-one')[1]):
+            self.assertGreaterEqual(out.count('home is not in a git repository'), 2, out)
+
+
 # ---------- batches and housekeeping ----------
 
 class BatchTest(CalibrateCase):
@@ -583,6 +841,170 @@ class BatchTest(CalibrateCase):
         self.assertEqual((code, err), (0, ''))
         self.assertEqual(sum(line.startswith('profile:') for line in out.splitlines()), 1)
 
+    def plan_line(self, signature):
+        """The plan's problem line of this signature."""
+        code, out, err = self.cli('plan')
+        self.assertEqual((code, err), (0, ''))
+        return next(line for line in out.splitlines() if line.startswith('  - ') and f' {signature} ' in line)
+
+    def test_without_a_checkout_the_plan_names_the_addenda_file_as_the_fix_home(self):
+        self.lay_out_plugin()
+        cases = (('skill-by-name', 'anomaly:observe', 'addenda/observe.md'),
+                 ('agent-by-name', 'anomaly:facts', 'addenda/agents/facts.md'),
+                 ('inside-a-skill', 'skills/research/references/notes.md', 'addenda/research.md'),
+                 ('agent-file', 'agents/digest.md', 'addenda/agents/digest.md'),
+                 ('prose-two-skills', 'anomaly:observe step 3 and review apply', 'addenda/observe.md'),
+                 ('prose-agent', 'anomaly:facts reads too much', 'addenda/agents/facts.md'),
+                 ('prose-slash', 'anomaly:review asks and/or skips', 'addenda/review.md'),
+                 ('prose-two-names', 'anomaly:observe and anomaly:review', 'addenda/observe.md'),
+                 ('prose-colon', 'anomaly:review step 10: delta', 'addenda/review.md'))
+        for signature, target, _ in cases:
+            write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
+        for signature, target, file_name in cases:
+            with self.subTest(target):
+                self.assertRegex(self.plan_line(signature), rf'fix home: \S*{re.escape(file_name)}(\s|$)')
+
+    def test_measure_takes_no_addenda_so_the_plan_names_no_fix_home_for_it(self):
+        self.lay_out_plugin()
+        write_anomaly_with(self.home, 'slow-measure', target='anomaly:measure', scope='repo:demo')
+        self.assertIn('fix home: none, measure takes no addenda', self.plan_line('slow-measure'))
+        self.assertEqual(self.plan_offers(), ['upstream: defect slow-measure'])
+
+    def test_without_a_checkout_plugin_code_and_docs_are_an_upstream_defect_not_an_addenda_fix(self):
+        self.lay_out_plugin()
+        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md')):
+            write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
+            line = self.plan_line(signature)
+            self.assertIn('upstream defect', line, target)
+            self.assertNotRegex(line, r'addenda[/\\]', target)
+
+    def kept_addendum(self, signature, name='observe', result='keep', line=True, **fields):
+        """An experiment with this result whose fix is the addenda file of the skill `name`, holding the tagged
+        line of `signature` unless `line` is False."""
+        if line:
+            addenda.append_line(addenda.addendum_path(self.home, name), f'Rule of {signature}.', signature,
+                                addenda.stamp(self.plugin / 'skills' / name))
+        write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', metric='active minutes',
+                                 guard='rework sightings', fixed_by=f'2026-09-20 · addenda/{name}.md',
+                                 check_by='2026-10-25', result=result, status='fixed', **fields)
+
+    @staticmethod
+    def offers(out):
+        """The offer lines of the plan output: `upstream: tuning <signature>` and `upstream: defect <signature>`."""
+        return sorted(line.strip() for line in out.splitlines() if 'upstream: ' in line)
+
+    def plan_offers(self):
+        code, out, err = self.cli('plan')
+        self.assertEqual((code, err), (0, ''))
+        return self.offers(out)
+
+    def test_without_a_checkout_the_plan_offers_a_tuning_report_for_each_kept_or_unproven_addenda_line_not_yet_sent(self):
+        """AC-29 (D-57, D-11)."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        self.kept_addendum('unproven-one', 'research', 'unproven')
+        self.kept_addendum('reverted-one', result='revert')
+        self.kept_addendum('inconclusive-one', 'research', 'inconclusive')
+        self.kept_addendum('in-flight-one', 'review', '')
+        self.kept_addendum('dropped-one', line=False)   # kept, but its line left the file
+        self.kept_addendum('sent-one', 'review', sections=[(addenda.LOG_HEADING, '- upstream 2026-10-02 · 7')])
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one', 'upstream: tuning unproven-one'])
+
+    def test_without_a_checkout_the_plan_offers_a_defect_report_for_each_target_upstream_defect_accepts_and_keeps_its_mark(self):
+        """AC-29 (D-57): a skill target, a `<plugin>:...` that names no skill and a target outside the plugin get
+        none; the mark of the problem line stays beside the offer (Amended 2026-10-11, conduct wave 6), and a
+        `<plugin>:...` that names no skill is marked as such, not as an upstream defect (Amended 2026-10-11,
+        cumulative review)."""
+        self.lay_out_plugin()
+        for signature, target in (('in-code', 'anomaly_loop/calibrate.py'), ('in-docs', 'docs/notes.md'),
+                                  ('no-such-skill', 'anomaly:nosuchskill frontier'), ('in-skill', 'anomaly:observe'),
+                                  ('escape', 'anomaly:../../x escape'), ('elsewhere', 'deploy-script')):
+            write_anomaly_with(self.home, signature, target=target, scope='repo:demo')
+        write_anomaly_with(self.home, 'sent-code', target='anomaly_loop/calibrate.py', scope='repo:demo',
+                           sections=[(addenda.LOG_HEADING, '- upstream 2026-10-02 · 7')])
+        self.assertEqual(self.plan_offers(), ['upstream: defect in-code', 'upstream: defect in-docs'])
+        self.assertIn(calibrate.UPSTREAM_DEFECT, self.plan_line('in-code'))
+        for signature in ('no-such-skill', 'escape'):
+            line = self.plan_line(signature)
+            self.assertIn('fix home: none, names no skill or agent of the plugin', line)
+            self.assertNotIn('upstream defect', line)
+
+    def test_with_a_checkout_the_plan_prints_no_offer_line(self):
+        """AC-29 (D-35): the same backlog offers both reports without a checkout, none with one."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        write_anomaly_with(self.home, 'in-code', target='anomaly_loop/calibrate.py', scope='repo:demo')
+        self.assertEqual(self.plan_offers(), ['upstream: defect in-code', 'upstream: tuning kept-one'])
+        self.checkout()
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_text(self.plugin / 'anomaly_loop' / 'calibrate.py', '# code\n')
+        self.assertEqual(self.plan_offers(), [])
+
+    def test_a_kept_line_of_a_reopened_anomaly_gets_no_offer(self):
+        """Ticket 06 Amended (review): the fix did not hold, so upstream tuning refuses it."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'observe'), 'Rule of reopened-one.', 'reopened-one',
+                            addenda.stamp(self.plugin / 'skills' / 'observe'))
+        write_experiment_anomaly(self.home, 'reopened-one', target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
+                                 check_by='2026-10-25', result='keep', status='reopened')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_a_kept_rule_that_names_a_profile_marker_gets_no_offer(self):
+        """An offer appears only when upstream tuning would take the report, its outside-text check included
+        (`run-tickets` is a build skill of the profile)."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Run run-tickets first.', 'marked-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'marked-one', target='anomaly:research', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/research.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
+    def test_an_addenda_file_that_cannot_be_read_prints_a_warning_and_no_offer(self):
+        """A folder where the addenda file should be cannot be read: the plan says so and still prints. An error that
+        names no file still names the anomaly's addenda file."""
+        self.lay_out_plugin()
+        folder = addenda.addendum_path(self.home, 'observe')
+        folder.mkdir(parents=True)
+        write_experiment_anomaly(self.home, 'unread-one', target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        unnamed = mock.patch('anomaly_loop.addenda.read_lines', side_effect=OSError(13, 'Permission denied'))
+        for case, patcher in (('a folder', contextlib.nullcontext()), ('an error that names no file', unnamed)):
+            with self.subTest(case=case), patcher:
+                code, out, err = self.cli('plan')
+                self.assertEqual((code, err), (0, ''))
+                self.assertEqual(self.offers(out), [])
+                warnings = [line for line in out.splitlines() if line.startswith('warning: ') and 'unread-one' in line]
+                self.assertEqual(len(warnings), 1, out)
+                self.assertIn(str(folder), warnings[0])
+                self.assertIn('not read', warnings[0])
+
+    def test_with_a_checkout_the_plan_is_what_it_was_before_addenda(self):
+        self.checkout()
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_text(self.plugin / 'agents' / 'facts.md', 'You answer questions.\n')
+        write_text(self.plugin / 'anomaly_loop' / 'calibrate.py', '# code\n')
+        write_anomaly_with(self.home, 'skill-by-name', target='anomaly:observe', scope='repo:demo', impact=2)
+        write_anomaly_with(self.home, 'agent-by-name', target='anomaly:facts', scope='repo:demo', impact=1)
+        write_anomaly_with(self.home, 'in-code', target='anomaly_loop/calibrate.py', scope='repo:demo', impact=1)
+        code, out, err = self.cli('plan')
+        self.assertEqual((code, err), (0, ''))
+        lines = out.splitlines()
+        start = next(n for n, line in enumerate(lines) if line.startswith('## Batches'))
+        self.assertEqual(lines[start:start + 6], [
+            '## Batches (summed score of the problems that can be fixed now)',
+            '1. repo:demo · score 4 · 3 problems',
+            '  - 2 skill-by-name · tool-economy · effort ? · anomaly:observe',
+            '  - 1 agent-by-name · tool-economy · effort ? · anomaly:facts',
+            '  - 1 in-code · tool-economy · effort ? · anomaly_loop/calibrate.py',
+            ''])
+        for word in ('fix home', 'addenda', 'upstream defect'):
+            self.assertNotIn(word, out)
+
     def test_an_empty_backlog_has_no_batches(self):
         code, out, _ = self.cli('plan')
         self.assertEqual(code, 0)
@@ -649,6 +1071,9 @@ class CommitTest(unittest.TestCase):
         self.repo = GitFixture(root / 'repo')
         self.home = self.repo.root / 'anomaly-home'
         self.data = root / 'data'
+        self.plugin = root / 'plugin'   # an installed copy: outside the repository, so no checkout
+        self.settings = root / 'settings'
+        no_managed_settings(self)
         self.repo.write('README.md', 'x\n')
         write_anomaly_with(self.home, 'slow-check', category='automated-checks', impact=2, occurrences=2)
         self.repo.commit(['README.md', 'anomaly-home/anomalies/slow-check.md'], 'chore: start', TODAY)
@@ -664,6 +1089,59 @@ class CommitTest(unittest.TestCase):
         self.assertEqual(files, ['anomaly-home/INDEX.md', 'anomaly-home/anomalies/slow-check.md'])
         self.assertIn('calibrate', self.repo.git('log', '-1', '--format=%s'))
         self.assertEqual(self.repo.status(), [' M README.md'])
+
+    def test_an_addendum_is_committed_alone_in_a_commit_that_holds_only_its_file(self):
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_experiment_anomaly(self.home, 'tune-observe', target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='', check_by='2026-10-25',
+                                 declared_on='2026-10-01')
+        self.repo.write('README.md', 'edited elsewhere\n')
+        code, out, err = run_cli('calibrate', 'fix', '--home', str(self.home), '--data', str(self.data),
+                                 '--plugin-root', str(self.plugin), '--signature', 'tune-observe',
+                                 '--addendum', 'Ask which repo before logging.',
+                                 environ={'CLAUDE_CONFIG_DIR': str(self.settings)})
+        self.assertEqual((code, err), (0, ''))
+        self.assertNotIn('not in a git repository', out)
+        addendum = 'anomaly-home/addenda/observe.md'
+        [commit] = self.repo.git('log', '--format=%H', '--', addendum).split()
+        self.assertEqual(self.repo.git('show', '--name-only', '--format=', commit).split(), [addendum])
+        self.assertEqual(self.repo.status(), [' M README.md'])
+
+    def test_a_revert_and_a_drop_keep_the_anomaly_commit_and_add_one_commit_holding_only_the_addenda_file(self):
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}')
+        cases = (('reverted-one', 'observe', dict(metric='minutes per build'),
+                  ('decide', '--signature', 'reverted-one', '--result', 'revert')),
+                 ('dropped-one', 'research', dict(result='keep'),
+                  ('drop', 'dropped-one', '--reason', 'folded into the core text')))
+        seeded = []
+        for signature, name, fields, _ in cases:
+            write_text(self.plugin / 'skills' / name / 'SKILL.md', f'# {name}\n')
+            seed_addenda_file(self.home, self.plugin, name, signature)
+            write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', guard='rework sightings',
+                                     kind='build', fixed_by=f'2026-09-20 · addenda/{name}.md', check_by='2026-10-01',
+                                     status='fixed', **fields)
+            seeded += [f'anomaly-home/addenda/{name}.md', f'anomaly-home/anomalies/{signature}.md']
+        index.write_index(self.home, TODAY)
+        self.repo.commit(seeded + ['anomaly-home/INDEX.md'], 'chore: seed', TODAY)
+        self.repo.write('README.md', 'edited elsewhere\n')
+        # a revert reopens the anomaly, which the index shows; a drop changes nothing the index shows
+        index_changes = {'reverted-one': ['anomaly-home/INDEX.md'], 'dropped-one': []}
+        for signature, name, _, argv in cases:
+            with self.subTest(signature):
+                code, out, err = run_cli('calibrate', argv[0], '--home', str(self.home), '--data', str(self.data),
+                                         '--plugin-root', str(self.plugin), *argv[1:])
+                self.assertEqual((code, err), (0, ''))
+                self.assertNotIn('not in a git repository', out)
+                addendum, anomaly = f'anomaly-home/addenda/{name}.md', f'anomaly-home/anomalies/{signature}.md'
+                addendum_commit = self.repo.git('log', '-1', '--format=%H', '--', addendum).strip()
+                anomaly_commit = self.repo.git('log', '-1', '--format=%H', '--', anomaly).strip()
+                self.assertEqual(self.repo.git('show', '--name-only', '--format=', addendum_commit).split(),
+                                 [addendum])
+                self.assertEqual(sorted(self.repo.git('show', '--name-only', '--format=', anomaly_commit).split()),
+                                 sorted(index_changes[signature] + [anomaly]))
+                self.assertNotEqual(addendum_commit, anomaly_commit)
+                self.assertEqual(self.repo.status(), [' M README.md'])
 
 
 class RegistrationTest(unittest.TestCase):

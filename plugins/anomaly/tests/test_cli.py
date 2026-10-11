@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import cli, constants, frontmatter, gitrepo, lens, paths, records
+from anomaly_loop import addenda, cli, constants, frontmatter, gitrepo, lens, paths, records
 from tests.fixtures import NOW, PLUGIN, SID, assistant, run_cli, ts, user, write_jsonl
 from tests.test_pipeline_files import ALLOWED_TOOLS_SKILLS
 
@@ -769,6 +769,15 @@ class CliTest(unittest.TestCase):
                                     '--projects', str(self.root / 'absent'))
         self.assertEqual(code, 2)
         self.assertIn('transcript folder', err)
+
+    def test_measure_prints_no_addendum_not_even_the_calibrate_one(self):
+        """AC-13: `measure` also runs inside calibrate, and prints neither addenda file."""
+        for skill in ('measure', 'calibrate'):
+            addenda.append_line(addenda.addendum_path(self.home, skill), f'A rule for {skill}.', f'sig-{skill}',
+                                '0a1b2c3d')
+        code, out, _ = self.measure()
+        self.assertEqual(code, 0)
+        self.assertNotIn('A rule for', out)
 
 
 class PlanningDocsTest(unittest.TestCase):

@@ -16,15 +16,11 @@ import unittest
 from pathlib import Path
 
 from anomaly_loop import cli, constants, frontmatter
+from anomaly_loop.scans import deny_regex, deny_rules, settings_files
 from tests.fixtures import PLUGIN, plugin_files
 
 ALLOWED_TOOLS_SKILLS = ('architecture', 'build', 'conduct', 'diagnose', 'interview', 'research', 'review', 'ship', 'slice', 'specify', 'tests')   # the pipeline skills whose tools are limited to the CLI
 PLACEHOLDER_FREE_SKILLS = ALLOWED_TOOLS_SKILLS   # the skills whose docs other than SKILL.md hold no `${…}`
-MANAGED_DIRS = {   # as the Claude Code documentation on managed settings gives them
-    'win32': Path('C:/Program Files/ClaudeCode'),            # documented, and read on this machine
-    'darwin': Path('/Library/Application Support/ClaudeCode'),   # documented, unverified (not tried)
-    'linux': Path('/etc/claude-code'),                       # documented (also WSL), unverified (not tried)
-}   # any other platform has no managed folder here: only the user files are read
 
 LIST_MARKER = re.compile(r'^(?:>\s*|(?:[-*+]|\d+[.)]|\$)\s+)+')   # quote and list markers in front of a call
 PREFIX = re.compile(r'^(?:>\s*|(?:[-*+]|\d+[.)]|\$)\s+|[A-Za-z_]\w*=\S*\s+)+')   # quote, list marker, VAR=value
@@ -42,6 +38,7 @@ CHAINED = re.compile(r'&&|\|\||;|`|\$\(|(?<!\|)\|(?!\|)|\s\d?>>?|\s<\s|&\s*$')  
 SETTINGS_FILE = re.compile(r'settings(?:\.local)?\.json')
 ALLOW_RULE = re.compile(r'"allow"\s*:|permissions\.allow')
 TOOL_RULE = re.compile(r'\b(?:Bash|Read|Edit|Write|WebFetch)\([^)\n]*\)')   # a rule in the text a user reads
+SETTINGS_READER = 'anomaly_loop/scans.py'   # the one plugin file that names settings files to read them, never writes them or prints an allow rule (ADR-0023)
 QUOTED = re.compile(r'"([^"\n]*)"|\'[^\'\n]*\'')   # a double-quoted span (group 1) or a single-quoted one, left to right
 PLACEHOLDER = re.compile(r'<[^<>\n]*>')
 FREE_TEXT_OPTION = re.compile(r"(?:\bticket adhoc|\bticket amend\s+\S+(?:\s+--after\s+\S+)?|--open|--changed|--name|--owner|--replaces)(?:\s+|=)(?=\S)(?!'<|--after\b|--from\s+(?:<[^>]*>|\S+)(?:\s+--[\w-]+\s+(?:<[^>]*>|\S+))*\s*$)")
@@ -86,45 +83,6 @@ def commands(text):
 
 def relative(root, path):
     return path.relative_to(root).as_posix()
-
-
-def settings_files(environ, platform, home):
-    """The user settings files and the managed settings files (with the `managed-settings.d` drop-ins)."""
-    config = Path(environ.get('CLAUDE_CONFIG_DIR') or home / '.claude')
-    managed = MANAGED_DIRS.get('linux' if platform.startswith('linux') else platform)
-    files = [config / 'settings.json', config / 'settings.local.json']
-    if managed is not None:
-        files += [managed / 'managed-settings.json', *sorted((managed / 'managed-settings.d').glob('*.json'))]
-    return files
-
-
-def deny_rules(files):
-    """The deny rules of the readable settings files; a missing or unreadable file adds none. The managed
-    file starts with a byte order mark, so files are read as utf-8-sig."""
-    rules = []
-    for path in files:
-        try:
-            data = json.loads(path.read_text(encoding='utf-8-sig'))
-        except (OSError, ValueError):
-            continue
-        permissions = data.get('permissions') if isinstance(data, dict) else None
-        found = permissions.get('deny') if isinstance(permissions, dict) else None
-        rules += [rule for rule in found or [] if isinstance(rule, str)]
-    return rules
-
-
-def deny_regex(rule):
-    """A `Bash(...)` deny rule as a regex over a whole command; None for any other rule. `*` matches any
-    text; a trailing ` *` or the older `:*` also matches the bare command."""
-    found = re.fullmatch(r'Bash\((.+)\)', rule)
-    if not found or not found.group(1).strip('*'):
-        return None
-    pattern, tail = found.group(1), ''
-    for suffix in (':*', ' *'):
-        if pattern.endswith(suffix):
-            pattern, tail = pattern[:-2], r'(?:\s.*)?'
-            break
-    return re.compile('.*'.join(re.escape(part) for part in pattern.split('*')) + tail, re.S)
 
 
 def deny_hits(root, rules):
@@ -245,19 +203,21 @@ def frontmatter_lines(lines):
 
 
 def settings_edit_hits(root):
-    """Plugin files (not the tests) that name a Claude Code settings file or print an allow rule. A tool
-    rule such as `Bash(...)` counts in the body of a Markdown file only: its frontmatter holds
-    `allowed-tools` and the constant that defines the CLI pattern is code (line numbers stay true)."""
+    """Plugin files (not the tests) that name a Claude Code settings file or print an allow rule. The one
+    settings reader is exempt from the settings-file-name match only. A tool rule such as `Bash(...)`
+    counts in the body of a Markdown file only: its frontmatter holds `allowed-tools` and the constant
+    that defines the CLI pattern is code (line numbers stay true)."""
     hits = set()
     for path in plugin_files(root):
         if relative(root, path).split('/')[0] == 'tests':
             continue
+        reader = relative(root, path) == SETTINGS_READER
         text = path.read_text(encoding='utf-8', errors='ignore')
         markdown = path.suffix == '.md'
         lines = text.splitlines()
         skipped = frontmatter_lines(lines) if markdown else 0
         for number, line in enumerate(lines[skipped:], start=skipped + 1):
-            if SETTINGS_FILE.search(line) or ALLOW_RULE.search(line) or (markdown and TOOL_RULE.search(line)):
+            if (not reader and SETTINGS_FILE.search(line)) or ALLOW_RULE.search(line) or (markdown and TOOL_RULE.search(line)):
                 hits.add(f'{relative(root, path)}:{number}: settings file or allow rule')
     return sorted(hits)
 
@@ -583,12 +543,14 @@ class NoSettingsEditTest(TempPluginTest):
     def test_a_settings_file_name_or_an_allow_rule_in_plugin_files_is_reported(self):
         plant(self.root, {
             'anomaly_loop/x.py': "open('settings.json', 'w')\n",
+            'anomaly_loop/scans.py': "x = 'settings.json'\nprint('\"allow\": []')\n",
             'skills/build/SKILL.md': skill_text(constants.CLI_PATTERN, 'Add "allow": ["x"] to it.\n'),
             'skills/review/SKILL.md': skill_text(constants.CLI_PATTERN, 'Allow `Bash(git *)` once.\n'),
             'agents/code.md': 'edit managed-settings.json\n',
             'tests/test_x.py': "SETTINGS = 'settings.json'\n"})
         self.assertEqual(settings_edit_hits(self.root), [
             'agents/code.md:1: settings file or allow rule',
+            'anomaly_loop/scans.py:2: settings file or allow rule',
             'anomaly_loop/x.py:1: settings file or allow rule',
             'skills/build/SKILL.md:5: settings file or allow rule',
             'skills/review/SKILL.md:5: settings file or allow rule'])

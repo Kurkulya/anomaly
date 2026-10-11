@@ -3,7 +3,7 @@
 The skill reads and judges; this module does what must not vary:
 
   check   what an input's key is, whether it was assessed before (its earlier idea is shown
-          instead of a new read), and else the open anomalies it could relate to
+          instead of a new read), and else the open anomalies it could relate to; then the assess addenda
   record  writes `ideas/<slug>.md`; for the verdict `adopt` it also drafts an experiment on a
           new anomaly, or on an open anomaly that has none, and changes nothing else (the
           exception is `--already-applied`: lessons already built into the plugin need no draft)
@@ -27,7 +27,7 @@ import unicodedata
 from datetime import date
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
-from . import ideas, observe, paths, privacy, profile, records, verdict
+from . import addenda, ideas, observe, paths, privacy, profile, records, verdict
 from .constants import (ASSESS_DEFAULT_IMPACT, ASSESS_DEFAULT_SCOPE, COMMIT_SCOPE, GUARD_HELP, LINK_DIGEST_LENGTH,
                         LINK_TRACKING_PARAMS, LINK_TRACKING_PREFIXES, NUDGE_MIN_SCORE, PARAGRAPH_MAX_CHARS,
                         SIGHTING_MAX_CHARS, TEXT_KEY_LENGTH, TEXT_KEY_PREFIX, UNKNOWN_REPO)
@@ -160,6 +160,7 @@ def run_check(args, environ):
         lines += show_candidates(records.load_anomalies(home)) or ['- none']
     message = profile.missing_message(profile.load_profile(home))
     print('\n'.join(([message] if message else []) + lines))
+    addenda.print_addenda(home, 'assess')
     return 0
 
 

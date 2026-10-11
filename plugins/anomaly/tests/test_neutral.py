@@ -11,56 +11,22 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 
-from anomaly_loop import flags, frontmatter, paths, profile
-from tests.fixtures import BENCH, PLUGIN, GitFixture, plugin_files, run_cli
+from anomaly_loop import addenda, flags, paths, profile
+from anomaly_loop.scans import marker_hits, profile_markers
+from tests.fixtures import (BENCH, PLUGIN, GitFixture, plugin_files, run_cli, write_anomaly_with,
+                            write_experiment_anomaly, write_text)
 
-IDENTIFIER = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:[-:][A-Za-z0-9]+)+')
 HOST = re.compile(r'https?://([A-Za-z0-9.-]+)')
 RESERVED_HOST = re.compile(r'(?:.+\.)?(?:example(?:\.com|\.net|\.org)?|test|invalid|localhost)')
 ALLOWED_HOSTS = {'host', 'person', 'www.youtube.com', 'api.deps.dev', 'pub.dev'}   # placeholders, a link example, the two pkg-facts API hosts
-
-
-def stack_values(value):
-    """The values of a per-stack key without their stack names: each stack's value, then each line without a stack."""
-    named, other = frontmatter.nested(value)
-    return list(named.values()) + other
-
-
-def is_this_plugins(identifier):
-    """True for `<plugin>:<name>` qualified by this plugin's name, in any case (flags.names_this_plugin)."""
-    qualifier, colon, _ = identifier.partition(':')
-    return bool(colon) and flags.names_this_plugin(SimpleNamespace(plugin_root=PLUGIN), qualifier, None)
-
-
-def profile_markers(values):
-    """Identifiers that name agents, tools and skills, with each '-' part of an agent id: every
-    agent id in `implementers` and `test_writers` (the stack name is left out; stack lines are read
-    as frontmatter.nested reads them, so a line without a stack keeps its whole id), every item of
-    `build_skills`, `reviewers` and `gather`, only the first identifier of `mr_tool`, `verify_ui`
-    and `ci` (the rest is prose, such as "or the built-in browser"), and the first identifier of
-    each `conventions` value. A name qualified by this plugin's own name (`<plugin>:<skill>`) is
-    the plugin's, not an environment fact, so it is no marker."""
-    found = []
-    for key in ('implementers', 'test_writers'):
-        for line in stack_values(values.get(key, '')):
-            found += IDENTIFIER.findall(line)
-    for key in ('build_skills', 'reviewers', 'gather'):
-        found += IDENTIFIER.findall(values.get(key, ''))
-    for key in ('mr_tool', 'verify_ui', 'ci'):
-        found += IDENTIFIER.findall(values.get(key, ''))[:1]
-    for line in stack_values(values.get('conventions', '')):
-        found += IDENTIFIER.findall(line)[:1]
-    found = [identifier for identifier in found if not is_this_plugins(identifier)]
-    return set(found) | {part for identifier in found for part in identifier.split(':') if '-' in part}
 
 
 def files_with(root, markers):
     hits = []
     for path in plugin_files(root):
         text = path.read_text(encoding='utf-8', errors='ignore')
-        hits += [f'{path.relative_to(root)}: {m}' for m in sorted(markers) if m in text]
+        hits += [f'{path.relative_to(root)}: {m}' for m in marker_hits(text, markers)]
     return hits
 
 
@@ -69,7 +35,7 @@ class ProfileMarkersTest(unittest.TestCase):
         values = {'implementers': 'web-ui: acme-kit:web-builder:acme-web-builder',
                   'mr_tool': 'acme-kit:open-mr skill', 'verify_ui': 'look-check, or the built-in browser',
                   'build_skills': 'implement, run-tickets', 'tracker': 'some-tracker-name'}
-        self.assertEqual(profile_markers(values), {
+        self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:web-builder:acme-web-builder', 'acme-kit', 'web-builder', 'acme-web-builder',
             'acme-kit:open-mr', 'open-mr', 'look-check', 'run-tickets'})
 
@@ -77,20 +43,25 @@ class ProfileMarkersTest(unittest.TestCase):
         values = {'test_writers': 'web-ui: acme-kit:test-builder', 'reviewers': '[acme-reviewer, acme-kit:sec-check]',
                   'gather': 'context-pull', 'ci': 'ci-watcher job watch, then log-reader',
                   'conventions': 'web-ui: acme-docs/web-rules.md\nmobile-ui: team-guide.md'}
-        self.assertEqual(profile_markers(values), {
+        self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:test-builder', 'acme-kit', 'test-builder', 'acme-reviewer', 'acme-kit:sec-check', 'sec-check',
             'context-pull', 'ci-watcher', 'acme-docs', 'team-guide'})
+
+    def test_the_upstream_keys_become_markers_too(self):
+        """D-47 (Amended): the upstream tool and the upstream repository are the 10th and 11th key."""
+        values = {'upstream_tool': 'acme-upstream-bot', 'upstream_repo': 'acme-org/acme-plugin'}
+        self.assertLessEqual({'acme-upstream-bot', 'acme-org'}, profile_markers(values, PLUGIN))
 
     def test_a_per_stack_line_without_a_stack_keeps_its_whole_id(self):
         values = {'implementers': 'acme-kit:web-builder\nmobile-ui: acme-kit:app-builder',
                   'conventions': 'acme-docs/rules.md'}
-        self.assertEqual(profile_markers(values), {
+        self.assertEqual(profile_markers(values, PLUGIN), {
             'acme-kit:web-builder', 'acme-kit', 'web-builder', 'acme-kit:app-builder', 'app-builder', 'acme-docs'})
 
     def test_a_name_qualified_by_this_plugin_is_not_a_marker(self):
         own = flags.plugin_name(PLUGIN, PLUGIN)
         values = {'build_skills': f'implement, {own}:build-step, acme-kit:run-tickets'}
-        self.assertEqual(profile_markers(values), {'acme-kit:run-tickets', 'acme-kit', 'run-tickets'})
+        self.assertEqual(profile_markers(values, PLUGIN), {'acme-kit:run-tickets', 'acme-kit', 'run-tickets'})
 
     def test_a_planted_marker_is_found_with_its_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,7 +86,7 @@ class ProfileMarkersTest(unittest.TestCase):
 class OrgNeutralTest(unittest.TestCase):
     def test_no_identifier_from_the_owners_profile_appears_in_a_plugin_file(self):
         home = paths.resolve_home(None, os.environ)
-        markers = profile_markers(profile.load_profile(home).values)
+        markers = profile_markers(profile.load_profile(home).values, PLUGIN)
         if not markers:
             self.skipTest(f'no profile identifiers under {home}')
         self.assertEqual(files_with(PLUGIN, markers), [])
@@ -160,11 +131,28 @@ class EmptyProfileTest(unittest.TestCase):
         self.seams.write_text('- a seam · `a.py` · replaces a copy (ticket 01)\n', encoding='utf-8', newline='\n')
         self.run_command('lens', 'tally', 'add', '--session', 's1', '--lens', 'code', '--accepted', '2',
                          '--rejected', '1')
+        self.config = root / 'config'   # an installed copy of the plugin outside git, with a GitHub marketplace record
+        self.installed = self.config / 'plugins' / 'cache' / 'market' / 'plugin' / 'ab12cd3'
+        write_text(self.installed / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}\n')
+        write_text(self.installed / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_text(self.config / 'plugins' / 'known_marketplaces.json',
+                   '{"market": {"source": {"source": "github", "repo": "owner/plugin"}}}\n')
+        write_anomaly_with(self.home, 'slow-check', target='anomaly:observe')
 
     def run_command(self, *argv):
         return run_cli(*argv, '--home', str(self.home), '--data', str(self.data))
 
+    def keep_an_addendum(self, signature):
+        """A kept experiment whose fix is a tagged line in the addenda file of the installed `observe` skill."""
+        addenda.append_line(addenda.addendum_path(self.home, 'observe'), 'Ask which repo before logging.', signature,
+                            addenda.stamp(self.installed / 'skills' / 'observe'))
+        write_experiment_anomaly(self.home, signature, target='anomaly:observe', metric='active minutes',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/observe.md',
+                                 check_by='2026-10-01', result='keep', status='fixed',
+                                 summary='The check runs every test twice.')
+
     def test_every_subcommand_runs_on_core_defaults_without_a_profile(self):
+        self.keep_an_addendum('slow-tune')
         commands = [
             ('measure', '--projects', str(self.projects)),
             ('index',),
@@ -196,6 +184,10 @@ class EmptyProfileTest(unittest.TestCase):
             ('lens', 'tally', 'sum', '--session', 's1'),
             ('worklog', 'start', 'a-feature', 'build'),
             ('worklog', 'add', '--feature', 'a-feature', '--stage', 'build', '--session', 's1'),
+            ('upstream', 'defect', 'slow-check', '--plugin-root', str(self.installed),
+             '--user-config', str(self.config)),
+            ('upstream', 'tuning', 'slow-tune', '--plugin-root', str(self.installed),
+             '--user-config', str(self.config)),
         ]
         for command in commands:
             with self.subTest(command=command[:2]):

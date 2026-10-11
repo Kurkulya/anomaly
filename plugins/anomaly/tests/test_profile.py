@@ -101,6 +101,12 @@ class LoadTest(unittest.TestCase):
         self.assertNotIn('build_skills', profile.PROFILE_KEYS)
         self.assertIn('build_skills', profile.OPTIONAL_KEYS)
 
+    def test_optional_upstream_keys_are_never_reported_missing(self):
+        self.write(FULL)
+        for key in ('upstream_tool', 'upstream_repo'):
+            with self.subTest(key=key):
+                self.assertNotIn(key, profile.load_profile(self.home).missing)
+
     def test_shipped_template_copied_unchanged_is_not_complete(self):
         template = Path(__file__).resolve().parent.parent / 'templates' / 'profile.md'
         shutil.copy(template, self.home / 'profile.md')

@@ -8,7 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import constants, observe, records
+from anomaly_loop import addenda, constants, observe, records
 from tests.fixtures import (NOW, SID, GitFixture, anomaly_text, observed, run_cli, write_anomaly_text, write_batch,
                             write_experiment_anomaly, write_text)
 
@@ -526,6 +526,17 @@ class ListTest(ObserveCase):
                    'issue_source: i\n---\n')
         _, out, _ = run_cli('observe', 'list', '--home', str(self.home))
         self.assertNotIn('profile:', out)
+
+    def test_the_addendum_of_observe_comes_after_all_the_existing_output(self):
+        """AC-12: the output without an addenda file stays as it was, profile line first, and the addendum follows."""
+        write_anomaly_text(self.home, 'open-one', 2, 3)
+        _, before, _ = run_cli('observe', 'list', '--home', str(self.home))
+        addenda.append_line(addenda.addendum_path(self.home, 'observe'), 'Ask which repo before logging.',
+                            'slow-check', '0a1b2c3d')
+        _, after, _ = run_cli('observe', 'list', '--home', str(self.home))
+        self.assertTrue(before.startswith('profile: '), before)
+        self.assertTrue(after.startswith(before), after)
+        self.assertIn('Ask which repo before logging.', after[len(before):])
 
     def test_a_profile_that_is_not_utf8_does_not_stop_the_command(self):
         self.home.mkdir(parents=True)

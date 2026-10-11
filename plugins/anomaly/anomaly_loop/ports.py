@@ -114,6 +114,28 @@ def core_default(name):
     raise KeyError(f'no port named {name}')
 
 
+def adapter_name(resolution, name, adapters, kind):
+    """The adapter the replace port `name` names, checked against `adapters` (the values that name a tool wrapper),
+    or None on the core default. An unknown value is a RecordError naming the profile key, the `kind` of adapter and
+    the accepted values."""
+    adapter = port(resolution, name)
+    if adapter.is_default:
+        return None
+    if adapter.value not in adapters:
+        key = next(key for port_name, _, key, _ in PORTS if port_name == name)
+        raise RecordError(f'profile key {key}: unknown {kind} adapter {adapter.value!r} '
+                          f'(accepted: {", ".join(adapters)})')
+    return adapter.value
+
+
+def call_tool(errors, function, *args, **kwargs):
+    """function(*args, **kwargs), with a tool wrapper's error (one of `errors`) as a RecordError."""
+    try:
+        return function(*args, **kwargs)
+    except errors as error:
+        raise RecordError(str(error)) from None
+
+
 def command(resolution, name):
     """The repo-layer command `name` (one of constants.REPO_COMMANDS) as a repolayer.Setting; an
     unresolved command has an empty value. A broken repository file raises its error here."""

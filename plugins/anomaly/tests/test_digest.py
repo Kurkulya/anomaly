@@ -5,8 +5,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-from anomaly_loop import digest, ideas, index, profile, records
-from tests.fixtures import anomaly_text, context, run_cli, write_text
+from anomaly_loop import addenda, digest, ideas, index, profile, records
+from tests.fixtures import anomaly_text, context, run_cli, write_experiment_anomaly, write_text
 
 
 class DigestCase(unittest.TestCase):
@@ -21,6 +21,8 @@ class RegistryTest(DigestCase):
     def test_ships_with_the_index_section_and_every_entry_resolves_to_a_function(self):
         self.assertIn(('index', 'digest_section'), digest.SECTIONS)
         self.assertIn(index.digest_section, digest.section_functions())
+        self.assertIn(('addenda', 'recheck_section'), digest.SECTIONS)
+        self.assertIn(addenda.recheck_section, digest.section_functions())
         self.assertTrue(all(callable(section) for section in digest.section_functions()))
 
     def test_sections_run_in_order_empty_ones_skipped_blank_line_between(self):
@@ -53,7 +55,8 @@ class RegistryTest(DigestCase):
     def test_each_kind_of_record_is_loaded_once(self):
         loaders = {'anomalies': (records, 'load_anomalies'), 'ideas': (ideas, 'load_ideas'),
                    'lenses': (records, 'load_lenses'), 'session_kinds': (records, 'load_session_kinds'),
-                   'profile': (profile, 'load_profile'), 'metrics_rows': (digest, 'load_lines')}
+                   'profile': (profile, 'load_profile'), 'metrics_rows': (digest, 'load_lines'),
+                   'rechecks': (addenda, 'scan_rechecks')}
         for attribute, (module, name) in loaders.items():
             with self.subTest(attribute=attribute), \
                     mock.patch.object(module, name, wraps=getattr(module, name)) as loader:
@@ -82,6 +85,61 @@ class IndexSectionTest(DigestCase):
 
     def test_empty_backlog_says_so(self):
         self.assertEqual(index.digest_section(self.context), ['## Backlog', '0 open · 0 closed'])
+
+
+class RecheckSectionTest(DigestCase):
+    """AC-16 and AC-17: an addenda line whose target changed since the line was written, or whose target
+    is gone, is listed under re-check."""
+    STALE = '0a1b2c3d'   # a stamp that is not the stamp of any file the tests write
+
+    def setUp(self):
+        super().setUp()
+        self.plugin = self.home.parent / 'plugin'
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        write_text(self.plugin / 'skills' / 'research' / 'SKILL.md', '# research\n')
+
+    def line(self, name, text, signature, stamp, agent=False, check_by='2026-10-01', **experiment):
+        """A line in the addenda file of the skill or agent `name`, with its experiment on record."""
+        addenda.append_line(addenda.addendum_path(self.home, name, agent=agent), text, signature, stamp)
+        write_experiment_anomaly(self.home, signature, target=f'anomaly:{name}', check_by=check_by,
+                                 fixed_by=f'2026-09-10 · addenda/{"agents/" if agent else ""}{name}.md', **experiment)
+
+    def section(self):
+        return addenda.recheck_section(self.context)
+
+    def test_a_line_whose_stamp_differs_from_its_targets_hash_is_listed_with_the_drop_command(self):
+        current = addenda.stamp(self.plugin / 'skills' / 'observe')
+        self.line('observe', 'Ask which repo first.', 'stale-one', self.STALE, result='keep')
+        self.line('observe', 'Name the file first.', 'fresh-one', current, result='keep')
+        addenda.append_line(addenda.addendum_path(self.home, 'observe'), 'Keep it short.', 'no-record', self.STALE)
+        lines = self.section()
+        out = '\n'.join(lines)
+        self.assertIn('no anomaly no-record in home', out)
+        self.assertIn('re-check', lines[0].lower())
+        self.assertIn('Ask which repo first.', out)
+        self.assertIn("calibrate drop stale-one --reason '<text>'", out)
+        self.assertNotIn('fresh-one', out)
+        self.assertNotIn('Name the file first.', out)
+
+    def test_a_stale_line_whose_experiment_has_no_result_shows_its_check_date_not_the_drop_command(self):
+        self.line('research', 'Cite the source.', 'in-flight', self.STALE, check_by='2026-10-25')
+        lines = self.section()
+        self.assertTrue(any('in-flight' in line and '2026-10-25' in line for line in lines), lines)
+        self.assertNotIn('calibrate drop', '\n'.join(lines))
+
+    def test_a_target_that_cannot_be_read_is_listed_with_why_and_does_not_stop_the_section(self):
+        self.line('observe', 'Ask which repo first.', 'stale-one', self.STALE, result='keep')
+        with mock.patch.object(addenda, 'stamp', side_effect=PermissionError(13, 'Permission denied')):
+            out = '\n'.join(self.section())
+        self.assertIn('the skill observe not read (Permission denied)', out)
+
+    def test_an_addenda_file_whose_skill_or_agent_is_gone_is_listed_naming_the_missing_target(self):
+        write_text(self.plugin / 'skills' / 'gone-skill' / 'notes.md', 'left over\n')   # a folder without SKILL.md
+        self.line('gone-skill', 'Ask which repo first.', 'skill-line', self.STALE, result='keep')
+        self.line('gone-agent', 'Name the file first.', 'agent-line', self.STALE, agent=True, result='keep')
+        out = '\n'.join(self.section())
+        self.assertIn('the skill gone-skill is gone from the plugin', out)
+        self.assertIn('the agent gone-agent is gone from the plugin', out)
 
 
 class DigestCommandTest(DigestCase):
@@ -123,6 +181,17 @@ class DigestCommandTest(DigestCase):
                 mock.patch.object(index, 'digest_section', folder):
             code, out, _ = run_cli('digest', '--home', str(self.home))
         self.assertEqual((code, out), (0, 'None\n'))
+
+    def test_the_calibrate_addendum_is_the_last_thing_the_digest_prints(self):
+        """AC-13: the output without an addenda file stays as it was, and the addendum follows it."""
+        _, before, _ = run_cli('digest', '--home', str(self.home))
+        addenda.append_line(addenda.addendum_path(self.home, 'calibrate'), 'Read the backlog top down.',
+                            'skipped-top', '0a1b2c3d')
+        code, after, err = run_cli('digest', '--home', str(self.home))
+        self.assertEqual((code, err), (0, ''))
+        self.assertTrue(before.strip(), before)
+        self.assertTrue(after.startswith(before), after)
+        self.assertIn('Read the backlog top down.', after.rstrip().splitlines()[-1])
 
     def test_digest_refuses_a_data_folder_inside_home(self):
         code, out, err = run_cli('digest', '--home', str(self.home), '--data', str(self.home / 'state'))
