@@ -906,7 +906,7 @@ class PlanReviewerTest(unittest.TestCase):
         self.assertRegex(item, r'`implement`(?!_)')
 
     def test_both_plan_modes_flag_an_unsettled_rule_pair_as_a_blocker_only_with_a_concrete_case(self):
-        """Calibrate-fixes ticket 04 (AC-13, AC-14, AC-15): one numbered check item per mode doc carries the
+        """Calibrate-fixes-1 ticket 04 (AC-13, AC-14, AC-15): one numbered check item per mode doc carries the
         unsettled-pair rule, the Blocker severity, the one concrete case, and the no-case-no-Blocker line."""
         pairs = {self.SPEC: ('two rules', 'brief', 'stories', 'decisions'),
                  self.TICKETS: ('two tickets', 'its brief')}
