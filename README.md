@@ -435,7 +435,7 @@ one rule per line, at most 5 lines, and each line is one experiment:
 ```
 
 - `calibrate fix --addendum '<rule>'` writes the line, with the anomaly's signature in the tag
-  (see calibrate). A line added by hand has no tag, so it is never printed.
+  (see calibrate). A line without its tag is never printed.
 - The stamp is 8 hex characters of sha256 over the target as it was when the line was written:
   every file of the skill folder (its relative path and bytes), or the one agent file. It changes
   only when that skill or agent changes.
@@ -715,7 +715,8 @@ and problems without a target share one `untargeted` batch. The batches are rank
 score of the problems that can be fixed now; inside a batch the order is score, then the lower
 effort (`S`, `M`, `L`, then not set). With no plugin checkout (the plugin folder is no git
 checkout of its own, and `plugin_repo` names none), a section
-`## Upstream reports not yet sent (offer each; send one only after the user's yes)` follows: one
+`## Upstream reports not yet sent (offer each; send one only after the user's yes)` follows when
+there is a report to offer: one
 `upstream: tuning <signature>` line for each kept addenda line that `upstream tuning` would take,
 then one `upstream: defect <signature>` line for each problem marked `upstream defect` that
 `upstream defect` would take, each only until its report was sent (see Upstream reports). A file
@@ -767,7 +768,8 @@ of this plugin, a skill that takes no addenda, an empty rule, a rule that is not
 at most 300 characters (the privacy checks of `observe`), a rule that is a whole command a live
 deny rule of your settings denies, a file that already holds 5 lines, and a second line of the
 same experiment. A new `declare` on an anomaly whose last line is still in its addenda file is
-refused until `drop` removes that line.
+refused. While that experiment has no verdict yet, `drop` refuses too: judge it with `verify`
+(or `decide`) first. Once it has a verdict, `drop` removes the line and `declare` is accepted.
 
 **A switch-over** replaces an old build skill with a new one
 ([ADR-0013](docs/adr/0013-switch-over-compares-skills.md)). Declare it with `--kind build --skill
@@ -1022,8 +1024,9 @@ installed copy calibrate plugin text through a checkout.
 1. Fork the plugin's repository on GitHub, then clone your fork.
 2. Set `plugin_repo` in your profile to the plugin folder inside the clone,
    `<clone>/plugins/anomaly`.
-3. Install the plugin from your fork: run the commands of Install with the clone's path as the
-   marketplace path.
+3. Install the plugin from your fork. Install fixes the marketplace name (`anomaly-local`), so
+   first remove any copy of the plugin you installed before, and its marketplace. Then run the
+   commands of Install with the clone's path as the marketplace path.
 4. Calibrate as usual. A target that is part of this plugin needs `calibrate declare --approved`,
    given only after your explicit yes. Make the change in the clone, commit it there, and record
    it with `calibrate fix --ref <commit>`.
