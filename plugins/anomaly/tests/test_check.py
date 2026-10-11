@@ -960,13 +960,9 @@ def hook_input(command, **fields):
     return data
 
 
-def subagent_bash(data):
-    return getattr(check, 'subagent_bash')(data)   # looked up per call: a missing function fails the test, not the import
-
-
 class SubagentBashVerdictTest(unittest.TestCase):
     def assert_denied(self, command, **fields):
-        verdict = subagent_bash(hook_input(command, **fields))
+        verdict = check.subagent_bash(hook_input(command, **fields))
         self.assertIsNotNone(verdict, command)
         output = verdict['hookSpecificOutput']
         self.assertEqual(output['hookEventName'], 'PreToolUse')
@@ -975,7 +971,7 @@ class SubagentBashVerdictTest(unittest.TestCase):
         self.assertIn('Edit', output['permissionDecisionReason'])
 
     def assert_allowed(self, command, **fields):
-        self.assertIsNone(subagent_bash(hook_input(command, **fields)), command)
+        self.assertIsNone(check.subagent_bash(hook_input(command, **fields)), command)
 
     def test_a_file_write_in_a_subagent_is_denied_naming_write_and_edit(self):
         """AC-21."""
@@ -1011,9 +1007,9 @@ class SubagentBashVerdictTest(unittest.TestCase):
         """AC-25: the main window, also a session started with `--agent` (it has an `agent_type`)."""
         data = hook_input('echo x > f')
         del data['agent_id']
-        self.assertIsNone(subagent_bash(data))
+        self.assertIsNone(check.subagent_bash(data))
         del data['agent_type']
-        self.assertIsNone(subagent_bash(data))
+        self.assertIsNone(check.subagent_bash(data))
 
     def test_the_survey_agent_is_allowed_to_write_through_the_shell(self):
         """AC-26."""
@@ -1022,10 +1018,10 @@ class SubagentBashVerdictTest(unittest.TestCase):
     def test_a_command_it_cannot_parse_or_a_missing_command_is_allowed(self):
         """AC-27, the verdict half; input that is not JSON is a CLI test."""
         self.assert_allowed('echo "a > b')
-        self.assertIsNone(subagent_bash(hook_input('', tool_input={})))
+        self.assertIsNone(check.subagent_bash(hook_input('', tool_input={})))
         data = hook_input('echo x > f')
         del data['tool_input']
-        self.assertIsNone(subagent_bash(data))
+        self.assertIsNone(check.subagent_bash(data))
 
     def test_a_write_command_after_a_shell_keyword_or_a_wrapper_with_options_is_denied(self):
         """AC-21: the command name is found past `do`, `then`, `!`, `{`, `sudo -u root` and the like."""
