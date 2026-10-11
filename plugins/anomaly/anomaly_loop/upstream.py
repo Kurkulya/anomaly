@@ -23,10 +23,10 @@ check_report: each field, and the agent name of a per-dispatch reading, passes p
 profile marker, scans.profile_markers, and no repo-layer name, scans.repo_layer_names; a hit refuses with no file
 written and nothing redacted), writes it to `<home>/upstream/<signature>.defect.md` or
 `<home>/upstream/<signature>.tuning.md` (a `Title:` line, a blank line, the body) and prints the path. The marker and
-repo-layer check (in any case) reads only the text from outside the CLI (the symptom, the rule, the reason, the agent name of a
-per-dispatch reading, verdict.per_dispatch_agent, the installed version folder and the signature), not the title,
-target, verdict word, readings heading and the rest of each readings line, which the CLI composes; that text is also
-refused when it holds a local path or the OS user name.
+repo-layer check (in any case) reads only the text from outside the CLI (the symptom, the rule, the reason, the
+agent name of a per-dispatch reading, verdict.per_dispatch_agent, the installed version folder and the signature),
+not the title, target, verdict word, readings heading and the rest of each readings line, which the CLI composes;
+that text is also refused when it holds a local path or the OS user name.
 
 The target repository: `source.repo` of the installed copy's marketplace record (marketplace_repo) when its source is
 GitHub, else the profile key `upstream_repo`; with neither, the command says no target repository is known and
@@ -111,10 +111,11 @@ def check_report(context, fields, environ, label=LABEL):
     a short repo-layer name such as `add` cannot match its hex) holds a profile marker (scans.profile_markers) or a
     repo-layer name (scans.repo_layer_names) in any case, by scans.marker_hits on the text and the names in lower
     case (marker_hits itself and the neutrality test stay case-sensitive: plugin files are text the plugin's own
-    author writes, a report holds the user's words), a local path (LOCAL_PATH: `/x/y` or `~/` not
-    right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, a drive `X:\\` or
-    `X:/`, a `file://` link in any case, or a UNC path `\\\\host\\share\\...`; a slash inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash
-    command such as `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
+    author writes, a report holds the user's words), a local path (LOCAL_PATH: `/x/y` or `~/` not right after a
+    letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, a drive `X:\\` or `X:/`, a `file://`
+    link in any case, or a UNC path `\\\\host\\share\\...`; a slash inside a word such as `and/or`, the `//` of a
+    link and any one-segment path are none, so a slash command such as `/compact` and a path such as `/etc` are
+    allowed) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
     lowered = {name.lower(): name for name in names}
     users = user_names(environ)
