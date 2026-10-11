@@ -452,11 +452,10 @@ def run_verify(args, environ):
     if reason is None:
         raise RecordError(f'the experiment of {seen.signature} is not due')
     found = verdict.verdict(context, seen)
-    roles = ('primary', 'guard', 'time before tokens')
     lines = [f'verify: {seen.signature} ({reason})']
     if seen.experiment.skill:
         lines.append(f'switch-over: {switch_over_text(seen.experiment.kind, seen.experiment.skill)}')
-    lines += [verdict.reading_line(r, role) for r, role in zip(found.readings, roles)]
+    lines += verdict.reading_lines(found)
     if found.fall_backs is not None:
         lines.append(f'- fall-backs: {found.fall_backs} (in neither side)')
     if found.no_factor:

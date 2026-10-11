@@ -458,3 +458,11 @@ def reading_line(reading, role):
         line += '; the tested sessions moved the other way'
     left_out = before.left_out + after.left_out
     return line + (f'; sightings left out of the test: {left_out}' if left_out else '')
+
+
+READING_ROLES = ('primary', 'guard', 'time before tokens')   # the role of each Verdict reading, in order
+
+
+def reading_lines(found):
+    """reading_line of each reading of the Verdict `found`, with its role (READING_ROLES)."""
+    return [reading_line(reading, role) for reading, role in zip(found.readings, READING_ROLES)]
