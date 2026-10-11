@@ -185,16 +185,18 @@ def tuning_source(context, anomaly):
 
 
 def tuning_checked(context, anomaly):
-    """The checked part of the anomaly's tuning report, with no verdict run: tuning_source, its fields and the agent
-    name of each per-dispatch reading (verdict.per_dispatch_agent of the experiment's metric and guard as
-    verdict.verdict_inputs names them, the names of the readings tuning_report adds). RecordError when upstream
-    tuning refuses it, also when verdict.verdict would refuse it before its readings (verdict.verdict_inputs)."""
+    """The checked part of the anomaly's tuning report, with no verdict run: tuning_source, its fields up to the
+    Readings field (`Readings as of <today>`: the record keeps no verify day) and the agent name of each
+    per-dispatch reading (verdict.per_dispatch_agent of the experiment's metric and guard as verdict.verdict_inputs
+    names them, the names of the readings tuning_report adds). RecordError when upstream tuning refuses it, also
+    when verdict.verdict would refuse it before its readings (verdict.verdict_inputs)."""
     word, rule = tuning_source(context, anomaly)
     experiment, version = anomaly.experiment, installed_version(context)
     names = tuple(metric.name for metric in verdict.verdict_inputs(anomaly)[1:])   # the metric and the guard
+    heading = f'Readings as of {context.today.isoformat()}'
     fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', experiment.result),
               ('Reason', experiment.reason or '(none recorded)'), (VERSION_FIELD, version),
-              ('Signature', anomaly.signature))
+              ('Signature', anomaly.signature), (heading, 'before the fix and since; n= is the sessions on each side'))
     agents = tuple((READING_FIELD, agent) for agent in map(verdict.per_dispatch_agent, names)
                    if agent is not None)   # the user part of a reading; the rest of its line is CLI text
     plus_one = f'+1: the same line, {experiment.result} on the installed version {version}'
@@ -202,13 +204,10 @@ def tuning_checked(context, anomaly):
 
 
 def tuning_report(context, anomaly, checked):
-    """The tuning report the send writes: its checked part `checked` (tuning_checked) with the readings of
-    verdict.verdict as of today (the record keeps no verify day), CLI text only."""
+    """The tuning report the send writes: its checked part `checked` (tuning_checked) with the reading lines of
+    verdict.verdict as of today under its Readings field, CLI text only."""
     found = verdict.verdict(context, anomaly)
-    heading = (f'Readings as of {context.today.isoformat()}',
-               'before the fix and since; n= is the sessions on each side')
-    readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
-    return checked._replace(fields=checked.fields + (heading,), lines=readings)
+    return checked._replace(lines=tuple(f'  {line}' for line in verdict.reading_lines(found)))
 
 
 ACTIONS = {'defect': (LABEL, defect_report), 'tuning': (TUNING_LABEL, tuning_checked)}   # action: (label, compose)
@@ -217,7 +216,7 @@ ACTIONS = {'defect': (LABEL, defect_report), 'tuning': (TUNING_LABEL, tuning_che
 def checked_report(context, anomaly, action, environ):
     """The report of `action` (ACTIONS) for the anomaly once check_report passed it: its fields and its checked
     pairs (the agent name of a per-dispatch reading), for a tuning report its checked part (tuning_checked, no
-    readings); RecordError when the action refuses it, OSError when a file it reads cannot be read."""
+    reading lines); RecordError when the action refuses it, OSError when a file it reads cannot be read."""
     label, compose = ACTIONS[action]
     report = compose(context, anomaly)
     check_report(context, report.fields + report.checked, environ, label)
