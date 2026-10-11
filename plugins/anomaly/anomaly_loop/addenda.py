@@ -181,14 +181,17 @@ def scan_rechecks(home, plugin_root):
 
 def recheck_section(context):
     """The addenda lines to re-check (scan_rechecks), each with `calibrate drop` once its experiment has a verdict
-    (has_verdict), else with its check date."""
-    experiments = {anomaly.signature: anomaly.experiment for anomaly in context.anomalies}
+    (has_verdict), else with its check date; a line whose signature names no anomaly says so."""
+    anomalies = {anomaly.signature: anomaly for anomaly in context.anomalies}
     lines = []
     for recheck in context.rechecks:
         lines.append(f'- {recheck.path}: {recheck.note}')
         for line in recheck.lines:
-            signature, experiment = line['signature'], experiments.get(line['signature'])
-            if has_verdict(experiment):
+            signature, anomaly = line['signature'], anomalies.get(line['signature'])
+            experiment = anomaly.experiment if anomaly is not None else None
+            if anomaly is None:
+                then = f'no anomaly {signature} in home'
+            elif has_verdict(experiment):
                 then = f"`calibrate drop {signature} --reason '<text>'`"
             else:
                 then = f'no verdict yet, check by {(experiment.check_by if experiment else "") or "?"}'
