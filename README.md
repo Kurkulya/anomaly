@@ -137,11 +137,13 @@ absent, blank or still a `<placeholder>` counts as missing.
 | `models` | optional: the model per dispatch role, one `role: model` (or `role: model effort`) per indented line; roles `explore`, `implement`, `implement_wide`, `digest`, `survey`, `review`, `review_code`, `review_feature`, `review_security`, `deep_analysis` (also written `deep analysis` or `deep-analysis`), `browse`; effort `low`, `medium`, `high`, `xhigh` or `max` |
 | `key_line` | optional port: the name of the ticket line that holds the key (core default `Key`) |
 | `adr_folder` | optional port: the repo-relative folder ADR drafts are moved to, and where `check stories` looks up `ADR-NNNN` owners (core default `docs/adr/`) |
+| `upstream_tool` | optional port: the tool `upstream` searches and writes the plugin's GitHub issues with; the only value today is `gh`, and any other value stops `upstream` with one `anomaly:` line (see Upstream reports) |
+| `upstream_repo` | optional: the plugin's GitHub repository as `owner/name`, where `upstream` sends a report. Read only when the installed copy's marketplace record names no GitHub source; a value that is not `owner/name` stops `upstream` with one `anomaly:` line |
 
 After changing `ticket_key`, run `measure --full` so old rows are rescanned.
 
-There are nine required keys (`tracker` to `issue_source`) and ten optional ones
-(`build_skills` to `adr_folder`). The pipeline reads some of them as ports (see Ports and the
+There are nine required keys (`tracker` to `issue_source`) and twelve optional ones
+(`build_skills` to `upstream_repo`). The pipeline reads some of them as ports (see Ports and the
 repo layer).
 
 ## Ports and the repo layer
@@ -170,6 +172,7 @@ python plugins/anomaly/scripts/anomaly.py ports --home <dir> [--repo <dir>]
 | `ui_check` | replace | `verify_ui` | built-in browser walkthrough of the ticket's UI ACs; its app facts come from the repo layer |
 | `key_line` | replace | `key_line` | `Key`: the name of the ticket line that holds the key |
 | `adr_folder` | replace | `adr_folder` | `docs/adr/`: the repo folder ADR drafts are moved to; `check stories` looks up `ADR-NNNN` owners there |
+| `upstream` | replace | `upstream_tool` | write the GitHub issue text to a file and print the search link (see Upstream reports) |
 
 Replace: the adapter takes the core default's place. Add: the adapter's names (separated by
 commas or lines, optionally inside one pair of `[ ]`) are listed after the core default's.
@@ -284,6 +287,7 @@ port branch = feat/<slug> [core default]
 port ui_check = built-in browser walkthrough of the ticket's UI ACs [core default]
 port key_line = Key [core default]
 port adr_folder = docs/adr/ [core default]
+port upstream = write the GitHub issue text to a file and print the search link [core default]
 repo name = demo [checkout]
 repo override = <home>/repos/demo.md [absent]
 repo base = main [core default]
@@ -320,6 +324,8 @@ Everything under `home`:
 | `work-units.jsonl` | one line per pipeline stage run: `{feature, stage, session, date, ended}`, plus `started`, `doc_bytes`, `ticket` and `mode` when they apply; written by `worklog add` |
 | `profile.md` | the profile (see above) |
 | `repos/<repo>.md` | optional: the personal override file of one repository (see Ports and the repo layer); never committed to that repository |
+| `addenda/<skill>.md`, `addenda/agents/<agent>.md` | optional: your extra rules for one skill or agent of this plugin, at most 5 lines, written by `calibrate fix --addendum` (format below) |
+| `upstream/<signature>.defect.md`, `upstream/<signature>.tuning.md` | the issue text of an upstream report, written by `upstream defect` or `upstream tuning` (see Upstream reports) |
 
 ### Anomaly file
 
@@ -377,6 +383,9 @@ Run the fast suite first.
 - When a new experiment replaces a finished one, the old one becomes one line under
   `## Earlier experiments` (result, the whole `fixed_by`, metric, guard, expectation, skill, reason),
   newest first, so a reverted attempt stays on record.
+- `## Addenda log` is written only by the CLI, one `- ` line per event, oldest first:
+  `dropped <date> · <reason>` from `calibrate drop`, and `upstream <date> · <number>` once a
+  report went upstream.
 
 Categories: `navigation`, `automated-checks`, `coding-standards`, `steering-files`,
 `tool-economy`, `no-ops`, `information-access`, `rework`, `late-catch`, `handoff-loss`,
@@ -412,6 +421,34 @@ assessed; the command fills it in. The body is written in the assessor's own wor
 most one short quote (at most 15 words: a block of `> ` lines, or a span of 4 or more
 words in straight double, curly double or curly single quotes). A link is stored without its query string (only a
 digest of it, see assess).
+
+### Addenda files
+
+An installed copy of the plugin has no checkout to change. An **addenda file** lets you tune one
+of its skills or agents from home instead
+([ADR-0021](docs/adr/0021-user-addenda-in-home-load-through-cli-output.md)):
+`addenda/<skill>.md` for a skill, `addenda/agents/<agent>.md` for an agent. It is plain text,
+one rule per line, at most 5 lines, and each line is one experiment:
+
+```
+<rule> [exp: <signature> · <stamp>]
+```
+
+- `calibrate fix --addendum '<rule>'` writes the line, with the anomaly's signature in the tag
+  (see calibrate). A line without its tag is never printed.
+- The stamp is 8 hex characters of sha256 over the target as it was when the line was written:
+  every file of the skill folder (its relative path and bytes), or the one agent file. It changes
+  only when that skill or agent changes.
+- `measure` takes no addenda file.
+
+**How a skill reads them.** A call the skill already makes prints its addenda last: `observe
+list` for observe, `assess check` for assess, `digest` for calibrate, and `worklog start <key>
+<stage>` for the pipeline skill named by the stage. The skill's own lines come under
+`Extra rules for <skill>. They add or narrow; the core rules and invariants win on a clash.`
+Then come the lines of each agent the skill dispatches, under a line that asks the skill to add
+them to the brief of `anomaly:<agent>`. With no addenda file nothing is printed, not even an
+empty line. A file that holds a line without its tag adds one `warning:` line that counts them,
+and a file that cannot be read is one `warning:` line, not a stop.
 
 ## The loop
 
@@ -493,7 +530,8 @@ python plugins/anomaly/scripts/anomaly.py observe apply --home <dir> --file <bat
 ```
 
 - `observe list` prints one line per anomaly (open ones by score, then closed ones) so a new
-  sighting can be matched by root cause, and the missing-profile line when keys are missing.
+  sighting can be matched by root cause, the missing-profile line when keys are missing, and last
+  the addenda of observe and of `anomaly:digest` (see Addenda files).
 - `observe apply` records one batch: `{"sightings": [...], "lenses": [...], "kind": {...}}`,
   every key optional. The whole batch is checked first; nothing is written if any part is
   invalid. A sighting whose signature exists adds one occurrence, sets `last_seen`, puts the
@@ -623,6 +661,13 @@ folder has a skill of that name. Nothing is judged unless the
 measured sessions cover the whole 56 days. A skill with a win of 2 or more sightings is listed as
 protected instead of proposed. Hook runs are not in transcripts and are not counted.
 
+**Addenda to re-check.** The last section, `## Addenda to re-check`, lists each addenda file whose
+skill or agent changed since its lines were written (their stamp differs from the target's stamp
+now; only those lines are listed) or is gone from the plugin (every tagged line is listed). Each
+line ends with what to do: `calibrate drop <signature> --reason '<text>'` once its experiment has
+a verdict, else `no verdict yet, check by <date>`; a line whose signature names no anomaly in home
+says so. A file or target that cannot be read is listed with why.
+
 ### The weekly nudge
 
 ```
@@ -650,7 +695,7 @@ as an experiment. A script does the ranking, the recording and the arithmetic:
 python plugins/anomaly/scripts/anomaly.py calibrate plan    --home <dir>
 python plugins/anomaly/scripts/anomaly.py calibrate effort  --home <dir> --set <signature>=S|M|L [--set ...]
 python plugins/anomaly/scripts/anomaly.py calibrate declare --home <dir> --signature <s> --expect '<effect>' --metric '<name>' --guard '<name>' [--kind <kind>] [--skill <new skill>] [--check-by <date>] [--effort S|M|L] [--approved]
-python plugins/anomaly/scripts/anomaly.py calibrate fix     --home <dir> --signature <s> --ref <commit or file> [--date <date>]
+python plugins/anomaly/scripts/anomaly.py calibrate fix     --home <dir> --signature <s> (--ref <commit or file> | --addendum '<line>') [--date <date>]
 python plugins/anomaly/scripts/anomaly.py calibrate verify  --home <dir> --signature <s>
 python plugins/anomaly/scripts/anomaly.py calibrate decide  --home <dir> --signature <s> --result keep|revert
 python plugins/anomaly/scripts/anomaly.py calibrate close   --home <dir> --signature <s> [--signature ...]
@@ -668,8 +713,16 @@ skills (removal). Then the open and reopened problems in batches: a `repo:` or `
 is one batch; any other scope (`global` and the like) is split by target (`target: <target>`),
 and problems without a target share one `untargeted` batch. The batches are ranked by the summed
 score of the problems that can be fixed now; inside a batch the order is score, then the lower
-effort (`S`, `M`, `L`, then not set). The plan ends with the metric names, the allowed guards and
-the number of sessions per kind in the last 28 days. Marks on a problem:
+effort (`S`, `M`, `L`, then not set). With no plugin checkout (the plugin folder is no git
+checkout of its own, and `plugin_repo` names none), a section
+`## Upstream reports not yet sent (offer each; send one only after the user's yes)` follows when
+there is a report to offer: one
+`upstream: tuning <signature>` line for each kept addenda line that `upstream tuning` would take,
+then one `upstream: defect <signature>` line for each problem marked `upstream defect` that
+`upstream defect` would take, each only until its report was sent (see Upstream reports). A file
+such a report needs that cannot be read gives a `warning:` line in its place. The plan ends with
+the metric names, the allowed guards and the number of sessions per kind in the last 28 days.
+Marks on a problem:
 
 - `waits`: a problem in a workflow category (`rework`, `late-catch`, `handoff-loss`,
   `manual-step`, `blocked`, `pipeline-fit`) is fixed only with score 4 or more, or impact 3.
@@ -679,6 +732,15 @@ the number of sessions per kind in the last 28 days. Marks on a problem:
   removal unless you override that explicitly.
 - `experiment drafted`: an adopted idea left a draft experiment; `declare` completes it and keeps
   the drafted values you do not replace.
+- `fix home: addenda/<skill>.md` (or `addenda/agents/<agent>.md`): only with no plugin checkout,
+  for a target that is one skill or agent of this plugin. The fix is one line in that addenda
+  file, written with `fix --addendum`. `fix home: none, measure takes no addenda` means that skill
+  takes none.
+- `upstream defect: not one skill or agent of the plugin, so no addendum; report it upstream`:
+  only with no plugin checkout, for a target in the plugin's other code or docs, or an
+  `anomaly:<name>` that names no skill or agent. It cannot be fixed here; the upstream section
+  offers it when `upstream defect` takes it (a file of the plugin; a name of no skill or agent is
+  refused).
 
 **Declare, then change, then record.** `declare` writes the experiment before the change: the
 expected effect, exactly one primary metric, exactly one guard, the session kind, `declared_on`
@@ -697,6 +759,17 @@ checkout) needs `--approved`: the loop proposes changes to itself and applies th
 your explicit yes. After the change, `fix` writes `fixed_by` as `YYYY-MM-DD · <ref>` and sets the
 status to `fixed`. It refuses an experiment that `declare` did not write, and a `--date` before
 `declared_on`. A blank `check_by` becomes the fix day + 21 days.
+
+**An addenda fix.** `fix --addendum '<rule>'`, given in place of `--ref`, makes the change
+itself: it appends the rule with its tag to the target's addenda file (see Addenda files), commits
+that file alone, prints `addendum: <tagged line>`, and the file (`addenda/<skill>.md` or
+`addenda/agents/<agent>.md`) becomes the ref. It refuses a target that is not one skill or agent
+of this plugin, a skill that takes no addenda, an empty rule, a rule that is not one clean line of
+at most 300 characters (the privacy checks of `observe`), a rule that is a whole command a live
+deny rule of your settings denies, a file that already holds 5 lines, and a second line of the
+same experiment. A new `declare` on an anomaly whose last line is still in its addenda file is
+refused. While that experiment has no verdict yet, `drop` refuses too: judge it with `verify`
+(or `decide`) first. Once it has a verdict, `drop` removes the line and `declare` is accepted.
 
 **A switch-over** replaces an old build skill with a new one
 ([ADR-0013](docs/adr/0013-switch-over-compares-skills.md)). Declare it with `--kind build --skill
@@ -816,7 +889,9 @@ the anomaly has sightings on the fix day, it says how many and that the verdict 
 them (they are in neither window), and when one of them is what reopened the anomaly, it says
 that too. On a guard line, `→ real change`
 means the one-way test passed (the guard is worse), even when the result is `inconclusive`
-because a sighting guard is `thin`. `revert` reopens the anomaly. `decide` is accepted once the
+because a sighting guard is `thin`. `revert` reopens the anomaly; when the fix was an addenda
+line, it also removes that line from its file, commits that file alone and prints
+`removed: <line>` (from `verify` or `decide`). `decide` is accepted once the
 moved check date of an inconclusive result has come, or when an experiment is due but its metric
 or fix date cannot be measured (older records).
 
@@ -830,7 +905,51 @@ its N is 0.
 **Housekeeping writes.** `effort` sets the effort of several anomalies in one step. `close` marks
 anomalies `wontfix`. `merge` adds the sightings of one anomaly to another (occurrences added up,
 the higher impact, the newer last-seen date) and marks the folded one `wontfix` with a
-`## Merged` note that names where it went.
+`## Merged` note that names where it went. `drop <signature> --reason '<text>'` removes the
+addenda line of an experiment that has a verdict (a blank or `inconclusive` result is none yet)
+and keeps that result: use it for a line in Addenda to re-check whose rule the core text now
+holds, or to make room in a full file. It logs `dropped <date> · <reason>` under the anomaly's
+`## Addenda log`, prints `removed: <line>` and `dropped: <signature>; the result <result> stays`,
+and refuses an anomaly with no tagged line in the file its fix names.
+
+**Upstream reports.** With no plugin checkout, you can send the plugin's owner what you found, as
+a GitHub issue ([ADR-0022](docs/adr/0022-upstream-reports-through-an-upstream-port.md)). Each
+report goes once, and nothing reaches GitHub without your yes.
+
+```
+python plugins/anomaly/scripts/anomaly.py upstream defect <signature> --home <dir> [--comment <number> | --create]
+python plugins/anomaly/scripts/anomaly.py upstream tuning <signature> --home <dir> [--comment <number> | --create]
+```
+
+- `upstream defect` reports a plugin fault, with no experiment. It refuses a target that is not a
+  skill, an agent or a file of this plugin. The body holds the target, the anomaly's summary as
+  the symptom, the installed version (the plugin folder name) and the signature.
+- `upstream tuning` reports a kept addenda line with its result. It refuses an anomaly that is
+  not `fixed`, an experiment whose result is not `keep` or `unproven`, and a line that is no
+  longer in the addenda file its fix names. The body holds the target, the rule (the line without
+  its tag), the verdict word, the recorded reason, the installed version, the signature, and the
+  readings as `calibrate verify` prints them, under `Readings as of <today>`.
+- Both titles are `[anomaly:<skill or agent>] <signature>`, or `[anomaly:<path from the plugin
+  root>] <signature>` for plugin code. Every field passes the privacy checks; the text that does
+  not come from the CLI (the symptom, rule, reason, an agent name in a reading, the version folder
+  and the signature) also may not name a profile value, a repo-layer name, a local path or your
+  OS user name. A hit refuses the report: nothing is redacted and no file is written.
+- The command writes `upstream/<signature>.defect.md` or `upstream/<signature>.tuning.md` in
+  home (a `Title:` line, a blank line, the body) and prints `report: <path>`. The target
+  repository is the GitHub source of the installed copy's marketplace record, else the profile
+  key `upstream_repo`; with neither it says no target repository is known and exits 1, the file
+  written.
+- On the core default of the `upstream` port it prints `search: <link>`, a search of the
+  repository's open issues for the title prefix, and calls nothing. With `upstream_tool: gh` it
+  lists the open issues whose title names the same target and marks an exact title as the
+  `+1 offer`. A second run acts: `--comment <number>` adds a +1 comment to that issue and prints
+  `+1 added to #<number>`; `--create` opens the issue from the file and prints its link. Either
+  one logs `upstream <date> · <number>` under the anomaly's `## Addenda log` and commits it;
+  after that, `--comment` and `--create` are refused (exit 2). On the core default both flags are
+  refused.
+- With a plugin checkout (the plugin folder is a git checkout of its own, or `plugin_repo`
+  names one) both commands print `a plugin checkout is set: fix it through an MR` and exit 1
+  with nothing written; see The fork lane.
 
 ### assess
 
@@ -877,7 +996,8 @@ python plugins/anomaly/scripts/anomaly.py assess record --home <dir> --slug <slu
 
 - `check` prints `assess: seen before` and the earlier idea, or `assess: new`, the key to use
   for the record, and the open anomalies by score. Like `observe list`, it prints the
-  missing-profile line first.
+  missing-profile line first, and last the addenda of assess and of `anomaly:digest` (see
+  Addenda files).
 - Text options have a `-file` twin that reads a UTF-8 file (the skill uses it so that quotes in
   the text cannot break the command line); give one of the two. `-` reads standard input.
 - `record` refuses an input whose key is already used by an idea with another slug, and refuses
@@ -894,6 +1014,28 @@ python plugins/anomaly/scripts/anomaly.py assess record --home <dir> --slug <slu
   and the idea's slug in the session place. When `home` is in a git repository, only the
   files written (the idea, and for `adopt` the anomaly and `INDEX.md`) are committed, with
   `chore(anomaly): assess <slug> (<verdict>)`; the command prints one `commit:` line.
+
+## The fork lane
+
+The power-user lane: you change the plugin's own text, judge the change as an experiment, and send
+it upstream as a PR. It needs no code of its own: the `plugin_repo` profile key already lets an
+installed copy calibrate plugin text through a checkout.
+
+1. Fork the plugin's repository on GitHub, then clone your fork.
+2. Set `plugin_repo` in your profile to the plugin folder inside the clone,
+   `<clone>/plugins/anomaly`.
+3. Install the plugin from your fork. Install fixes the marketplace name (`anomaly-local`), so
+   first remove any copy of the plugin you installed before, and its marketplace. Then run the
+   commands of Install with the clone's path as the marketplace path.
+4. Calibrate as usual. A target that is part of this plugin needs `calibrate declare --approved`,
+   given only after your explicit yes. Make the change in the clone, commit it there, and record
+   it with `calibrate fix --ref <commit>`.
+5. Send the change upstream: push it to your fork and open a PR to the plugin's repository.
+
+With a checkout, `calibrate plan` marks no fix home and offers no upstream report, and
+`upstream defect` and `upstream tuning` refuse (see Upstream reports): a fork sends its fixes
+through a PR, not an issue. The digest checks of plugin skills (Needs rework, Unused plugin
+skills) read the clone's history.
 
 ## Tickets
 
@@ -1756,8 +1898,9 @@ Every pipeline skill run (`build`, `review`, the later stages) leaves one line, 
 - `worklog start <key> <stage>` stamps the start of a stage from the CLI clock; the model never
   passes a time. It appends one `{feature, stage, [ticket,] started}` line to `worklog-starts.jsonl`
   in the data folder (`--data` or `CLAUDE_PLUGIN_DATA`; throwaway, never home) and prints
-  `start: <key> <stage> <time>`. Key and stage are checked like `add`'s. `worklog add` reads that
-  time into `started` and appends a `consumed` line to the same file before it writes the
+  `start: <key> <stage> <time>`, then the addenda of the skill named by the stage and of the
+  agents it dispatches (see Addenda files). Key and stage are checked like `add`'s. `worklog add`
+  reads that time into `started` and appends a `consumed` line to the same file before it writes the
   work-unit line (the file is never rewritten), so one start measures one `add`: two starts in a row
   keep the later one, and an `add` after that with no new `start` has no start time. A start that
   no `add` ever read (an abandoned one) is still read by the next `add` for the same key, stage and
@@ -1827,7 +1970,7 @@ python plugins/anomaly/scripts/anomaly.py index     --home <dir>
 python plugins/anomaly/scripts/anomaly.py digest    --home <dir> [--data <dir>] [--user-config <dir>] [--plugin-root <dir>]
 python plugins/anomaly/scripts/anomaly.py observe   list|apply ...
 python plugins/anomaly/scripts/anomaly.py assess    check|record ...
-python plugins/anomaly/scripts/anomaly.py calibrate plan|effort|declare|fix|verify|decide|close|merge ...
+python plugins/anomaly/scripts/anomaly.py calibrate plan|effort|declare|fix|verify|decide|close|merge|drop ...
 python plugins/anomaly/scripts/anomaly.py nudge     --home <dir> --data <dir> [--user-config <dir>] [--plugin-root <dir>]
 python plugins/anomaly/scripts/anomaly.py ticket    show|gate|set-status|result|reviewed|verified|red|adhoc|amend ...
 python plugins/anomaly/scripts/anomaly.py ports     --home <dir> [--repo <dir>]
@@ -1858,8 +2001,9 @@ python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> [-
 - `digest` prints the review summary for `calibrate`: one block per section, and a section with
   nothing to show is left out, except Experiment results, which always shows. The backlog
   section (counts and the top three anomalies by score) belongs to the index; the others are
-  described under The digest. The data folder is optional here, and a section that needs it
-  says so.
+  described under The digest, the last one being `## Addenda to re-check`. After the sections
+  it prints the addenda of calibrate (see Addenda files). The data folder is optional here, and
+  a section that needs it says so.
 - `observe`, `assess` and `calibrate` take an action; their options are in their sections.
 - `nudge` is run by a hook (see The weekly nudge).
 - `ticket` takes an action; its options are in Tickets.
@@ -1891,6 +2035,11 @@ python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> [-
   comma-separated term in `--terms` with `--context` characters on each side (default 300);
   `--word` matches whole words only. A page it cannot read prints `FETCH FAILED` and exits 1,
   since that output cannot prove a clause absent.
+- `upstream` takes the action `defect` or `tuning`: it writes the report of one anomaly to
+  `<home>/upstream/<signature>.defect.md` or `<home>/upstream/<signature>.tuning.md`, then prints
+  the search link, or with `upstream_tool: gh` searches, adds a +1 or creates the issue. `tuning`
+  is refused unless the result is `keep` or `unproven` and the anomaly is still `fixed`. A plugin
+  checkout, or no target repository, exits 1; see Upstream reports.
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
