@@ -429,9 +429,9 @@ class SkillFileTest(unittest.TestCase):
 
     def test_the_readme_review_section_names_the_rule_trace_pass(self):
         """Rule-trace ticket AC-1."""
-        readme = PLUGIN.parent.parent / 'README.md'
+        readme = PLUGIN.parent.parent / 'docs' / 'reference.md'
         if not readme.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = readme.read_text(encoding='utf-8')
         section = text.split('## The review skill', 1)[1].split('\n## ', 1)[0].lower()
         self.assertIn('rule trace', section)
@@ -458,7 +458,7 @@ class SkillFileTest(unittest.TestCase):
 
 
 class ReadmeTest(unittest.TestCase):
-    README = PLUGIN.parent.parent / 'README.md'
+    README = PLUGIN.parent.parent / 'docs' / 'reference.md'
 
     def help_names(self, *argv):
         """The names listed under a help text's positional arguments (the commands or the actions)."""
@@ -490,7 +490,7 @@ class ReadmeTest(unittest.TestCase):
 
     def test_the_readme_names_every_command_group_and_every_group_action_of_the_help(self):
         if not self.README.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         self.assertEqual(self.gaps(self.README.read_text(encoding='utf-8')), [])
 
     def test_a_readme_that_misses_a_group_or_an_action_is_reported(self):
@@ -505,7 +505,7 @@ class ReadmeTest(unittest.TestCase):
     def test_the_readme_delta_line_states_the_any_fix_round_rule_and_the_blocker_and_high_only_rule(self):
         """Calibrate-fixes-1 ticket 05, AC-19: the same rule as the review skill's AC-16 and AC-17."""
         if not self.README.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = self.README.read_text(encoding='utf-8')
         item = ' '.join(text.split('- **delta**', 1)[1].split('\n- **', 1)[0].split())
         self.assertIn('any fix round', item)
@@ -786,7 +786,7 @@ class PlanningDocsTest(unittest.TestCase):
     FORMATS = DOCS_DIR / 'formats.md'
     BOUNDARIES = DOCS_DIR / 'boundaries.md'
     DOC_BUDGETS = {FORMATS.name: 6 * 1024, BOUNDARIES.name: 2 * 1024}   # shared shapes; where each planning stage ends
-    README = PLUGIN.parent.parent / 'README.md'
+    README = PLUGIN.parent.parent / 'docs' / 'reference.md'
     CONTEXT = PLUGIN.parent.parent / 'CONTEXT.md'
 
     def doc_text(self, path):
@@ -835,9 +835,9 @@ class PlanningDocsTest(unittest.TestCase):
 
     def test_the_readme_has_a_planning_formats_section_naming_both_docs(self):
         if not self.README.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         parts = self.README.read_text(encoding='utf-8').split('## Planning formats', 1)
-        self.assertEqual(len(parts), 2, 'README.md has no "## Planning formats" section')
+        self.assertEqual(len(parts), 2, 'docs/reference.md has no "## Planning formats" section')
         section = parts[1].split('\n## ', 1)[0]
         for name in self.DOC_BUDGETS:
             with self.subTest(doc=name):
@@ -858,7 +858,7 @@ class PlanReviewerTest(unittest.TestCase):
     MODE_DOC_MAX_BYTES = 3 * 1024   # each mode doc, loaded only in its mode
     SPEC = PLUGIN / 'skills' / 'review' / 'plan-spec.md'
     TICKETS = PLUGIN / 'skills' / 'review' / 'plan-tickets.md'
-    README = PLUGIN.parent.parent / 'README.md'
+    README = PLUGIN.parent.parent / 'docs' / 'reference.md'
 
     def text(self, path):
         self.assertTrue(path.is_file(), path.relative_to(PLUGIN).as_posix())
@@ -930,7 +930,7 @@ class PlanReviewerTest(unittest.TestCase):
 
     def test_the_readme_reviewer_agents_section_names_the_plan_agent_and_both_modes(self):
         if not self.README.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         section = self.README.read_text(encoding='utf-8').split('## Reviewer agents', 1)[1].split('\n## ', 1)[0]
         self.assertIn('anomaly:plan', section)
         for mode in ('spec', 'tickets'):
@@ -1016,9 +1016,9 @@ class PlanGateReviewTest(unittest.TestCase):
         self.assertTrue(carriers, 'neither agents/plan.md nor review/BRIEFS.md has a plan delta line')
 
     def test_the_readme_review_section_names_the_spec_and_tickets_modes(self):
-        if not (self.ROOT / 'README.md').is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
-        section = (self.ROOT / 'README.md').read_text(encoding='utf-8').split('## The review skill', 1)[1].split('\n## ', 1)[0]
+        if not (self.ROOT / 'docs' / 'reference.md').is_file():
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
+        section = (self.ROOT / 'docs' / 'reference.md').read_text(encoding='utf-8').split('## The review skill', 1)[1].split('\n## ', 1)[0]
         for mode in ('spec', 'tickets'):
             with self.subTest(mode=mode):
                 self.assertRegex(section, rf'`{mode}`')
@@ -1238,9 +1238,9 @@ class InterviewSkillTest(unittest.TestCase):
                 self.assertIn(word, rows[0])
 
     def test_the_readme_has_an_interview_skill_section_naming_the_slash_command(self):
-        readme = self.ROOT / 'README.md'
+        readme = self.ROOT / 'docs' / 'reference.md'
         if not readme.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = readme.read_text(encoding='utf-8')
         self.assertRegex(text, r'(?m)^## The interview skill$')
         section = text.split('## The interview skill', 1)[1].split('\n## ', 1)[0]
@@ -1379,9 +1379,9 @@ class SpecifySkillTest(unittest.TestCase):
                         'the empty-owner rule does not run check stories and stop before the gate')
 
     def test_the_readme_has_a_specify_skill_section_naming_the_slash_command(self):
-        readme = self.ROOT / 'README.md'
+        readme = self.ROOT / 'docs' / 'reference.md'
         if not readme.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = readme.read_text(encoding='utf-8')
         self.assertRegex(text, r'(?m)^## The specify skill$')
         section = text.split('## The specify skill', 1)[1].split('\n## ', 1)[0]
@@ -1514,9 +1514,9 @@ class SliceSkillTest(unittest.TestCase):
         self.assertRegex(section.lower(), r'first ticket with no open blocker')
 
     def test_the_readme_has_a_slice_skill_section_naming_the_slash_command(self):
-        readme = self.ROOT / 'README.md'
+        readme = self.ROOT / 'docs' / 'reference.md'
         if not readme.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = readme.read_text(encoding='utf-8')
         self.assertRegex(text, r'(?m)^## The slice skill$')
         section = text.split('## The slice skill', 1)[1].split('\n## ', 1)[0]
@@ -1640,9 +1640,9 @@ class DiagnoseSkillTest(unittest.TestCase):
                              'the ticket template is restated; link formats.md instead')
 
     def test_the_readme_has_a_diagnose_skill_section_naming_the_skill(self):
-        readme = self.ROOT / 'README.md'
+        readme = self.ROOT / 'docs' / 'reference.md'
         if not readme.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = readme.read_text(encoding='utf-8')
         self.assertRegex(text, r'(?m)^## The diagnose skill$')
         section = text.split('## The diagnose skill', 1)[1].split('\n## ', 1)[0]
@@ -1888,16 +1888,16 @@ class ModelPickSkillTest(unittest.TestCase):
 class LensReplaceDocsTest(unittest.TestCase):
     """Calibrate-fixes-1 ticket 02 (AC-6): the README and review step 10 no longer say that a later lens line of
     the session is skipped or lost. The docstrings of observe.py and lens.py are checked by the ticket review."""
-    README = PLUGIN.parent.parent / 'README.md'
+    README = PLUGIN.parent.parent / 'docs' / 'reference.md'
     REVIEW = PLUGIN / 'skills' / 'review' / 'SKILL.md'
 
     def test_the_readme_no_longer_says_observe_apply_skips_a_lens_or_puts_each_lens_in_once(self):
         if not self.README.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = ' '.join(self.README.read_text(encoding='utf-8').split())
         for old in ('skips a lens it already logged', 'home gets each lens once', 'put each lens into home once'):
             with self.subTest(old=old):
-                self.assertFalse(old in text, f'README.md still says: {old}')
+                self.assertFalse(old in text, f'docs/reference.md still says: {old}')
 
     def test_review_step_10_no_longer_says_an_applied_lens_is_skipped_and_a_later_run_lost(self):
         step = next(line for line in self.REVIEW.read_text(encoding='utf-8').splitlines() if line.startswith('10. '))
@@ -1912,11 +1912,11 @@ class LensReplaceDocsTest(unittest.TestCase):
         phrase = "a later apply replaces the session's line of each lens"
         self.assertTrue(phrase in ' '.join(step.split()), f'review step 10 lacks: {phrase}')
         if not self.README.is_file():
-            self.skipTest('no README.md two folders above the plugin: an installed copy, not the repository')
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
         text = ' '.join(self.README.read_text(encoding='utf-8').split())
         for phrase in ("replaces the session's line with larger ones", "replacing the session's earlier line"):
             with self.subTest(phrase=phrase):
-                self.assertTrue(phrase in text, f'README.md lacks: {phrase}')
+                self.assertTrue(phrase in text, f'docs/reference.md lacks: {phrase}')
 
     def test_observe_says_a_capture_adds_no_entry_for_the_names_lens_tally_holds(self):
         """Review round 1 (user decision): the capture would add a second, smaller line for a name `lens tally`
