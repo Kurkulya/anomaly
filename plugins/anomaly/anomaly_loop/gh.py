@@ -4,10 +4,10 @@ failure raises a GhError with the tool's own message, which `mr` and `upstream` 
 line (exit 2).
 
 The MR calls are `gh pr create --draft`, `gh api -X PATCH repos/<project>/pulls/<number>`, `gh pr ready` and
-`gh pr view --json`. The issue calls of the `upstream` port are `gh issue list --json`, `gh issue comment` and
-`gh issue create`. The body goes to the tool on its standard input (`--body-file -`, or `-F body=@-` for the REST
-call), so it is never an argument and never a file left behind. A write is tried once: a repeat after a network error
-could make a second pull request, comment or issue.
+`gh pr view --json`. The issue calls of the `upstream` port are `gh issue list --json`, `gh issue view --json`,
+`gh issue comment` and `gh issue create`. The body goes to the tool on its standard input (`--body-file -`, or
+`-F body=@-` for the REST call), so it is never an argument and never a file left behind. A write is tried once: a
+repeat after a network error could make a second pull request, comment or issue.
 """
 import json
 import re
@@ -107,6 +107,19 @@ def list_issues(project, prefix, environ=None):
             for item in answer):
         raise GhError(f'gh answered the issue list of {project} in an unknown shape')
     return [(item['number'], item['title']) for item in answer]
+
+
+def view_issue(project, number, environ=None):
+    """(title, state) of issue `number` of `project`; the state is `open` or `closed`."""
+    check_project(project)
+    out = call('issue', 'view', str(number), '--repo', project, '--json', 'title,state', environ=environ)
+    try:
+        answer = json.loads(out)
+        if isinstance(answer['title'], str):
+            return answer['title'], answer['state'].lower()
+    except (ValueError, KeyError, TypeError, AttributeError):
+        pass
+    raise GhError(f'gh answered issue {number} of {project} in an unknown shape')
 
 
 def comment_issue(project, number, body, environ=None):

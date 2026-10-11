@@ -35,7 +35,9 @@ exits 1, the file written.
 The `upstream` port (profile key `upstream_tool`, constants.UPSTREAM_ADAPTERS): on its core default the command
 prints the search link of the repository's GitHub issues and calls nothing. With `gh` it lists the open issues whose
 title names the same target and offers an exact title hit as the +1. A second run acts, each after the user's yes:
-`--comment <number>` adds a +1 comment to that issue, `--create` opens the issue from the file this run writes; either
+`--comment <number>` reads the title and state of that issue (gh.view_issue) and adds a +1 comment to it only when it
+is open and its title, after printable() and a strip, starts with the report's prefix (PREFIX), else it is refused
+(exit 2) with nothing posted, logged or committed; `--create` opens the issue from the file this run writes; either
 appends `upstream <date> · <number>` under the anomaly's `## Addenda log` (addenda.log_line) and commits the anomaly.
 Without either flag nothing is written to GitHub. When the Addenda log already holds an `upstream ` line, `--comment`
 and `--create` are refused (exit 2) with nothing sent or written: a report goes once. A failed `gh` call is one
@@ -324,6 +326,10 @@ def run_report(args, environ, action):
         return 0
     tool = ADAPTERS[name]
     if args.comment is not None:
+        issue_title, state = ports.call_tool(ADAPTER_ERRORS, tool.view_issue, repo, args.comment, environ=environ)
+        if state != 'open' or not printable(issue_title).strip().startswith(prefix):
+            raise RecordError(f'{label}: issue #{args.comment} of {repo} is not an open issue whose title starts with '
+                              f'{prefix}; nothing was posted')
         ports.call_tool(ADAPTER_ERRORS, tool.comment_issue, repo, args.comment, report.plus_one, environ=environ)
         number = args.comment
         print(f'+1 added to #{number}')
@@ -361,7 +367,8 @@ def register(commands, common):
         action.add_argument('signature', help='the anomaly the report is about')
         act = action.add_mutually_exclusive_group()
         act.add_argument('--comment', type=issue_option, metavar='<number>',
-                         help="only after the user's yes: add a +1 comment to this issue")
+                         help="only after the user's yes: add a +1 comment to this issue, refused unless it is open "
+                              "and its title starts with the report's [anomaly:<word>] prefix")
         act.add_argument('--create', action='store_true',
                          help="only after the user's yes: open the issue from the report file")
         action.set_defaults(handler=handler)
