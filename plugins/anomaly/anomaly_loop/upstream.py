@@ -62,7 +62,7 @@ LABEL = 'upstream defect'
 TUNING_LABEL = 'upstream tuning'
 KEPT = ('keep', 'unproven')              # the experiment results a tuning report is sent for
 VERSION_FIELD = 'Installed version'
-OUTSIDE_FIELDS = ('Symptom', 'Rule', VERSION_FIELD, 'Signature')   # from outside the CLI: the user, a folder name
+OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', VERSION_FIELD, 'Signature')   # see check_report
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
@@ -164,16 +164,17 @@ def tuning_source(context, anomaly):
 
 
 def tuning_report(context, anomaly):
-    """The tuning report of the anomaly (tuning_source), its readings from verdict.verdict; RecordError when upstream
-    tuning refuses it."""
+    """The tuning report of the anomaly (tuning_source), its readings from verdict.verdict as of today (the record
+    keeps no verify day); RecordError when upstream tuning refuses it."""
     word, rule = tuning_source(context, anomaly)
     found = verdict.verdict(context, anomaly)
-    result, version = anomaly.experiment.result, installed_version(context)
-    fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', result), (VERSION_FIELD, version),
-              ('Signature', anomaly.signature),
-              ('Readings', 'before the fix and since; n= is the sessions on each side'))
+    experiment, version = anomaly.experiment, installed_version(context)
+    heading = f'Readings as of {context.today.isoformat()}'
+    fields = (*title_fields(word, anomaly.signature), ('Rule', rule), ('Verdict', experiment.result),
+              ('Reason', experiment.reason or '(none recorded)'), (VERSION_FIELD, version),
+              ('Signature', anomaly.signature), (heading, 'before the fix and since; n= is the sessions on each side'))
     readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
-    plus_one = f'+1: the same line, {result} on the installed version {version}'
+    plus_one = f'+1: the same line, {experiment.result} on the installed version {version}'
     return Report(TUNING_SUFFIX, word, fields, readings, plus_one)
 
 

@@ -480,9 +480,14 @@ class TuningTextTest(TuningCase):
                 self.assertIn(result, self.report_text(self.run_ok_tuning()))
 
     def test_the_text_holds_the_line_its_target_the_metric_before_and_after_the_guard_and_the_sessions_on_each_side(self):
-        """AC-27 (D-26): the readings are those of `calibrate verify` (n= is the sessions on each side)."""
+        """AC-27 (D-26): the readings are those of `calibrate verify` (n= is the sessions on each side), titled with
+        the day they were read, after the recorded reason (Amended 2026-10-11, ticket 06 review)."""
+        anomaly = records.read_anomaly(self.anomaly_path)
+        anomaly.experiment.reason = 'active minutes fell and the guard held'
+        records.write_anomaly(self.home, anomaly)
         text = self.report_text(self.run_ok_tuning())
-        for fact in (TUNING_RULE, TUNING_TARGET, SIGNATURE, 'keep', *self.reading_lines()):
+        for fact in (TUNING_RULE, TUNING_TARGET, SIGNATURE, 'keep', '- Reason: active minutes fell and the guard held',
+                     f'- Readings as of {LOGGED_DAY}', *self.reading_lines()):
             self.assertIn(fact, text)
 
 
