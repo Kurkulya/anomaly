@@ -2171,9 +2171,9 @@ the CLI.
 - **Finish.** `anomaly:review` in cumulative mode over the whole branch (skipped for a one-ticket
   unit), one fix branch (the `implementer` port on the `implement_wide` model role, with effort) that
   also takes every open Low and Nit finding whose fix needs no decision, a warm `anomaly:review`
-  delta round on the fix merge (its tally counts only that round), one full verify and the
-  `ui_check` port, `mr reviewed` and `mr verified` on the tip, then
-  `anomaly:ship` for the ready gate.
+  delta round on the fix merge (the last round of the cumulative review: each agent tallies once,
+  after it, over all its rounds), one full verify and the `ui_check` port, `mr reviewed` and
+  `mr verified` on the tip, then `anomaly:ship` for the ready gate.
 
 ## The architecture skill
 
