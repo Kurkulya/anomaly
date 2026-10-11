@@ -654,9 +654,10 @@ The second hook in `plugins/anomaly/hooks/hooks.json` is a `PreToolUse` hook on 
 check on every Bash call, with the same `python` command and no shell as the nudge. It reads the hook
 JSON on standard input and, for a subagent that is not `anomaly:survey`, denies a command that writes
 a file through the shell, so the rule of the build briefs (edit files only with Edit or Write) is
-enforced and not only asked. The deny reason names Write and Edit. What counts as a write is in The
-pre-merge check and the seam ledger. The main window is never checked, and the check uses no model
-([ADR-0022](docs/adr/0022-subagent-bash-write-check.md)).
+enforced and not only asked, but only for the shell forms listed in The pre-merge check and the
+seam ledger; other file writes, such as `cp` or `mv`, are not checked (the Accepted risks of
+ADR-0022). The deny reason names Write and Edit. The main window is never checked, and the check
+uses no model ([ADR-0022](docs/adr/0022-subagent-bash-write-check.md)).
 
 ### calibrate
 
