@@ -628,32 +628,67 @@ SUBAGENT_BASH_REASON = ('A subagent writes files with the Write and Edit tools, 
                         'Use Write to create or replace a file and Edit to change one.')
 
 
+def command_substitutions(text):
+    """The bodies of the `$(...)` and backtick substitutions in the text of a double-quoted string: they run
+    even inside the quotes. An unclosed one runs to the end of the text."""
+    bodies, index = [], 0
+    while index < len(text):
+        if text[index] == '\\':
+            index += 2
+        elif text.startswith('$(', index):
+            depth, end = 1, index + 2
+            while end < len(text) and depth:
+                depth += (text[end] == '(') - (text[end] == ')')
+                end += 1
+            bodies.append(text[index + 2:end - 1 if depth == 0 else end])
+            index = end
+        elif text[index] == '`':
+            end = index + 1
+            while end < len(text) and text[end] != '`':
+                end += 2 if text[end] == '\\' else 1
+            bodies.append(text[index + 1:end])
+            index = end + 1
+        else:
+            index += 1
+    return bodies
+
+
 def shell_tokens(command):
     """The `(kind, text)` tokens of a shell line: `('word', text)` with its quotes resolved, `('op', text)`
-    for an unquoted operator (`;`, `|`, `>>`, `<<`, ...) or a newline. A `>` or `<<` inside quotes stays
-    part of a word. An unclosed quote ends the stream: what came before it still counts, so a heredoc
-    whose body holds an apostrophe is still seen. A `#` that starts a word is a comment."""
+    for an unquoted operator (`;`, `|`, `>>`, `<<`, ...) or a newline, and `('sub', text)` after a word for
+    the body of a command substitution inside its double quotes. A `>` or `<<` inside quotes stays
+    part of a word. `$'...'` takes backslash escapes. An unclosed quote ends the stream: what came before
+    it still counts, so a heredoc whose body holds an apostrophe is still seen. A `#` that starts a word
+    is a comment."""
     tokens, word, index = [], [], 0   # `word` holds the parts of the word being read; it is empty between words
     started = False                   # a word is open (it may still be empty: `""`)
+    substitutions = []                # the command substitutions found in the double quotes of that word
 
     def end_word():
         nonlocal started
         if started:
             tokens.append(('word', ''.join(word)))
+            tokens.extend(('sub', body) for body in substitutions)
             word.clear()
+            substitutions.clear()
             started = False
 
     while index < len(command):
         char = command[index]
-        if char in '\'"':
-            end = index + 1
-            while end < len(command) and command[end] != char:
-                end += 2 if char == '"' and command[end] == '\\' else 1
+        ansi = command.startswith("$'", index)
+        if char in '\'"' or ansi:
+            quote, start = command[index + ansi], index + 1 + ansi
+            escapes = quote == '"' or ansi   # a backslash escapes the next character
+            end = start
+            while end < len(command) and command[end] != quote:
+                end += 2 if escapes and command[end] == '\\' else 1
             if end >= len(command):
                 end_word()
                 return tokens
-            body = command[index + 1:end]
-            word.append(re.sub(r'\\(.)', r'\1', body) if char == '"' else body)
+            body = command[start:end]
+            word.append(re.sub(r'\\(.)', r'\1', body) if escapes else body)
+            if quote == '"':
+                substitutions.extend(command_substitutions(body))
             started = True
             index = end + 1
             continue
@@ -739,6 +774,11 @@ def shell_write(command):
             if not skip:
                 segment.append(text)
             skip = False
+            continue
+        if kind == 'sub':
+            found = shell_write(text)
+            if found:
+                return found
             continue
         skip = False
         following = tokens[index + 1] if index + 1 < len(tokens) and tokens[index + 1][0] == 'word' else None

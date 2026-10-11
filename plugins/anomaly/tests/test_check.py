@@ -1075,6 +1075,15 @@ class SubagentBashVerdictTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
+    def test_a_substitution_inside_double_quotes_and_an_ansi_c_string_are_read(self):
+        """AC-21, AC-23: `$(...)` and backticks run inside double quotes; `$'...'` has backslash escapes."""
+        for command in ('echo "$(cat x > f)"', 'echo "`tee f`"', "echo $'a\\'b' > f"):
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        for command in ('echo "$(date)"', 'echo "\\$(tee f)"', "echo $'a>b'", 'echo "a > $(date)"'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_a_write_command_name_as_an_argument_is_allowed(self):
         """AC-24: `tee` after a command that is not a wrapper is a plain argument."""
         for command in ('grep tee f', 'sudo grep tee f', 'sudo -E grep tee f'):

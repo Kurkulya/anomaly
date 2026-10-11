@@ -1599,7 +1599,8 @@ python plugins/anomaly/scripts/anomaly.py seams add       <ledger> --name <name>
   included), `sed -i`, `tee`, a `>`, `>>`, `>|` or `&>` redirection to anything but `/dev/null`,
   `curl -o` or `wget -O`. The reason names Write and Edit. Allowed: `2>&1`, `>/dev/null`,
   `2>/dev/null`, a copy of one stream to another (`>&2`), a here-string `<<<`, a `>` or `<<` inside
-  a quoted argument, inline code with `-c` or `-e`, pipes and chains. The check returns before it
+  a quoted argument (a `$(...)` or backtick substitution inside double quotes runs, so its body is
+  checked as a command), inline code with `-c` or `-e`, pipes and chains. The check returns before it
   reads the command when `agent_id` is absent (the main window, also a session started with
   `--agent`), and it fails open: input that is not JSON, no `tool_input.command` and any error are an
   allow with no output. An unclosed quote ends the scan of the command, but a write before it still
