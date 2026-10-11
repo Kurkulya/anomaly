@@ -76,7 +76,7 @@ def append_line(path, line, signature, stamp):
     A file that already holds ADDENDA_MAX_LINES lines, or a line of this experiment, raises RecordError and
     is not changed: one line is one experiment."""
     lines = read_lines(path)
-    if any(f'{TAG_OPEN}{signature}{TAG_SEPARATOR}' in old for old in lines):
+    if any(is_tagged_with(old, signature) for old in lines):
         raise RecordError(f'{path}: already holds a line of the experiment {signature}, and one line is one '
                           'experiment; remove the old line from this file first, then run the fix again')
     if len(lines) >= ADDENDA_MAX_LINES:
