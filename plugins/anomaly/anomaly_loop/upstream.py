@@ -47,7 +47,8 @@ DEFECT_SUFFIX = '.defect.md'
 MARKETPLACES = Path('plugins') / 'known_marketplaces.json'   # in the Claude Code user folder
 PREFIX = '[anomaly:{part}]'              # the start of a title: `<prefix> <signature>`
 LABEL = 'upstream defect'
-OUTSIDE_FIELDS = ('Symptom', 'Installed version', 'Signature')   # from outside the CLI: the user, a folder name
+VERSION_FIELD = 'Installed version'
+OUTSIDE_FIELDS = ('Symptom', VERSION_FIELD, 'Signature')   # from outside the CLI: the user, a folder name
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
@@ -81,7 +82,8 @@ def user_names(environ):
 def check_report(context, fields, environ):
     """Refuse the report (ADR-0003: refuse, never redact) when a field fails privacy.check_text, or when a field from
     outside the CLI (OUTSIDE_FIELDS: the symptom, the installed version folder and the signature, not the title and
-    target lines the CLI composes) holds a profile marker
+    target lines the CLI composes; an installed version that is a commit id, privacy.COMMIT_ID, holds no name and is
+    skipped, so a short repo-layer name such as `add` cannot match its hex) holds a profile marker
     (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path
     (LOCAL_PATH: `/x/y` or `~/` not right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or
     `=`, or a drive `X:\\` or `X:/`; a slash inside a word such as `and/or`, a one-segment slash command such as
@@ -90,7 +92,7 @@ def check_report(context, fields, environ):
     users = user_names(environ)
     for key, value in fields:
         privacy.check_text(LABEL, key, value)
-        if key not in OUTSIDE_FIELDS:
+        if key not in OUTSIDE_FIELDS or (key == VERSION_FIELD and privacy.COMMIT_ID.fullmatch(value)):
             continue
         found = scans.marker_hits(value, names)
         if found:
@@ -103,7 +105,7 @@ def check_report(context, fields, environ):
 def defect_fields(context, anomaly, word):
     """(key, text) of the defect report, the title first; `word` is part_word's answer."""
     return (('Title', f'{PREFIX.format(part=word)} {anomaly.signature}'), ('Target', f'anomaly:{word}'),
-            ('Symptom', anomaly.summary), ('Installed version', Path(context.plugin_root).resolve().name),
+            ('Symptom', anomaly.summary), (VERSION_FIELD, Path(context.plugin_root).resolve().name),
             ('Signature', anomaly.signature))
 
 
@@ -217,7 +219,7 @@ def run_defect(args, environ):
         return 0
     tool = ADAPTERS[name]
     if args.comment is not None:
-        version = dict(fields)['Installed version']
+        version = dict(fields)[VERSION_FIELD]
         ports.call_tool(ADAPTER_ERRORS, tool.comment_issue, repo, args.comment,
                         f'+1: the same defect on the installed version {version}', environ=environ)
         number = args.comment

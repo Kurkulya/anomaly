@@ -291,6 +291,14 @@ class RefusalTest(UpstreamCase):
         assert_cli_error(self, self.run_defect(), 'Installed version', 'acme-kit')
         self.assertEqual(self.tree(), before)
 
+    def test_a_commit_id_version_folder_is_not_matched_against_a_short_repo_layer_name(self):
+        """A hex folder name (a commit id) holds no org name; `add` must not refuse version `add12cd3`."""
+        write_text(self.home / 'repos' / 'add.md', '---\nverify: run-all\n---\n')
+        self.plugin = self.plugin.parent / 'add12cd3'
+        write_text(self.plugin / '.claude-plugin' / 'plugin.json', '{"name": "anomaly"}\n')
+        write_text(self.plugin / 'skills' / 'observe' / 'SKILL.md', '# observe\n')
+        self.report(self.run_ok(), title_of('observe'))
+
     def test_a_local_path_or_the_user_name_in_the_symptom_is_refused_and_no_file_is_written(self):
         """D-12 Amended: an absolute path, a `~/` start or the OS user name; a slash inside a word is no path."""
         user = {'USER': 'jdoe'}
