@@ -96,6 +96,20 @@ class GhIssueTest(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs['input'], '+1 from another user')
         self.assertFalse(run.call_args.kwargs.get('shell'))
 
+    def test_an_issue_is_viewed_with_an_argument_list_and_read_as_title_and_state(self):
+        """AC-21 (D-3). `view_issue(project, number)` answers (title, state); the test reads the state in any case."""
+        answer = '{"title": "[anomaly:observe] a", "state": "OPEN"}'
+        with mock.patch('subprocess.run', return_value=done(answer)) as run:
+            title, state = gh.view_issue('owner/repo', 12)
+        self.assertEqual(title, '[anomaly:observe] a')
+        self.assertEqual(state.lower(), 'open')
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ['gh', 'issue', 'view'])
+        self.assertIn('12', command)
+        self.assertEqual(command[command.index('--repo') + 1], 'owner/repo')
+        self.assertEqual(command[command.index('--json') + 1], 'title,state')
+        self.assertFalse(run.call_args.kwargs.get('shell'))
+
     def test_a_new_issue_is_created_from_a_body_file_and_answers_its_link(self):
         """D-18: `gh issue create --body-file`; the body is never an argument."""
         with mock.patch('subprocess.run', return_value=done(ISSUE_LINK + '\n')) as run:

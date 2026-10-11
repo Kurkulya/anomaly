@@ -44,17 +44,29 @@ FIX_REF = '2026-09-20 · addenda/observe.md'   # fixed_by of the kept addendum: 
 
 class FakeIssueGh(FakeGh):
     """FakeGh for the issue calls: `issues` is the list of open (number, title) a list call answers as JSON, a create
-    answers the link of the new issue, a comment answers nothing. `failure` set to a text fails every call."""
+    answers the link of the new issue, a comment answers nothing. `failure` set to a text fails every call.
+    `views` maps an issue number to the (title, state) an `issue view` call answers as JSON, as gh prints the state
+    (`OPEN` or `CLOSED`); a number not in it fails the call. `view_failure` set to a text fails only that call."""
 
     def __init__(self):
         super().__init__()
         self.issues = []
+        self.views = {}
+        self.view_failure = None
 
     def run(self, *args, environ=None, **kwargs):
         self.records.append(record(args, kwargs))
         self.environs.append(environ)
         if self.failure:
             return finished('gh', args, code=1, stderr=self.failure)
+        if 'view' in args:
+            if self.view_failure:
+                return finished('gh', args, code=1, stderr=self.view_failure)
+            number = int(args[args.index('view') + 1])
+            if number not in self.views:
+                return finished('gh', args, code=1, stderr=f'no issue {number} in the fake')
+            title, state = self.views[number]
+            return finished('gh', args, json.dumps({'title': title, 'state': state}))
         if 'create' in args:
             stdout = ISSUE_LINK + '\n'
         elif 'comment' in args:
@@ -131,6 +143,31 @@ class UpstreamCase(unittest.TestCase):
     def tree(self):
         """Path -> bytes of every file under the temporary root."""
         return {path: path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+
+    def assert_comment_refused(self, run, label, number, view):
+        """`--comment <number>` on an issue that `issue view` answers as `view` (title, state): exit 2 with the one
+        refusal line, no comment posted, the anomaly not logged, and no commit attempted."""
+        self.gh.views[number] = view
+        before = self.anomaly_path.read_bytes()
+        result = run('--comment', str(number))
+        line = (f'{label}: issue #{number} of {REPO} is not an open issue whose title starts with '
+                f'[anomaly:observe]; nothing was posted')
+        assert_cli_error(self, result, line)
+        self.assertEqual(result[2].strip(), f'anomaly: {line}')
+        self.assertEqual(self.gh.calls('comment'), [])
+        self.assertEqual(self.anomaly_path.read_bytes(), before)
+        self.assertNotIn('commit:', result[1])
+
+    def assert_comment_read_failed(self, run, number):
+        """A failed `issue view` for `--comment <number>`: exit 2, one gh error line, nothing posted or logged."""
+        self.gh.views[number] = (title_of('observe'), 'OPEN')
+        self.gh.view_failure = TOOL_FAILURE
+        before = self.anomaly_path.read_bytes()
+        result = run('--comment', str(number))
+        assert_cli_error(self, result, TOOL_FAILURE)
+        self.assertEqual(self.gh.calls('comment'), [])
+        self.assertEqual(self.anomaly_path.read_bytes(), before)
+        self.assertNotIn('commit:', result[1])
 
 
 def title_of(target_word, signature=SIGNATURE):
@@ -224,6 +261,7 @@ class SecondRunTest(UpstreamCase):
         super().setUp()
         self.use_gh()
         self.gh.issues = [(12, title_of('observe'))]
+        self.gh.views = {12: (title_of('observe'), 'OPEN')}
         self.run_ok()   # the first run: checks, writes the file, searches
         self.before = records.read_anomaly(self.anomaly_path)
 
@@ -233,15 +271,38 @@ class SecondRunTest(UpstreamCase):
         self.assertEqual(records.read_anomaly(self.anomaly_path).sections, self.before.sections)
 
     def test_comment_adds_a_plus_one_comment_to_that_issue_and_logs_the_number(self):
-        """AC-21 (D-4, D-41)."""
+        """AC-21 (D-4, D-41). AC-17 (D-2): the issue is read before the comment is posted."""
         self.run_ok('--comment', '12')
-        comments = self.gh.calls('comment')
+        views, comments = self.gh.calls('view'), self.gh.calls('comment')
+        self.assertEqual(len(views), 1, self.gh.records)
         self.assertEqual(len(comments), 1, self.gh.records)
+        self.assertLess(self.gh.records.index(views[0]), self.gh.records.index(comments[0]))
         self.assertIn('12', comments[0].args)
         self.assertIn(REPO, comments[0].text)
         self.assertIn('+1', comments[0].text)
         self.assertEqual(self.gh.calls('create'), [])
         self.assert_logged(12)
+
+    def test_comment_on_an_open_issue_with_another_title_is_refused_and_posts_logs_and_commits_nothing(self):
+        """AC-18 (D-2)."""
+        self.assert_comment_refused(self.run_defect, 'upstream defect', 13, ('An unrelated issue', 'OPEN'))
+        self.assert_comment_refused(self.run_defect, 'upstream defect', 14, (title_of('facts'), 'OPEN'))
+
+    def test_comment_on_a_closed_issue_with_the_prefix_is_refused_and_posts_logs_and_commits_nothing(self):
+        """AC-19 (D-2)."""
+        self.assert_comment_refused(self.run_defect, 'upstream defect', 13, (title_of('observe'), 'CLOSED'))
+
+    def test_the_prefix_is_read_after_printable_and_strip_so_a_listed_title_is_not_refused(self):
+        """D-2, amended 2026-10-11: the title is read as upstream.search_lines reads it."""
+        self.gh.views[13] = ('  \x07' + title_of('observe'), 'OPEN')
+        self.run_ok('--comment', '13')
+        self.assertEqual(len(self.gh.calls('view')), 1, self.gh.records)
+        self.assertEqual(len(self.gh.calls('comment')), 1, self.gh.records)
+        self.assert_logged(13)
+
+    def test_a_failed_read_of_the_issue_is_one_gh_error_line_and_nothing_is_posted_or_logged(self):
+        """AC-20 (D-3)."""
+        self.assert_comment_read_failed(self.run_defect, 12)
 
     def test_create_opens_the_issue_from_the_file_and_logs_the_number_of_the_new_issue(self):
         """AC-21 (D-18): the title and the body come from the file written by the first run."""
@@ -526,6 +587,7 @@ class TuningGhTest(TuningCase):
     def setUp(self):
         super().setUp()
         self.use_gh()
+        self.gh.views = {12: (title_of('observe'), 'OPEN')}
         self.before = records.read_anomaly(self.anomaly_path)
 
     def assert_logged(self, number):
@@ -542,13 +604,24 @@ class TuningGhTest(TuningCase):
 
     def test_comment_adds_a_plus_one_comment_to_that_issue_and_logs_the_number(self):
         self.run_ok_tuning('--comment', '12')
-        comments = self.gh.calls('comment')
+        views, comments = self.gh.calls('view'), self.gh.calls('comment')
+        self.assertEqual(len(views), 1, self.gh.records)
         self.assertEqual(len(comments), 1, self.gh.records)
+        self.assertLess(self.gh.records.index(views[0]), self.gh.records.index(comments[0]))
         self.assertIn('12', comments[0].args)
         self.assertIn(REPO, comments[0].text)
         self.assertIn('+1', comments[0].text)
         self.assertEqual(self.gh.calls('create'), [])
         self.assert_logged(12)
+
+    def test_comment_on_a_closed_issue_or_one_with_another_title_is_refused_with_the_tuning_label(self):
+        """AC-18, AC-19 (D-2): the refusal line of `upstream tuning` names `upstream tuning`."""
+        self.assert_comment_refused(self.run_tuning, 'upstream tuning', 13, ('An unrelated issue', 'OPEN'))
+        self.assert_comment_refused(self.run_tuning, 'upstream tuning', 14, (title_of('observe'), 'CLOSED'))
+
+    def test_a_failed_read_of_the_issue_is_one_gh_error_line_and_nothing_is_posted_or_logged(self):
+        """AC-20 (D-3)."""
+        self.assert_comment_read_failed(self.run_tuning, 12)
 
     def test_create_opens_the_issue_from_the_report_and_logs_the_number_of_the_new_issue(self):
         self.run_ok_tuning('--create')
