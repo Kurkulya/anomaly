@@ -71,6 +71,16 @@ The marketplace points at a folder on disk. Skills are read from that folder whe
 reload (a hook, for example), reinstall the plugin from the marketplace. If you move or delete
 this checkout, the marketplace breaks until you add it again from the new place.
 
+To update:
+
+```
+claude plugin marketplace update anomaly-local
+claude plugin update anomaly@anomaly-local
+```
+
+Then start a new session and confirm the installed commit: `claude plugin list` shows it as the
+`Version` of `anomaly@anomaly-local`.
+
 ## Configuration
 
 The plugin declares one `userConfig` value, `home`: the folder for all durable loop data.
