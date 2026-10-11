@@ -456,6 +456,16 @@ class SkillFileTest(unittest.TestCase):
         for part in ('stop', 'ask', 'command', 'repo override', 'verify:', 'never guess'):
             self.assertIn(part, clause)
 
+    def test_the_build_key_rule_takes_the_ports_no_ticket_fallback_on_both_paths(self):
+        """No-ticket branch short-readme: a ticket with no key line uses the port's no-ticket fallback, and the Light path keeps no second [I2] rule."""
+        text = self.build_text()
+        start = text.split('## Start', 1)[1].split('\n## ', 1)[0]
+        light = text.split('## Light path', 1)[1].split('\n## ', 1)[0]
+        start_rule = next(line for line in start.splitlines() if '[I2]' in line and '<key>' in line)
+        light_rule = next(line for line in light.splitlines() if '[I2]' in line)
+        self.assertIn('no-ticket fallback', start_rule)
+        self.assertIn('Start step 2', light_rule)
+
 
 class ReferenceTest(unittest.TestCase):
     REFERENCE = PLUGIN.parent.parent / 'docs' / 'reference.md'
