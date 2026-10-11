@@ -380,14 +380,27 @@ class DeclareCommandTest(CalibrateCase):
                          ('faster', 'active minutes', 'rework sightings', TODAY.isoformat()))
 
     def test_a_finished_experiment_is_archived_when_a_new_one_is_declared(self):
-        write_experiment_anomaly(self.home, 'retry', status='reopened', fixed_by=FIX, check_by='2026-10-01',
-                                 result='revert', guard='rework sightings')
-        code, _, _ = self.declare(signature='retry')
-        self.assertEqual(code, 0)
-        anomaly = self.anomaly('retry')
-        self.assertEqual(anomaly.fixed_by, '')
-        self.assertEqual(anomaly.experiment.result, '')
-        self.assertEqual(records.earlier_experiments(anomaly)[0][0], 'revert')
+        for result in ('keep', 'revert', 'unproven'):
+            with self.subTest(result=result):
+                write_experiment_anomaly(self.home, 'retry', status='reopened', fixed_by=FIX, check_by='2026-10-01',
+                                         result=result, guard='rework sightings')
+                code, _, _ = self.declare(signature='retry')
+                self.assertEqual(code, 0)
+                anomaly = self.anomaly('retry')
+                self.assertEqual(anomaly.fixed_by, '')
+                self.assertEqual(anomaly.experiment.result, '')
+                self.assertEqual(records.earlier_experiments(anomaly)[0][0], result)
+
+    def test_an_inconclusive_experiment_in_flight_is_refused_and_kept(self):
+        write_experiment_anomaly(self.home, 'retry', status='reopened', fixed_by=FIX, check_by='2026-10-03',
+                                 result='inconclusive', guard='rework sightings')
+        before = self.anomaly('retry')
+        code, _, err = self.declare(signature='retry')
+        self.assertEqual(code, 2)
+        self.assertIn('in flight', err)
+        after = self.anomaly('retry')
+        self.assertEqual((after.experiment, after.fixed_by), (before.experiment, FIX))
+        self.assertEqual(records.earlier_experiments(after), [])
 
     def test_an_earlier_reverted_attempt_on_the_same_target_is_mentioned(self):
         write_experiment_anomaly(self.home, 'old-try', target='scripts/check.sh', status='reopened', fixed_by=FIX,
@@ -745,6 +758,11 @@ class AddendumRemovalTest(CalibrateCase):
         for out in (self.cli('decide', '--signature', 'reverted-one', '--result', 'revert')[1],
                     self.drop('dropped-one')[1]):
             self.assertGreaterEqual(out.count('home is not in a git repository'), 2, out)
+
+
+class MeasurableTest(CalibrateCase):
+    def test_an_anomaly_with_no_experiment_cannot_be_measured(self):
+        self.assertFalse(calibrate.measurable(write_anomaly_with(self.home, 'bare')))
 
 
 # ---------- batches and housekeeping ----------
