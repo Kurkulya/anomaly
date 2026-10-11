@@ -1519,7 +1519,7 @@ later unit. The sonnet decoy hits are X4 and X5, rejected call sites in answer l
 `anomaly:build` takes one ticket from a red acceptance test to a reviewed, verified commit merged
 `--no-ff` into the integration branch, and closes the ticket through the CLI. The model may call
 it, but it acts only on an explicit request from you or from `conduct`. Its text is
-`plugins/anomaly/skills/build/SKILL.md` (9279 bytes or less); four docs are loaded only when used: the
+`plugins/anomaly/skills/build/SKILL.md` (9269 bytes or less); four docs are loaded only when used: the
 implementer brief `BRIEFS.md` and the test-writer brief `TEST-WRITER.md` at dispatch (3 KB and 2 KB
 or less), the worktree commit recipe `WORKTREE.md` (2 KB or less) inside a worktree, and the UI
 walkthrough `UI-CHECK.md` (3 KB or less) only when the UI step of the verify runs (`Tests:`
@@ -2463,7 +2463,7 @@ pipeline (every skill except the four loop skills, its extra docs, the agent fil
 under `plugins/anomaly/docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
-  `SKILL.md` is 8 KB or less (build: 9279 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
+  `SKILL.md` is 8 KB or less (build: 9269 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
   file is 6 KB or less.
 - The `allowed-tools` of `build` and `review` is the one CLI pattern, defined once as
   `CLI_PATTERN` in `anomaly_loop/constants.py`, and every call of the CLI in their text uses that
