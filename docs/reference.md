@@ -71,6 +71,16 @@ The marketplace points at a folder on disk. Skills are read from that folder whe
 reload (a hook, for example), reinstall the plugin from the marketplace. If you move or delete
 this checkout, the marketplace breaks until you add it again from the new place.
 
+To update:
+
+```
+claude plugin marketplace update anomaly-local
+claude plugin update anomaly@anomaly-local
+```
+
+Then start a new session and confirm the installed commit: `claude plugin list` shows it as the
+`Version` of `anomaly@anomaly-local`.
+
 ## Configuration
 
 The plugin declares one `userConfig` value, `home`: the folder for all durable loop data.
@@ -1394,6 +1404,15 @@ Line numbers in `defects.json` are those of the reviewed state. No fixture file 
 `test*.py`, so `python -m unittest discover` never runs them. The security fixture plants no
 credential, key, token or password value.
 
+Run the bench from the branch build: set `CLAUDE_CODE_PLUGIN_DIRS` to the worktree's
+`plugins/anomaly` when you start the session, so the reviewer agents run live instead of
+emulated. Turn the installed `anomaly@anomaly-local` off for that session, so its agents cannot
+stand in for the branch build.
+
+```
+CLAUDE_CODE_PLUGIN_DIRS=<worktree>/plugins/anomaly claude --settings '{"enabledPlugins":{"anomaly@anomaly-local":false}}'
+```
+
 `defects.json` is a JSON object with `fixture` (a name), `defects` and `decoys`. A defect has an
 `id`, a `min_severity` (`Blocker`, `High` or `Medium`) and `places`
 (`{"file": <path>, "lines": [first, last]}`), a `rule` id, or both. It may have `category` (an
@@ -1500,7 +1519,7 @@ later unit. The sonnet decoy hits are X4 and X5, rejected call sites in answer l
 `anomaly:build` takes one ticket from a red acceptance test to a reviewed, verified commit merged
 `--no-ff` into the integration branch, and closes the ticket through the CLI. The model may call
 it, but it acts only on an explicit request from you or from `conduct`. Its text is
-`plugins/anomaly/skills/build/SKILL.md` (9229 bytes or less); four docs are loaded only when used: the
+`plugins/anomaly/skills/build/SKILL.md` (9269 bytes or less); four docs are loaded only when used: the
 implementer brief `BRIEFS.md` and the test-writer brief `TEST-WRITER.md` at dispatch (3 KB and 2 KB
 or less), the worktree commit recipe `WORKTREE.md` (2 KB or less) inside a worktree, and the UI
 walkthrough `UI-CHECK.md` (3 KB or less) only when the UI step of the verify runs (`Tests:`
@@ -1520,7 +1539,8 @@ never the spec or stories file.
   `.anomaly/adhoc/`, and its file name without `.md` is the work-unit key. `build` branches from the
   current head with the `branch` port, then follows the same red step and invariants, with one
   `anomaly:review` in combined mode, one verify and a `--no-ff` merge back into the starting
-  branch. It writes no seam ledger lines. If the `branch` or `commit` port needs a `<key>`, it asks
+  branch. It writes no seam ledger lines. If the `branch` or `commit` port needs a `<key>`, it uses
+  the port's no-ticket fallback (such as the word `no-ticket`) when the port defines one, else asks
   you for it and never guesses.
 - **Red first.** The `test_writer` port, never the implementer, writes the acceptance test,
   extending an existing test first. The skill runs it, confirms it fails for the right reason,
@@ -2443,7 +2463,7 @@ pipeline (every skill except the four loop skills, its extra docs, the agent fil
 under `plugins/anomaly/docs/`). They pass while those files do not exist. Once they do:
 
 - A skill's description and an agent's description are 250 characters or fewer; a pipeline skill's
-  `SKILL.md` is 8 KB or less (build: 9229 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
+  `SKILL.md` is 8 KB or less (build: 9269 bytes, conduct: 9 KB, review: 8216 bytes) and an agent
   file is 6 KB or less.
 - The `allowed-tools` of `build` and `review` is the one CLI pattern, defined once as
   `CLI_PATTERN` in `anomaly_loop/constants.py`, and every call of the CLI in their text uses that

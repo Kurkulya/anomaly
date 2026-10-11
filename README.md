@@ -21,6 +21,16 @@ claude plugin install anomaly@anomaly-local
 
 Then run `/reload-plugins` in a session, or start a new session.
 
+To update:
+
+```
+claude plugin marketplace update anomaly-local
+claude plugin update anomaly@anomaly-local
+```
+
+Then start a new session and confirm the installed commit: `claude plugin list` shows it as the
+`Version` of `anomaly@anomaly-local`.
+
 ## What's inside
 
 ### Feedback loop

@@ -39,7 +39,7 @@ class RegistryTest(unittest.TestCase):
 
 class SkillFileTest(unittest.TestCase):
     SKILL_MAX_BYTES = 8 * 1024    # a pipeline skill's SKILL.md; the four loop skills are out of this check
-    BUILD_SKILL_MAX_BYTES = 9 * 1024 + 13   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10); +13: a delta round after any fix round (calibrate-fixes-1 ticket 05)
+    BUILD_SKILL_MAX_BYTES = 9 * 1024 + 53   # build only: the model_pick tally, the sum and the apply calls (model-roles ticket 07, 2026-10-10); +13: a delta round after any fix round (calibrate-fixes-1 ticket 05); +40: the port's no-ticket fallback (2026-10-12)
     CONDUCT_SKILL_MAX_BYTES = 9 * 1024   # conduct only: the fix-branch and research dispatches name roles and effort (model-roles cumulative review, 2026-10-10)
     AGENT_MAX_BYTES = 6 * 1024
     RULES_DOC_MAX_BYTES = 2 * 1024   # the rules-mode doc of the feature agent, loaded only in that mode
@@ -455,6 +455,16 @@ class SkillFileTest(unittest.TestCase):
         self.assertRegex(clause, r'unresolved|empty')
         for part in ('stop', 'ask', 'command', 'repo override', 'verify:', 'never guess'):
             self.assertIn(part, clause)
+
+    def test_the_build_key_rule_takes_the_ports_no_ticket_fallback_on_both_paths(self):
+        """No-ticket branch short-readme: a ticket with no key line uses the port's no-ticket fallback, and the Light path keeps no second [I2] rule."""
+        text = self.build_text()
+        start = text.split('## Start', 1)[1].split('\n## ', 1)[0]
+        light = text.split('## Light path', 1)[1].split('\n## ', 1)[0]
+        start_rule = next(line for line in start.splitlines() if '[I2]' in line and '<key>' in line)
+        light_rule = next(line for line in light.splitlines() if '[I2]' in line)
+        self.assertIn('no-ticket fallback', start_rule)
+        self.assertIn('Start step 2', light_rule)
 
 
 class ReferenceTest(unittest.TestCase):
@@ -1673,7 +1683,7 @@ class ShipSkillTest(unittest.TestCase):
     GATE_MAX_BYTES = 2 * 1024
     DOMAIN_WORDS = re.compile(r'(?i)\b(?:recipes?|bakery|library|garden|plants?|shop|carts?|orders?|invoices?|books?|'
                               r'loans?|playlists?|tea|coffee|pets?|trips?|bookings?|menu|quiz|calendar|weather)\b')   # loose: a made-up everyday domain
-    REAL_NAME = re.compile(r'(?i)\b(?:anomaly|claude|anthropic|jira|gitlab|github|glab)\b')   # a real product or project name
+    REAL_NAME = re.compile(r'(?i)\b(?:anomaly|claude|anthropic|jira|gitlab|github|glab)\b')   # a real product, company or project name
     TICKET_KEY = re.compile(r'\b(?!AC-|D-|ADR-)[A-Z][A-Z0-9]+-\d+\b')   # PRJ-123; AC-n, D-n and ADR-n are the plugin's own ids
 
     def text(self):
@@ -1710,7 +1720,7 @@ class ShipSkillTest(unittest.TestCase):
                     if all(re.search(rf'(?i)\b{section}\b', block) for section in ('why', 'what changed', 'tested'))]
         self.assertEqual(len(examples), 1, 'expected one fenced MR body example with Why, What changed and Tested')
         example = examples[0]
-        self.assertIsNone(self.REAL_NAME.search(example), 'a real product or project name')
+        self.assertIsNone(self.REAL_NAME.search(example), 'a real product, company or project name')
         self.assertIsNone(self.TICKET_KEY.search(example), 'a ticket key')
         self.assertIsNone(re.search(r'https?://|@\w|\b[0-9a-f]{7,40}\b', example), 'a link, a mention or a commit id')
         self.assertIsNotNone(self.DOMAIN_WORDS.search(example), 'no word of a made-up everyday domain')
