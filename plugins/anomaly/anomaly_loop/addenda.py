@@ -10,7 +10,7 @@ import re
 from collections import namedtuple
 from pathlib import Path
 
-from . import files
+from . import files, flags
 from .constants import ADDENDA_DIR, ADDENDA_MAX_LINES, SKILL_AGENTS
 from .files import RecordError
 from .records import SLUG
@@ -157,7 +157,7 @@ Recheck = namedtuple('Recheck', 'path note lines')   # an addenda file, why it i
 
 
 def scan_rechecks(home, plugin_root):
-    """The addenda files to re-check: one whose target (`<plugin_root>/skills/<name>`, or
+    """The addenda files to re-check: one whose target (`<plugin_root>/skills/<name>` with its SKILL.md, or
     `<plugin_root>/agents/<name>.md`) is gone, with all its tagged lines, and one with tagged lines whose stamp
     differs from the target's stamp now, with those lines. A file that cannot be read is listed with why."""
     found = []
@@ -169,7 +169,7 @@ def scan_rechecks(home, plugin_root):
         except (RecordError, OSError) as error:
             found.append(Recheck(path, not_read(path, error), ()))
             continue
-        if not (target.is_file() if agent else target.is_dir()):
+        if not (target if agent else target / flags.SKILL_FILE).is_file():
             found.append(Recheck(path, f'{part} is gone from the plugin', tagged))
             continue
         now = stamp(target)
