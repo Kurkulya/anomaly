@@ -62,7 +62,8 @@ LABEL = 'upstream defect'
 TUNING_LABEL = 'upstream tuning'
 KEPT = ('keep', 'unproven')              # the experiment results a tuning report is sent for
 VERSION_FIELD = 'Installed version'
-OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', VERSION_FIELD, 'Signature')   # see check_report
+READING_FIELD = 'Reading'                # one readings line, as check_report reads it
+OUTSIDE_FIELDS = ('Symptom', 'Rule', 'Reason', READING_FIELD, VERSION_FIELD, 'Signature')   # see check_report
 LOCAL_PATH = re.compile(r'(?<![\w./])(?:/[^\s/]+/[^\s/]|~/)|(?<![A-Za-z0-9])[A-Za-z]:[\\/]')   # see check_report
 USER_NAME_KEYS = ('USER', 'USERNAME')    # the environment keys that hold the OS user name
 CHECKOUT_SET = 'a plugin checkout is set: fix it through an MR'
@@ -95,15 +96,14 @@ def user_names(environ):
 
 def check_report(context, fields, environ, label=LABEL):
     """Refuse the report (ADR-0003: refuse, never redact; `label` starts the error) when a field fails
-    privacy.check_text, or when a field from outside the CLI (OUTSIDE_FIELDS: the symptom, the rule, the installed
-    version folder and the signature, not the title, target and readings the CLI composes; an installed version that
-    is a commit id, privacy.COMMIT_ID, holds no name and is skipped, so a short repo-layer name such as `add` cannot
-    match its hex) holds a profile marker
-    (scans.profile_markers) or a repo-layer name (scans.repo_layer_names), by scans.marker_hits, a local path
-    (LOCAL_PATH: `/x/y` or `~/` not right after a letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or
-    `=`, or a drive `X:\\` or `X:/`; a slash inside a word such as `and/or`, the `//` of a link and any one-segment
-    path are none, so a slash command such as `/compact` and a path such as `/etc` are allowed) or the OS user name
-    (user_names)."""
+    privacy.check_text, or when a field from outside the CLI (OUTSIDE_FIELDS: the symptom, the rule, the reason, a
+    readings line, the installed version folder and the signature, not the title and target the CLI composes; an
+    installed version that is a commit id, privacy.COMMIT_ID, holds no name and is skipped, so a short repo-layer
+    name such as `add` cannot match its hex) holds a profile marker (scans.profile_markers) or a repo-layer name
+    (scans.repo_layer_names), by scans.marker_hits, a local path (LOCAL_PATH: `/x/y` or `~/` not right after a
+    letter, digit, `_`, `.` or `/`, so also after a quote, a bracket or `=`, or a drive `X:\\` or `X:/`; a slash
+    inside a word such as `and/or`, the `//` of a link and any one-segment path are none, so a slash command such as
+    `/compact` and a path such as `/etc` are allowed) or the OS user name (user_names)."""
     names = scans.profile_markers(context.profile.values, context.plugin_root) | scans.repo_layer_names(context.home)
     users = user_names(environ)
     for key, value in fields:
@@ -176,6 +176,20 @@ def tuning_report(context, anomaly):
     readings = tuple(f'  {line}' for line in verdict.reading_lines(found))   # nested under the Readings field
     plus_one = f'+1: the same line, {experiment.result} on the installed version {version}'
     return Report(TUNING_SUFFIX, word, fields, readings, plus_one)
+
+
+ACTIONS = {'defect': (LABEL, defect_report), 'tuning': (TUNING_LABEL, tuning_report)}   # action: (label, compose)
+
+
+def checked_report(context, anomaly, action, environ):
+    """The report of `action` (ACTIONS) for the anomaly once check_report passed it: its fields, and each line that
+    follows them as a READING_FIELD field; RecordError when the action refuses it, OSError when a file it reads
+    cannot be read."""
+    label, compose = ACTIONS[action]
+    report = compose(context, anomaly)
+    check_report(context, report.fields + tuple((READING_FIELD, line.strip()) for line in report.lines), environ,
+                 label)
+    return report
 
 
 def write_report(home, signature, report):
@@ -265,9 +279,9 @@ def sent_lines(anomaly):
     return [line for line in addenda.log_lines(anomaly) if line.startswith(LOG_WORD)]
 
 
-def run_report(args, environ, label, compose):
-    """The run of `upstream defect` and `upstream tuning` (the module text); `compose(context, anomaly)` is
-    defect_report or tuning_report, and `label` starts the errors."""
+def run_report(args, environ, action):
+    """The run of `upstream defect` and `upstream tuning` (the module text); `action` is a key of ACTIONS."""
+    label = ACTIONS[action][0]
     context = digest.context_from_args(args, environ, strict=True)
     if gitrepo.plugin_repo(context.plugin_root, context.profile) is not None:
         print(CHECKOUT_SET)
@@ -281,8 +295,7 @@ def run_report(args, environ, label, compose):
     sent = sent_lines(anomaly)
     if sent and (args.comment is not None or args.create):
         raise RecordError(f'{label}: {anomaly.signature} was already sent upstream ({sent[-1]}); a report goes once')
-    report = compose(context, anomaly)
-    check_report(context, report.fields, environ, label)
+    report = checked_report(context, anomaly, action, environ)
     path, title, body = write_report(context.home, anomaly.signature, report)
     print(f'report: {path}')
     repo = target_repository(context, label)
@@ -313,11 +326,11 @@ def run_report(args, environ, label, compose):
 
 
 def run_defect(args, environ):
-    return run_report(args, environ, LABEL, defect_report)
+    return run_report(args, environ, 'defect')
 
 
 def run_tuning(args, environ):
-    return run_report(args, environ, TUNING_LABEL, tuning_report)
+    return run_report(args, environ, 'tuning')
 
 
 def register(commands, common):

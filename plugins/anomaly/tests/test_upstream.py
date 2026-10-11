@@ -470,6 +470,19 @@ class TuningRefusalTest(TuningCase):
                                  status='reopened', summary=SUMMARY)
         self.assert_refused(SIGNATURE, 'reopened')
 
+    def test_a_rule_that_names_a_profile_marker_is_refused(self):
+        """D-3: the rule is text from outside the CLI, checked as the symptom of a defect report is."""
+        self.write_profile('mr_tool: acme-kit:open-mr')
+        addenda.remove_line(self.addenda_path, SIGNATURE)
+        addenda.append_line(self.addenda_path, 'Run acme-kit before logging.', SIGNATURE, self.stamp)
+        self.assert_refused('Rule', 'acme-kit')
+
+    def test_a_reading_that_names_a_profile_marker_is_refused(self):
+        """A per-dispatch metric carries an agent name into the readings, so they get the outside-text check."""
+        self.write_profile('mr_tool: acme-kit:open-mr')
+        self.write_experiment(metric='model-weighted tokens per dispatch acme-kit')
+        self.assert_refused('acme-kit')
+
 
 class TuningTextTest(TuningCase):
     def test_keep_and_unproven_are_accepted_and_the_text_names_the_verdict_word(self):
