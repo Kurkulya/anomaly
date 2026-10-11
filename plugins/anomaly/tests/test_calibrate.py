@@ -994,6 +994,17 @@ class BatchTest(CalibrateCase):
                                  check_by='2026-10-25', result='keep', status='fixed')
         self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
 
+    def test_a_kept_line_whose_metric_resolve_metric_refuses_gets_no_offer(self):
+        """D-7: the send refuses it before its readings, so the offer does too."""
+        self.lay_out_plugin()
+        self.kept_addendum('kept-one')
+        addenda.append_line(addenda.addendum_path(self.home, 'research'), 'Rule of unknown-one.', 'unknown-one',
+                            addenda.stamp(self.plugin / 'skills' / 'research'))
+        write_experiment_anomaly(self.home, 'unknown-one', target='anomaly:research', metric='speed',
+                                 guard='rework sightings', fixed_by='2026-09-20 · addenda/research.md',
+                                 check_by='2026-10-25', result='keep', status='fixed')
+        self.assertEqual(self.plan_offers(), ['upstream: tuning kept-one'])
+
     def test_an_addenda_file_that_cannot_be_read_prints_a_warning_and_no_offer(self):
         """A folder where the addenda file should be cannot be read: the plan says so and still prints. An error that
         names no file still names the anomaly's addenda file."""
