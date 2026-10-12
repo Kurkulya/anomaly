@@ -198,9 +198,9 @@ def has_base(folder, branch):
 
 
 def slug_branch(pattern, unit):
-    """The branch the `branch` port pattern gives for the unit key; None unless `<slug>` is the pattern's one
-    placeholder (a pattern with `<type>` or `<key>` is not expanded)."""
-    return pattern.replace(SLUG, unit) if PLACEHOLDER.findall(pattern) == [SLUG] else None
+    """The branch the `branch` port pattern gives for the unit key; None unless `<slug>` is the only placeholder
+    the pattern holds (a pattern with `<type>` or `<key>` is not expanded), however often it repeats."""
+    return pattern.replace(SLUG, unit) if set(PLACEHOLDER.findall(pattern)) == {SLUG} else None
 
 
 def is_unfinished(folder):
