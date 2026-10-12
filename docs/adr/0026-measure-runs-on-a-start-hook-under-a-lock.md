@@ -13,7 +13,7 @@ Revisit: when the side pane needs fresher numbers than session start gives, when
 ## Decision
 
 - Hook: second handler in the `startup` group of `hooks.json`, `python` with `measure --quiet`, `"async": true`. No `SessionEnd` hook.
-- `--quiet`: no stdout on success or on a skip, and no `home: placeholder unfilled` notice. Errors still print `anomaly: <msg>` on stderr with exit 2; an async hook shows them to no one, and a later plain run shows an error that persists.
+- `--quiet`: no stdout on success or on a skip, and no `home: placeholder unfilled` notice. Errors still print `anomaly: <msg>` on stderr with exit 2; the Claude Code hooks docs do not say who sees an async hook's stderr, and a later plain run shows an error that persists.
 - Lock: `metrics.lock` in home, created with `O_CREAT|O_EXCL` and holding a token of the run, held from the read of the old rows to the last write. At the end a run removes the lock only if it still holds its own token. Wait 30 s, stale after 10 min, the age taken from the lock file's modification time; a run removes every stale lock it finds (lstat, then unlink). After its first removal it makes its own lock at once, even when the wait is over; after a later one it waits one poll as for a held lock. A plain run that skips prints `measure: skipped, another run holds <home>/metrics.lock`.
 - Conduct: Report step 13 runs `measure --quiet` just before `conduct status`, and prints nothing about it. The side pane's poll never runs `measure`.
 

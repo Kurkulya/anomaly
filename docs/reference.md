@@ -484,7 +484,8 @@ The plugin also runs `measure --quiet` on its own: an async start hook in
 `plugins/anomaly/hooks/hooks.json` runs it at the start of a new session, and `conduct` runs it
 once in its Report step (step 13), just before `conduct status`. `--quiet` prints nothing on
 success or on a skip, and hides the `home:` notice; an error still prints its `anomaly:` line on
-stderr with exit 2, which an async hook shows to no one. Every run holds the lock
+stderr with exit 2. The Claude Code hooks docs do not say who sees an async hook's stderr; a later
+plain run shows an error that persists. Every run holds the lock
 `<home>/metrics.lock` while it reads and writes the rows. A run that finds the lock held waits up
 to 30 s, then prints `measure: skipped, another run holds <home>/metrics.lock` (nothing with
 `--quiet`) and exits 0. A lock older than 10 min is stale and is taken over
