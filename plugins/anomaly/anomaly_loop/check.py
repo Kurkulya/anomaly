@@ -41,7 +41,7 @@ import re
 import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from . import files, gitrepo, paths, ports, ticket
+from . import files, gitrepo, log, paths, ports, ticket
 from .constants import (KEY_LINE_CORE, TICKET_ADHOC_DIR, TICKET_FIELD_SEPARATOR, TICKET_NUMBER_DIGITS, TICKET_STATUS_DONE,
                         TICKET_STATUS_HUMAN, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_NEEDS_INFO,
                         TICKET_STATUS_READY, TICKET_STATUS_WONTFIX)
@@ -111,8 +111,8 @@ STORIES_WARN_BYTES = 6 * 1024
 DECISIONS_WARN_BYTES = 8 * 1024
 AC_LINE = re.compile(r'^- (AC-\d+):')
 D_LINE = re.compile(r'^- D-\d+:')
-SPECIFY_LINE = re.compile(r'^\S+ \S+ specify:')
-SPECIFY_IDS = re.compile(r'^\S+ \S+ specify: ACs: ([^;]*);')
+SPECIFY_STAGE = 'specify'   # the stage of a log.md line (log.LINE) that names the AC ids
+SPECIFY_IDS = re.compile(r'ACs: ([^;]*);')   # the start of the text of a specify line
 D_TOKEN = re.compile(r'\bD-\d+')
 BRACKETED = re.compile(r'\([^()]*\)|\[[^\[\]]*\]')
 # The shapes below are the exact text of docs/formats.md; a test holds them to it.
@@ -323,13 +323,15 @@ def decisions_errors(text, folder, look_up_owners=True, adr_folder=ADR_FOLDER_CO
 
 
 def logged_ac_ids(text):
-    """(ids, errors) for the `specify:` lines of log.md: ids maps each AC id to the number of the
-    first line that names it, in order; a `specify:` line without the `ACs: ...;` shape is an error."""
+    """(ids, errors) for the `specify:` lines of log.md, read with log.LINE (a line of another shape is not
+    read): ids maps each AC id to the number of the first line that names it, in order; a `specify:` line
+    without the `ACs: ...;` shape is an error."""
     ids, errors = {}, []
     for number, line in enumerate(text.splitlines(), 1):
-        if not SPECIFY_LINE.match(line):
+        entry = log.LINE.fullmatch(line)
+        if entry is None or entry.group(2) != SPECIFY_STAGE:
             continue
-        match = SPECIFY_IDS.match(line)
+        match = SPECIFY_IDS.match(entry.group(3))
         if not match:
             errors.append(f'log.md:{number}: a specify: line must start its text with the ids '
                           f'({SPECIFY_SHAPE})')
