@@ -1805,8 +1805,10 @@ class ConductSkillTest(unittest.TestCase):
         self.assertEqual(len(measure), 1, 'the command list has no single `measure --quiet` line')
         self.assertIn("--home '${user_config.home}'", measure[0])
         self.assertIn('--data "${CLAUDE_PLUGIN_DATA}"', measure[0])
-        step = next(line for line in lines if line.startswith('13. '))
+        step = next((line for line in lines if line.startswith('13. ')), '')
+        self.assertTrue(step, 'no Report step 13')
         self.assertIn('measure --quiet', step, 'Report step 13 does not name `measure --quiet`')
+        self.assertIn('a nonzero exit neither stops the run nor prints a line', step)
         self.assertLess(step.index('measure --quiet'), step.index('conduct status'),
                         'step 13 names `measure --quiet` after `conduct status`')
 
