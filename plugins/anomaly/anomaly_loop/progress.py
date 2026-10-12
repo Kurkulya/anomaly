@@ -32,7 +32,7 @@ through worklog.read_report (ADR-0014). Nothing is written and nothing leaves th
 import json
 from pathlib import Path
 
-from . import check, conduct, files, frontier, gitrepo, log, mr, paths, records, ticket, worklog
+from . import check, conduct, frontier, gitrepo, log, mr, paths, records, ticket, worklog
 from .constants import TICKET_ADHOC_DIR, WORKLOG_BUILD_STAGE
 from .files import RecordError
 
@@ -115,12 +115,7 @@ def last_stage(rows):
 
 def wave_number(folder):
     """The number of `conduct` lines of the unit's log.md whose text starts with `wave `; 0 with no log.md."""
-    path = folder / log.FILE_NAME
-    if not path.is_file():
-        return 0
-    matches = (log.LINE.fullmatch(line) for line in files.read_input(path).splitlines())
-    return sum(1 for match in matches
-               if match and match.group(1) == WAVE_STAGE and match.group(2).startswith(WAVE_TEXT))
+    return sum(1 for _, stage, text in log.entries(folder) if stage == WAVE_STAGE and text.startswith(WAVE_TEXT))
 
 
 def unit_report(home, unit):
