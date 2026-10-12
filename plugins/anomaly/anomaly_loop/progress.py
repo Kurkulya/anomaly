@@ -13,8 +13,9 @@ keys, in this order:
   schema      1
   unit        the unit name; `picked_by` is `unit-option` (--unit), `branch` or `newest-log`
   stage       {name, ended} of the unit's work-unit line with the newest `ended` (a tie: the later line in the
-              file); null when no line has one
+              file); null when no line has one, or `work-units.jsonl` or `metrics.jsonl` cannot be read
   wave        the number of `log.md` lines of stage `conduct` whose text starts with `wave `; 0 with no `log.md`
+              or one that cannot be read
   counts      {done, failed, open}: numbers from conduct.wave_counts, the counts of `conduct status`
   next        the startable tickets (`NN-slug`), from conduct.wave_counts
   tickets     one object per ticket, in ticket order: slug, title, status, blocked_by (`NN` list), kind (`done`, or
@@ -23,16 +24,19 @@ keys, in this order:
               timed `build` lines, worklog.minutes_of; null when none is timed), high and fix_rounds (the
               `Metrics:` counts, ticket.metric_counts; null when absent)
   mr          {link, reviewed, verified}: the `MR:`, `Reviewed:` and `Verified:` values of `mr.md`
-              (mr.read_state), each null when absent
+              (mr.read_state), each null when absent; null when `mr.md` cannot be read
   cost        {weighted_tokens, merged, build_minutes} of worklog.read_report; null when the unit has no
-              work-unit line
-  warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; when several units
-              match the branch, one text that names the units not picked
+              work-unit line, or `work-units.jsonl` or `metrics.jsonl` cannot be read
+  warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; one text per file
+              that cannot be read (`log.md`, `mr.md`, `work-units.jsonl`, `metrics.jsonl`, or a ticket or `log.md`
+              the pick reads, which the pick then leaves out); when several units match the branch, one text that
+              names the units not picked
 
 A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
-`schema`, `unit` (null) and `warnings`. The work-unit lines are read only
-through worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The JSON is
-`json.dumps` with its default arguments: one line, ASCII escapes.
+`schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder, no unit picked, a `--repo` that is not a
+folder and a git call that fails, each with a warning. Every case exits 0; only bad arguments exit 2. The
+work-unit lines are read only through worklog.read_report (ADR-0014). Nothing is written and nothing leaves the
+machine. The JSON is `json.dumps` with its default arguments: one line, ASCII escapes.
 """
 import json
 import re
