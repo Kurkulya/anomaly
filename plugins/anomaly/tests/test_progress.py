@@ -508,6 +508,21 @@ class EveryCaseTest(ProgressCase):
         report = self.pick()
         self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'newest-log'))
 
+    def test_a_gone_working_folder_with_no_repo_gives_unit_null_and_a_warning(self):
+        """AC-17, D-16: with no `--repo` the start is the working folder, which no longer exists."""
+        self.leave_a_gone_working_folder()
+        self.assert_unit_null(run_cli('progress', '--json', '--home', str(self.home)), 'no work unit: ')
+
+    def test_a_dot_anomaly_folder_that_cannot_be_listed_gives_unit_null_and_a_warning(self):
+        """AC-17: the unit would be picked if `.anomaly/` could be listed."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        units = self.repo.root / '.anomaly'
+        units.chmod(0o000)
+        self.addCleanup(units.chmod, 0o755)
+        if os.access(units, os.R_OK):
+            self.skipTest('this system lets the folder be listed although it has no read permission')
+        self.assert_unit_null(self.run_progress(), 'cannot be read')
+
     def test_a_unit_with_no_tickets_folder_still_shows_its_stage_wave_mr_and_cost(self):
         """AC-18: the unit is named with `--unit`."""
         self.put_before_slice()
