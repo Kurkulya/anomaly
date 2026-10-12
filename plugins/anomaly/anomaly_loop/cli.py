@@ -43,6 +43,7 @@ COMMANDS = (
     'log',
     'frontier',
     'conduct',
+    'progress',
     'mr',
     'docscan',
     'pkg_facts',
