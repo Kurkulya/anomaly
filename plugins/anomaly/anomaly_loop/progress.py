@@ -239,10 +239,12 @@ def unit_null(warnings):
 
 
 def picked_report(root, branch, home):
-    """The report of the unit pick_unit picks; with none picked, `unit` is null."""
+    """The report of the unit pick_unit picks; with none picked, `unit` is null and a warning says why."""
     picked = pick_unit(root, branch, home)
     if picked is None:
-        return unit_null([])
+        if not (root / UNITS_DIR).is_dir():
+            return unit_null([f'no work unit: {root} has no {UNITS_DIR.as_posix()}/ folder'])
+        return unit_null(['no work unit picked: none matches the current branch and none is unfinished'])
     folder, picked_by, warnings = picked
     report = build(folder, home, picked_by)
     report['warnings'].extend(warnings)
@@ -259,14 +261,24 @@ def named_report(root, unit, home):
     return unit_null([f'no work unit {unit}: {folder} is not a folder'])
 
 
+def located_report(repo_option, unit, home):
+    """The report of the unit `--unit` names or the pick finds, in the repository that holds `--repo`; a `--repo`
+    that is not a folder, or a git call that fails, gives `unit` null and a warning (D-16)."""
+    if repo_option and not Path(repo_option).is_dir():
+        return unit_null([f'--repo is not a folder: {repo_option}'])
+    start = start_folder(Path(repo_option) if repo_option else Path.cwd())
+    try:
+        root = gitrepo.shared_root(start)
+        repo = None if unit is not None else gitrepo.find_repo(start)
+        branch = '' if repo is None else mr.current_branch(repo)
+    except (gitrepo.GitError, OSError) as error:
+        return unit_null([f'no work unit: {error}'])
+    if unit is None:
+        return picked_report(root, branch, home)
+    return named_report(root, unit, home)
+
+
 def run_progress(args, environ):
-    start = start_folder(Path(args.repo) if args.repo else Path.cwd())
-    root = gitrepo.shared_root(start)
-    home = paths.resolve_home(args.home, environ)
-    if args.unit is None:
-        repo = gitrepo.find_repo(start)
-        report = picked_report(root, '' if repo is None else mr.current_branch(repo), home)
-    else:
-        report = named_report(root, args.unit, home)
+    report = located_report(args.repo, args.unit, paths.resolve_home(args.home, environ))
     print(json.dumps(report))
     return 0
