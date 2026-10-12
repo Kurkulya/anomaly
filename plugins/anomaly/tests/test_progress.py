@@ -1,4 +1,4 @@
-"""Tests for `progress --json --unit <name> --repo <checkout>` (ticket 02), CLI in-process. The fixture is a git
+"""Tests for `progress --json [--unit <name>] --repo <checkout>` (tickets 02, 03), CLI in-process. The fixture is a git
 repository with a unit folder `.anomaly/<unit>/` (tickets, and `mr.md` and `log.md` where a test needs them), and the
 test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` tests build them (the unit folder's
 name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29)."""
