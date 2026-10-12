@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from . import paths, profile
 from .constants import (ACTIVE_GAP_SECONDS, LONG_PROMPT_FACTORS, LONG_PROMPT_TOKENS, METRICS_FILE,
                         MODEL_FACTORS, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE, STATE_FILE)
-from .files import dump, load_lines, write_lines
+from .files import dump, file_lock, load_lines, write_lines
 from .records import number
 
 # Relative price ratios per token kind (input = 1); only the ratios matter here.
@@ -624,9 +624,15 @@ def run_measure(args, environ):
         raise paths.PathError(f'transcript folder not found: {projects}')
     loaded = profile.load_profile(home)
     out_path = home / METRICS_FILE
-    result = scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
-                  cache_path=data / PROMPT_CACHE_FILE, full=args.full,
-                  now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
+    lock_path = home / 'metrics.lock'
+    with file_lock(lock_path, LOCK_WAIT, LOCK_STALE) as held:
+        result = held and scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
+                               cache_path=data / PROMPT_CACHE_FILE, full=args.full,
+                               now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
+    if not held:
+        if not args.quiet:
+            print(f'measure: skipped, another run holds {lock_path}')
+        return 0
     if args.quiet:
         return 0
     totals = summarize_rows(load_lines(out_path))
@@ -647,3 +653,7 @@ def run_measure(args, environ):
     if message:
         print(message)
     return 0
+
+
+LOCK_WAIT = 30    # seconds a run waits for <home>/metrics.lock before it skips
+LOCK_STALE = 600  # a lock older than this many seconds is taken over
