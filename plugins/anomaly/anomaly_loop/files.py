@@ -96,16 +96,17 @@ def file_lock(path, wait, stale):
     """Hold the lock file `path` for the block: yields True when this run made it (`O_CREAT|O_EXCL`, with a
     token of this run written into it), False when another run still held it after `wait` seconds (that
     lock is left in place). A lock whose age (now minus its modification time) is over `stale` seconds is
-    removed and made again at once, even when `wait` is over. A PermissionError while no lock file exists
-    is tried once more and then raised (a folder that cannot be written); with a lock file in place, where
-    Windows also raises it for a file being deleted, it counts as a held lock. The lock is removed when the block ends, normally or by an exception, if it still holds
-    this run's token; if it cannot be read or removed it is left for the stale rule. Missing parent
-    folders are made."""
+    removed and made again at once, even when `wait` is over (once per call; a later stale lock waits its
+    turn like a held one). A PermissionError while no lock file exists is tried once more after a short
+    pause and then raised (a folder that cannot be written); with a lock file in place, where Windows also
+    raises it for a file being deleted, it counts as a held lock. The lock is removed when the block ends,
+    normally or by an exception, if it still holds this run's token; if it cannot be read or removed it is
+    left for the stale rule. Missing parent folders are made."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     token = f'{os.getpid()}-{os.urandom(8).hex()}'
     deadline = time.monotonic() + wait
-    held = retried = False
+    held = retried = took_over = False
     while not held:
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
@@ -114,6 +115,7 @@ def file_lock(path, wait, stale):
                 if retried:
                     raise
                 retried = True
+                time.sleep(LOCK_POLL_SECONDS)
                 continue
             retried = removed = False
             try:
@@ -122,7 +124,8 @@ def file_lock(path, wait, stale):
                     removed = True
             except (FileNotFoundError, PermissionError):
                 pass
-            if removed:
+            if removed and not took_over:
+                took_over = True
                 continue
             if time.monotonic() >= deadline:
                 break

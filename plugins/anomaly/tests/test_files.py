@@ -77,7 +77,7 @@ class LockTest(unittest.TestCase):
         self.lock.write_text('dead run', encoding='utf-8')
         old = time.time() - 1000
         os.utime(self.lock, (old, old))
-        with files.file_lock(self.lock, 0.2, 600) as got:
+        with files.file_lock(self.lock, 0, 600) as got:
             self.assertTrue(got)
 
     def test_the_lock_file_is_gone_after_the_block_ends(self):
@@ -142,14 +142,26 @@ class LockTest(unittest.TestCase):
                 self.assertTrue(got)
         self.assertEqual(len(calls), 2)
 
-    def test_a_stale_lock_met_after_the_wait_is_over_is_still_taken_over(self):
+    def test_a_permission_error_with_no_lock_file_is_retried_again_after_a_held_lock_was_met(self):
         import os
-        import time
-        self.lock.write_text('dead run', encoding='utf-8')
-        old = time.time() - 1000
-        os.utime(self.lock, (old, old))
-        with files.file_lock(self.lock, 0, 600) as got:
-            self.assertTrue(got)
+        from unittest import mock
+        real_open = os.open
+        calls = []
+
+        def open_denied_three_times(*args, **kwargs):
+            calls.append(args[0])
+            if len(calls) == 2:
+                self.lock.write_text('other', encoding='utf-8')
+            if len(calls) == 3:
+                self.lock.unlink()
+            if len(calls) <= 3:
+                raise PermissionError('lock was being deleted')
+            return real_open(*args, **kwargs)
+
+        with mock.patch.object(files.os, 'open', side_effect=open_denied_three_times):
+            with files.file_lock(self.lock, 2, 600) as got:
+                self.assertTrue(got)
+        self.assertEqual(len(calls), 4)
 
     def test_a_failing_token_write_leaves_no_lock_file_and_raises(self):
         from unittest import mock
