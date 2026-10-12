@@ -1278,17 +1278,18 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
 ```
 
 - The unit is the folder `.anomaly/<name>/` of the main checkout of the repository that holds
-  `--repo` (default: the current folder), so a worktree reads the units of the main checkout. A
-  `--repo` inside an `.anomaly/` folder starts from the folder that holds it. The `adhoc` folder is
-  never a unit.
+  `--repo` (default: the current folder), or of that folder itself when it is in no repository, so
+  a worktree reads the units of the main checkout. A `--repo` inside an `.anomaly/` folder starts
+  from the folder that holds it. The automatic pick never picks the `adhoc` folder.
 - `--unit <name>` names the folder. Without it the unit is picked in this order, and `picked_by`
   says which rule won (`pick_unit`): a unit with a ticket whose `Base:` equals the current branch
   (`branch`); else the unit whose name, put in place of `<slug>` in the `branch` port pattern,
   equals the current branch, only when `<slug>` is the one placeholder of that pattern (`branch`);
   else the unfinished unit with the newest `log.md` line (`newest-log`). A unit with no ticket, or
-  a ticket that is not `done` or cannot be loaded, is unfinished. When several units match the
-  branch, the one with the newest `log.md` line is picked and a warning names the others. A unit
-  at the interview stage has no `log.md` line, so only `--unit` shows it.
+  a ticket that is not `done` or cannot be loaded or classified, is unfinished. When several units
+  match the branch, the one with the newest `log.md` line is picked and a warning names the others.
+  The `newest-log` rule never picks a unit with no `log.md` line, such as one at the interview
+  stage; `--unit`, or a branch that matches its name through the `branch` pattern, does.
 - Every case exits 0 with the JSON, and a problem is a text in `warnings`. Only bad arguments
   (a missing `--json`, an unknown option) exit 2, as one `anomaly:` line on stderr.
 
@@ -2242,7 +2243,8 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2. `progress` is the exception for what it
-reads: a file it cannot read, or a git call that fails, becomes a JSON warning with exit 0.
+reads: a file it cannot read, or a git call that fails, becomes a JSON warning with exit 0 (a
+`work-units.jsonl` or `metrics.jsonl` that cannot be opened reads as missing, with no warning).
 
 ## Docs scan
 
