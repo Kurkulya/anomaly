@@ -603,7 +603,9 @@ def register(commands, common):
     measure.add_argument('--full', action='store_true', help='re-read every session, not only changed ones')
     measure.add_argument('--projects', help='transcript root (default: env ANOMALY_PROJECTS, '
                                             f'then {paths.DEFAULT_PROJECTS})')
-    measure.add_argument('--quiet', action='store_true', help='print no summary lines; errors still go to stderr')
+    measure.add_argument('--quiet', action='store_true',
+                         help='print nothing on success (no summary, warning or home notice); '
+                              'errors still go to stderr')
     measure.set_defaults(handler=run_measure)
 
 
