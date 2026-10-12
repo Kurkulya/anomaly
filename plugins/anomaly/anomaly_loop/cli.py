@@ -91,7 +91,7 @@ def main(argv=None, environ=None, now=None):
     args.today = args.now.date()
     try:
         notice = paths.home_notice(args.home, environ)
-        if notice:
+        if notice and not getattr(args, 'quiet', False):
             print(notice)
         return args.handler(args, environ)
     except (paths.PathError, records.RecordError, gitrepo.GitError, glab.CiError, OSError) as error:

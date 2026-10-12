@@ -603,6 +603,7 @@ def register(commands, common):
     measure.add_argument('--full', action='store_true', help='re-read every session, not only changed ones')
     measure.add_argument('--projects', help='transcript root (default: env ANOMALY_PROJECTS, '
                                             f'then {paths.DEFAULT_PROJECTS})')
+    measure.add_argument('--quiet', action='store_true', help='print no summary lines; errors still go to stderr')
     measure.set_defaults(handler=run_measure)
 
 
@@ -624,6 +625,8 @@ def run_measure(args, environ):
     result = scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
                   cache_path=data / PROMPT_CACHE_FILE, full=args.full,
                   now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
+    if args.quiet:
+        return 0
     totals = summarize_rows(load_lines(out_path))
     print(f"metrics: processed {result['processed']}, skipped {result['skipped']}, rows {result['rows']}")
     print(f"range: {day(totals['first_ts'])} to {day(totals['last_ts'])}")
