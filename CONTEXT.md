@@ -65,3 +65,4 @@
 | **upstream report** | Opt-in text an installed-copy user sends to the plugin's repository as a GitHub issue or a +1 comment, in one of two lanes (ADR-0024). | report (alone), telemetry, issue (alone) |
 | **defect report** | The upstream report lane for a plugin fault, sent with no experiment. | bug report |
 | **tuning report** | The upstream report lane for a kept addendum, sent with its experiment result. | patch report |
+| **progress** | A work unit's current state in one report: its last ended stage, wave, tickets, MR gate and cost, for a UI to draw. `progress --json` prints it (ADR-0025). | status, dashboard, digest |

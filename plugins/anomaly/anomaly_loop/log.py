@@ -10,12 +10,14 @@ that is not one word, text that is empty or breaks the line, and a log.md that i
 with no write; the folder is never created. Any existing folder is allowed, inside `.anomaly/` or not.
 """
 import errno
+import re
 
 from . import files, paths, privacy, records, ticket, worklog
 from .files import RecordError
 
 LABEL = 'log'
 FILE_NAME = 'log.md'
+LINE = re.compile(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) ([^\s:]+): (.*)')   # a line run_add writes: (time, stage, text)
 
 
 def register(commands, common):
@@ -51,3 +53,13 @@ def run_add(args, environ):
         raise
     print(f'log: {path}')
     return 0
+
+
+def entries(folder):
+    """[(time, stage, text)] of the lines of the folder's log.md that have the shape run_add writes, in file
+    order; [] when it has no log.md. The time text sorts in time order."""
+    path = folder / FILE_NAME
+    if not path.is_file():
+        return []
+    matches = (LINE.fullmatch(line) for line in files.read_input(path).splitlines())
+    return [match.groups() for match in matches if match]

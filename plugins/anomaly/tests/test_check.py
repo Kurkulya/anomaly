@@ -719,6 +719,13 @@ class CheckStoriesTest(unittest.TestCase):
         self.put(log=GOOD_LOG + '2026-10-02 10:00 specify: ACs: AC-1, AC-2 claim check passed\n')
         self.assert_error(2, 'ACs: AC-1, AC-2, …;', file_name='log.md')
 
+    def test_a_specify_line_that_log_line_rejects_is_not_read(self):
+        """The log.md line reader is log.LINE: a line with no `<YYYY-MM-DD HH:MM>` time names no AC and has no shape
+        to check, so neither the gone AC-9 nor the missing ids are errors."""
+        self.put(log=GOOD_LOG + 'yesterday 10:00 specify: ACs: AC-9; claim check passed\n'
+                                'yesterday 11:00 specify: no ids here\n')
+        self.assertEqual(self.stories(), ([], []))
+
     def test_a_missing_stories_file_is_an_error_and_missing_decisions_and_log_are_empty(self):
         (self.folder / 'stories.md').unlink()
         errors, _ = self.stories()

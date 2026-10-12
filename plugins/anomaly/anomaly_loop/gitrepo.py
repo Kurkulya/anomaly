@@ -167,10 +167,15 @@ def main_checkout(repo):
     return Path(run(repo, 'rev-parse', '--show-toplevel').stdout.strip()).resolve()
 
 
-def shared_root(folder):
+NOT_LOOKED_UP = object()   # shared_root's `found` when the caller has not run find_repo
+
+
+def shared_root(folder, found=NOT_LOOKED_UP):
     """The folder every worktree of a repository shares for untracked plugin files: the main checkout of
-    the repository that holds `folder`, or `folder` itself when it is in no repository."""
-    found = find_repo(folder)
+    the repository that holds `folder`, or `folder` itself when it is in no repository. `found` is
+    find_repo(folder) when the caller already has it (None included), so find_repo does not run again."""
+    if found is NOT_LOOKED_UP:
+        found = find_repo(folder)
     return folder if found is None else main_checkout(found)
 
 

@@ -228,15 +228,24 @@ class UnitReport(NamedTuple):
     unmeasured: list
     weighted: float
 
+    @property
+    def build_minutes(self):
+        """The minutes of all `build` lines of the unit; a line without a start adds none."""
+        return sum(span or 0 for span in self.spans)
+
+
+class NoUnitLines(RecordError):
+    """read_report of a work unit that has no line in `work-units.jsonl`, as opposed to a file it cannot read."""
+
 
 def read_report(home, unit):
     """The UnitReport of a work unit from `work-units.jsonl` and `metrics.jsonl` in home; a unit with no
-    lines raises RecordError."""
+    lines raises NoUnitLines, a file that is not UTF-8 RecordError."""
     everything = records.load_work_units(home)
     rows = [row for row in everything if row.get('feature') == unit]
     if not rows:
         units = sorted({row['feature'] for row in everything if isinstance(row.get('feature'), str)})
-        raise RecordError(f"{LABEL}: no lines for work unit {unit}; the units that exist: "
+        raise NoUnitLines(f"{LABEL}: no lines for work unit {unit}; the units that exist: "
                           f"{', '.join(units) or 'none'}")
     measured = {row.get('session_id'): row for row in files.load_lines(home / METRICS_FILE)}
     held = {}   # each session of the unit once, with the tickets its lines name
@@ -258,7 +267,7 @@ def cost_line(report):
     cost = f'cost: weighted tokens {report.weighted:,.0f}'
     if report.merged:
         cost += (f', weighted tokens per merged ticket {report.weighted / report.merged:,.0f}'
-                 f', minutes per merged ticket {sum(span or 0 for span in report.spans) / report.merged:,.1f}')
+                 f', minutes per merged ticket {report.build_minutes / report.merged:,.1f}')
     return cost
 
 
