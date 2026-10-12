@@ -257,8 +257,8 @@ def is_unfinished(folder):
 def pick_unit(folders, branch, home):
     """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, out of `folders` (unit_folders);
     folder and picked_by are None when no unit is picked. `branch` is the current branch: '' outside a repository or
-    on a detached head (then no branch match runs). A ticket or log.md that cannot be read is left out of the pick and named in `warnings`, only
-    for the units not picked: build names those of the picked unit itself."""
+    on a detached head (then no branch match runs). A ticket or log.md that cannot be read is left out of the pick
+    and named in `warnings`, only for the units not picked: build names those of the picked unit itself."""
     skipped = {folder: [] for folder in folders}   # per unit, the texts of the files the pick left out
     if branch:
         matches = [folder for folder in folders if has_base(folder, branch, skipped[folder])]
