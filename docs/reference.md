@@ -1296,7 +1296,8 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
   `mr.md` link). A reader escapes it before it draws it, and opens `mr.link` only when it is an
   `http://` or `https://` link.
 - The command follows symlinks: a unit folder, a `log.md` or a ticket file that is a symlink is
-  read through it.
+  read through it. A ticket file that is a named pipe (FIFO) is opened like a file, so the read
+  waits for a writer and blocks a UI that polls the command.
 
 ### Fields of schema 1
 
