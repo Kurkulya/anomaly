@@ -1278,9 +1278,9 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
 ```
 
 - The unit is the folder `.anomaly/<name>/` of the main checkout of the repository that holds
-  `--repo` (default: the current folder), or of that folder itself when it is in no repository, so
-  a worktree reads the units of the main checkout. A `--repo` inside an `.anomaly/` folder starts
-  from the folder that holds it. The automatic pick never picks the `adhoc` folder.
+  `--repo` (default: the current folder), so a worktree reads the units of the main checkout; in no
+  repository it is that folder itself. A `--repo` inside an `.anomaly/` folder starts from the
+  folder that holds it. The automatic pick never picks the `adhoc` folder.
 - `--unit <name>` names the folder. Without it the unit is picked in this order, and `picked_by`
   says which rule won (`pick_unit`): a unit with a ticket whose `Base:` equals the current branch
   (`branch`); else the unit whose name, put in place of `<slug>` in the `branch` port pattern,
