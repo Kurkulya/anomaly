@@ -174,7 +174,7 @@ def build(folder, home, picked_by):
     wave = wave_number(folder, warnings)
     gate = mr_gate(folder, warnings)
     cost = None if report is None else {
-        'weighted_tokens': report.weighted,
+        'weighted_tokens': float(report.weighted),
         'merged': report.merged,
         'build_minutes': report.build_minutes,
     }

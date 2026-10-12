@@ -244,10 +244,13 @@ class ProgressTest(ProgressCase):
 
     def test_cost_holds_the_weighted_tokens_the_merged_tickets_and_the_build_minutes_of_the_unit(self):
         """AC-11: 3000 weighted tokens (alpha, bravo, charlie, echo; delta has no metrics row), 3 merged tickets, and
-        120 build minutes over all build lines (30 + 60 + 30, the untimed ones add none)."""
-        self.write_files()
+        120 build minutes over all build lines (30 + 60 + 30, the untimed ones add none). The metrics rows hold whole
+        numbers, and `weighted_tokens` is still a float."""
+        self.write_files(weighted={session: int(value) for session, value in self.WEIGHTED.items()})
         self.unit(self.wave_tickets())
-        self.assertEqual(self.report()['cost'], {'weighted_tokens': 3000, 'merged': 3, 'build_minutes': 120})
+        cost = self.report()['cost']
+        self.assertEqual(cost, {'weighted_tokens': 3000, 'merged': 3, 'build_minutes': 120})
+        self.assertIsInstance(cost['weighted_tokens'], float)
 
     def test_cost_is_null_when_the_unit_has_no_work_unit_line(self):
         """AC-11: the only line in the work-unit file belongs to another unit."""

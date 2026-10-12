@@ -1319,9 +1319,10 @@ The keys come in this order. `schema` is first, so a reader checks it before it 
   lines of `mr.md`. Each is null when its line is absent or has no value. `mr` itself is null when
   `mr.md` cannot be read; a unit with no `mr.md` gives the object with three nulls.
 - `cost`: `{"weighted_tokens", "merged", "build_minutes"}` of `worklog.read_report`, the numbers
-  behind `worklog report`: the weighted tokens of the measured sessions of the unit, the number of
-  merged tickets, and the minutes of all its `build` lines (a line without both times adds 0). Null
-  when the unit has no work-unit line, or when `work-units.jsonl` or `metrics.jsonl` is not UTF-8.
+  behind `worklog report`: the weighted tokens of the measured sessions of the unit (a float, such
+  as `3000.0`), the number of merged tickets, and the minutes of all its `build` lines (a line
+  without both times adds 0). Null when the unit has no work-unit line, or when `work-units.jsonl`
+  or `metrics.jsonl` is not UTF-8.
 - `warnings`: a list of texts, empty when all is well. Each of these gets one text:
   - a ticket that cannot be loaded or classified, which is left out;
   - a file that cannot be read: `log.md`, `mr.md`, or a ticket or `log.md` that the unit pick reads
