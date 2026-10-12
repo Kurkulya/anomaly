@@ -272,7 +272,7 @@ def locate(target):
     """The Target of a work unit folder or an ad-hoc ticket file (a file outside `.anomaly/adhoc/` is refused)."""
     target = Path(target)
     if target.is_dir():
-        if frontier.unit_home(target) not in check.OWNER_HOME_DIRS or target.resolve().name == TICKET_ADHOC_DIR.name:
+        if frontier.unit_home(target) not in check.OWNER_HOME_DIRS or frontier.is_adhoc(target.resolve()):
             raise RecordError(f'{target}: not a work-unit folder (a folder in {" or ".join(check.OWNER_HOME_DIRS)}, '
                               f'not {TICKET_ADHOC_DIR.name})')
         return Target(True, target / BODY_FILE, target / STATE_FILE)
