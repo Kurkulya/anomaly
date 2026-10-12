@@ -125,6 +125,32 @@ class LockTest(unittest.TestCase):
                 with files.file_lock(self.lock, 5, 600):
                     self.fail('the block must not run')
 
+    def test_a_permission_error_with_no_lock_file_that_clears_on_the_retry_yields_true(self):
+        import os
+        from unittest import mock
+        real_open = os.open
+        calls = []
+
+        def open_once_denied(*args, **kwargs):
+            calls.append(args[0])
+            if len(calls) == 1:
+                raise PermissionError('lock was being deleted')
+            return real_open(*args, **kwargs)
+
+        with mock.patch.object(files.os, 'open', side_effect=open_once_denied):
+            with files.file_lock(self.lock, 0.2, 600) as got:
+                self.assertTrue(got)
+        self.assertEqual(len(calls), 2)
+
+    def test_a_stale_lock_met_after_the_wait_is_over_is_still_taken_over(self):
+        import os
+        import time
+        self.lock.write_text('dead run', encoding='utf-8')
+        old = time.time() - 1000
+        os.utime(self.lock, (old, old))
+        with files.file_lock(self.lock, 0, 600) as got:
+            self.assertTrue(got)
+
     def test_a_failing_token_write_leaves_no_lock_file_and_raises(self):
         from unittest import mock
         with mock.patch.object(files.os, 'write', side_effect=OSError('disk full')):
