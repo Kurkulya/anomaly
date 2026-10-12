@@ -40,21 +40,30 @@ def counted(names):
     return f'{len(names)} ({", ".join(names)})' if names else '0'
 
 
-def wave_lines(folder, home):
-    """The five lines of the wave report for the unit folder; an error raises RecordError."""
-    folder = Path(folder)
-    tickets, entries = frontier.read(folder)
+def wave_counts(tickets, entries):
+    """The wave counts as data, from what `frontier.read` returns: `done` is a number; `failed`, `open` and `next`
+    are lists of `NN-slug` stems in ticket order."""
     parsed = dict(tickets)
     done = sum(ticket.status == TICKET_STATUS_DONE for ticket in parsed.values())
     failed = [entry for entry in entries
               if entry.kind == frontier.RUNNING and not parsed[entry.path].has_result_line]
     opened = [entry for entry in entries if entry not in failed]
     following = [entry.path.stem for entry in entries if entry.kind == frontier.START]
+    return {'done': done,
+            'failed': [entry.path.stem for entry in failed],
+            'open': [entry.path.stem for entry in opened],
+            'next': following}
+
+
+def wave_lines(folder, home):
+    """The five lines of the wave report for the unit folder; an error raises RecordError."""
+    folder = Path(folder)
+    counts = wave_counts(*frontier.read(folder))
     cost = worklog.cost_line(worklog.read_report(home, folder.resolve().name))
-    return [f'{LABELS[0]}: {done}',
-            f'{LABELS[1]}: {counted([entry.path.stem for entry in failed])}',
-            f'{LABELS[2]}: {counted([entry.path.stem for entry in opened])}',
-            f'{LABELS[3]}: {", ".join(following) or "none"}',
+    return [f'{LABELS[0]}: {counts["done"]}',
+            f'{LABELS[1]}: {counted(counts["failed"])}',
+            f'{LABELS[2]}: {counted(counts["open"])}',
+            f'{LABELS[3]}: {", ".join(counts["next"]) or "none"}',
             cost]
 
 
