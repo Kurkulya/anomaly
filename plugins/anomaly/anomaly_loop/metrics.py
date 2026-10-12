@@ -628,9 +628,10 @@ def run_measure(args, environ):
     out_path = home / METRICS_FILE
     lock_path = home / 'metrics.lock'
     with file_lock(lock_path, LOCK_WAIT, LOCK_STALE) as held:
-        result = held and scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
-                               cache_path=data / PROMPT_CACHE_FILE, full=args.full,
-                               now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
+        if held:
+            result = scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
+                          cache_path=data / PROMPT_CACHE_FILE, full=args.full,
+                          now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
     if not held:
         if not args.quiet:
             print(f'measure: skipped, another run holds {lock_path}')

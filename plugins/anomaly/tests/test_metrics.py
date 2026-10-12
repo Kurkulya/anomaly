@@ -271,8 +271,7 @@ class MeasureQuietTest(Base):
 
 class MeasureLockTest(Base):
     """`measure` while another run holds a fresh `<home>/metrics.lock`: it waits, gives up with exit 0 and
-    changes none of the three files it writes. The wait is patched small; `create=True` lets the patch stand
-    before the constant exists, so the tests fail on what the run does, not on the patch."""
+    changes none of the three files it writes. The wait is patched small."""
 
     def held_run(self, *extra):
         """Fill the three files with one session, add a second session a normal run would take in, make
@@ -286,7 +285,7 @@ class MeasureLockTest(Base):
         (home / 'metrics.lock').write_text('another run', encoding='utf-8')
         written = (home / 'metrics.jsonl', data / 'measure-state.json', data / 'cache' / 'prompts.jsonl')
         before = [p.read_bytes() for p in written]
-        with mock.patch.object(metrics, 'LOCK_WAIT', 0.2, create=True):
+        with mock.patch.object(metrics, 'LOCK_WAIT', 0.2):
             code, out, err = run_cli(*argv, *extra)
         return code, out, err, before, [p.read_bytes() for p in written]
 

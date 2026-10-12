@@ -91,32 +91,67 @@ def append_text(path, text, *, no_follow=False):
         f.write(text.encode('utf-8'))
 
 
+def clear_stale_lock(path, stale, token):
+    """Take the lock file `path` out of the way when its age is over `stale` seconds. True when `path` is
+    free to be made again (the stale lock is gone, or someone else removed it); False when the lock is
+    held or cannot be touched now. The lock is renamed to a side name only this run uses, so of several
+    runs that read the same stale lock only one rename succeeds. A lock that turns out fresh once renamed
+    (another run replaced the stale one between the age check and the rename) is linked back."""
+    side = path.with_name(f'{path.name}.{token}.stale')
+    try:
+        if time.time() - path.stat().st_mtime <= stale:
+            return False
+        os.rename(path, side)
+    except FileNotFoundError:
+        return True
+    except PermissionError:
+        return False
+    fresh = False
+    try:
+        fresh = time.time() - side.stat().st_mtime <= stale
+        if fresh:
+            os.link(side, path)
+    except OSError:
+        pass
+    try:
+        side.unlink()
+    except OSError:
+        pass
+    return not fresh
+
+
 @contextmanager
 def file_lock(path, wait, stale):
-    """Hold the lock file `path` for the block: yields True when this run made it (`O_CREAT|O_EXCL`), False
-    when another run still held it after `wait` seconds (that lock is left in place). A lock whose age (now
-    minus its modification time) is over `stale` seconds is taken over. The lock is removed when the block
-    ends, normally or by an exception. Missing parent folders are made."""
+    """Hold the lock file `path` for the block: yields True when this run made it (`O_CREAT|O_EXCL`, with a
+    token of this run written into it), False when another run still held it after `wait` seconds (that
+    lock is left in place). A lock whose age (now minus its modification time) is over `stale` seconds is
+    taken over. The lock is removed when the block ends, normally or by an exception, if it still holds
+    this run's token; if it cannot be read or removed it is left for the stale rule. Missing parent
+    folders are made."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    token = f'{os.getpid()}-{os.urandom(8).hex()}'
     deadline = time.monotonic() + wait
     held = False
     while not held:
         try:
-            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666))
-            held = True
-        except FileExistsError:
-            try:
-                if time.time() - path.stat().st_mtime > stale:
-                    path.unlink()
-                    continue
-            except FileNotFoundError:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+        except (FileExistsError, PermissionError):
+            if clear_stale_lock(path, stale, token):
                 continue
             if time.monotonic() >= deadline:
                 break
             time.sleep(LOCK_POLL_SECONDS)
+        else:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(token)
+            held = True
     try:
         yield held
     finally:
         if held:
-            path.unlink(missing_ok=True)
+            try:
+                if path.read_text(encoding='utf-8') == token:
+                    path.unlink()
+            except (OSError, ValueError):
+                pass
