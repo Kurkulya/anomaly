@@ -42,8 +42,9 @@ Then start a new session and confirm the installed commit: `claude plugin list` 
 | `anomaly:calibrate` | The weekly review. Ranks the backlog, fixes one batch, records each fix as an experiment. |
 | `anomaly:assess` | Judges a new link, text or opinion against the recorded evidence, and keeps the verdict as an idea. |
 
-Two hooks run without a model. The **weekly nudge** tells you in the first session of the week
-when the backlog needs you. The **subagent Bash check** stops a subagent from writing files
+Three hooks run without a model. The **weekly nudge** tells you in the first session of the week
+when the backlog needs you. The **measure run** refreshes the metrics in the background at the
+start of each new session. The **subagent Bash check** stops a subagent from writing files
 through the shell.
 
 ### Pipeline
