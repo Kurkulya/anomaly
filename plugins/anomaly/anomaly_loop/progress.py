@@ -64,8 +64,9 @@ def register(commands, common):
 
 def classified(folder):
     """(tickets, entries, warnings): each numbered ticket file loaded with ticket.load and classified alone with
-    frontier.classify; a ticket that fails either is left out and named in a warning."""
-    tickets_dir = frontier.tickets_folder(folder)
+    frontier.classify; a ticket that fails either is left out and named in a warning. A unit with no tickets
+    folder (before slice) has none."""
+    tickets_dir = folder / check.TICKETS_DIR
     tickets, entries, warnings = [], [], []
     for path in frontier.ticket_paths(tickets_dir):
         try:
