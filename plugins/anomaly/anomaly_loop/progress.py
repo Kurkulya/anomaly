@@ -124,17 +124,38 @@ def last_stage(rows):
     return None if newest is None else {'name': newest.get('stage'), 'ended': newest['ended']}
 
 
-def wave_number(folder):
-    """The number of `conduct` lines of the unit's log.md whose text starts with `wave `; 0 with no log.md."""
-    return sum(1 for _, stage, text in log.entries(folder) if stage == WAVE_STAGE and text.startswith(WAVE_TEXT))
+def wave_number(folder, warnings):
+    """The number of `conduct` lines of the unit's log.md whose text starts with `wave `; 0 with no log.md. A
+    log.md that cannot be read gives 0 and a text in `warnings` that names it."""
+    try:
+        return sum(1 for _, stage, text in log.entries(folder) if stage == WAVE_STAGE and text.startswith(WAVE_TEXT))
+    except READ_ERRORS as error:
+        warnings.append(f'{log.FILE_NAME} cannot be read, wave shows 0: {error}')
+        return 0
 
 
-def unit_report(home, unit):
-    """The worklog.read_report of the unit, or None when it has no work-unit line (read_report raises)."""
+def unit_report(home, unit, warnings):
+    """The worklog.read_report of the unit, or None when it has no work-unit line (read_report raises NoUnitLines)
+    or a file it reads cannot be read (then a text in `warnings` names the file)."""
     try:
         return worklog.read_report(home, unit)
-    except RecordError:
+    except worklog.NoUnitLines:
         return None
+    except READ_ERRORS as error:
+        warnings.append(f'the work-unit lines cannot be read, stage and cost show null: {error}')
+        return None
+
+
+def mr_gate(folder, warnings):
+    """{link, reviewed, verified}: the `MR:`, `Reviewed:` and `Verified:` values of the unit's mr.md
+    (mr.read_state), each None when absent; None when mr.md cannot be read (then a text in `warnings` names it)."""
+    try:
+        state = mr.read_state(folder / mr.STATE_FILE)
+    except READ_ERRORS as error:
+        warnings.append(f'{mr.STATE_FILE} cannot be read, mr shows null: {error}')
+        return None
+    return {'link': state.get(mr.MR_LABEL), 'reviewed': state.get(mr.REVIEWED_LABEL),
+            'verified': state.get(mr.VERIFIED_LABEL)}
 
 
 def build(folder, home, picked_by):
@@ -142,9 +163,10 @@ def build(folder, home, picked_by):
     unit = folder.name
     tickets, entries, warnings = classified(folder)
     counts = conduct.wave_counts(tickets, entries)
-    report = unit_report(home, unit)
+    report = unit_report(home, unit, warnings)
     by_path = {entry.path: entry for entry in entries}
-    state = mr.read_state(folder / mr.STATE_FILE)
+    wave = wave_number(folder, warnings)
+    gate = mr_gate(folder, warnings)
     cost = None if report is None else {
         'weighted_tokens': report.weighted,
         'merged': report.merged,
@@ -155,12 +177,11 @@ def build(folder, home, picked_by):
         'unit': unit,
         'picked_by': picked_by,
         'stage': None if report is None else last_stage(report.rows),
-        'wave': wave_number(folder),
+        'wave': wave,
         'counts': {'done': counts['done'], 'failed': len(counts['failed']), 'open': len(counts['open'])},
         'next': counts['next'],
         'tickets': [ticket_entry(path, parsed, by_path.get(path), report) for path, parsed in tickets],
-        'mr': {'link': state.get(mr.MR_LABEL), 'reviewed': state.get(mr.REVIEWED_LABEL),
-               'verified': state.get(mr.VERIFIED_LABEL)},
+        'mr': gate,
         'cost': cost,
         'warnings': warnings,
     }
