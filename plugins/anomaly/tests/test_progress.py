@@ -428,8 +428,9 @@ class EveryCaseTest(ProgressCase):
         super().setUp()
         self.repo.write('.git/info/exclude', '.anomaly/\n')
 
-    def assert_unit_null(self, result):
-        """D-26, D-16: exit 0, one JSON line, exactly `schema`, `unit` (null) and a non-empty `warnings` list."""
+    def assert_unit_null(self, result, phrase):
+        """D-26, D-16: exit 0, one JSON line, exactly `schema`, `unit` (null) and a `warnings` list with a text that
+        holds `phrase`, the key words of that case's own warning."""
         code, out, err = result
         self.assertEqual((code, err), (0, ''), out)
         self.assertEqual(len(out.splitlines()), 1, out)
@@ -437,7 +438,7 @@ class EveryCaseTest(ProgressCase):
         self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
         self.assertEqual((report['schema'], report['unit']), (1, None))
         self.assertIsInstance(report['warnings'], list)
-        self.assertTrue(report['warnings'], out)
+        self.assert_warned_about(report, phrase)
 
     def assert_warned_about(self, report, *names):
         for name in names:
@@ -463,26 +464,26 @@ class EveryCaseTest(ProgressCase):
 
     def test_with_no_dot_anomaly_folder_the_object_holds_unit_null_and_a_warning(self):
         """AC-17: the repository has no `.anomaly/` and no unit is named."""
-        self.assert_unit_null(self.run_progress())
+        self.assert_unit_null(self.run_progress(), 'has no .anomaly/ folder')
 
     def test_with_no_unit_picked_the_object_holds_unit_null_and_a_warning(self):
         """AC-17: `.anomaly/` holds one unit, and all its tickets are done, so none is unfinished."""
         self.put_unit(self.ALPHA, {'01-first': slice_ticket('01', status='done')}, ['2026-10-01 09:00 ship: merged'])
-        self.assert_unit_null(self.run_progress())
+        self.assert_unit_null(self.run_progress(), 'no work unit picked')
 
     def test_a_repo_folder_that_does_not_exist_gives_unit_null_and_a_warning(self):
         """AC-17, D-7 Amended: the missing folder is inside the fixture repository, whose unit would be picked if
         the walk up to the nearest existing parent were read as the repository."""
         self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
         self.assert_unit_null(run_cli('progress', '--json', '--repo', str(self.repo.root / 'missing'),
-                                      '--home', str(self.home)))
+                                      '--home', str(self.home)), '--repo is not a folder')
 
     def test_a_failing_git_call_gives_unit_null_and_a_warning(self):
         """AC-17, D-16 Amended: a `HEAD` that names an invalid branch still lets git find the repository, but
         `git branch --show-current` fails (a real git failure, no mock); the unit would be picked otherwise."""
         self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
         self.repo.write('.git/HEAD', 'ref: refs/heads/a..b\n')
-        self.assert_unit_null(self.run_progress())
+        self.assert_unit_null(self.run_progress(), 'git branch failed')
 
     def test_a_unit_with_no_tickets_folder_still_shows_its_stage_wave_mr_and_cost(self):
         """AC-18: the unit is named with `--unit`."""
