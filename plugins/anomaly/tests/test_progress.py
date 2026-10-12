@@ -4,6 +4,7 @@ test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` t
 name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29),
 except the one reference check at the end."""
 import json
+import os
 import re
 import unittest
 from datetime import date
@@ -243,10 +244,13 @@ class ProgressTest(ProgressCase):
 
     def test_cost_holds_the_weighted_tokens_the_merged_tickets_and_the_build_minutes_of_the_unit(self):
         """AC-11: 3000 weighted tokens (alpha, bravo, charlie, echo; delta has no metrics row), 3 merged tickets, and
-        120 build minutes over all build lines (30 + 60 + 30, the untimed ones add none)."""
-        self.write_files()
+        120 build minutes over all build lines (30 + 60 + 30, the untimed ones add none). The metrics rows hold whole
+        numbers, and `weighted_tokens` is still a float."""
+        self.write_files(weighted={session: int(value) for session, value in self.WEIGHTED.items()})
         self.unit(self.wave_tickets())
-        self.assertEqual(self.report()['cost'], {'weighted_tokens': 3000, 'merged': 3, 'build_minutes': 120})
+        cost = self.report()['cost']
+        self.assertEqual(cost, {'weighted_tokens': 3000, 'merged': 3, 'build_minutes': 120})
+        self.assertIsInstance(cost['weighted_tokens'], float)
 
     def test_cost_is_null_when_the_unit_has_no_work_unit_line(self):
         """AC-11: the only line in the work-unit file belongs to another unit."""
@@ -288,6 +292,17 @@ class ProgressTest(ProgressCase):
                 self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
                 self.assertEqual((report['schema'], report['unit']), (1, None))
                 self.assertTrue(any(value in warning for warning in report['warnings']), report['warnings'])
+
+    def test_unit_adhoc_gives_unit_null_and_a_warning_though_the_folder_exists(self):
+        """AC-13 Amended (user, cumulative review): the adhoc folder is never a unit, also not with `--unit`."""
+        self.write_files()
+        write_text(self.repo.root / '.anomaly' / 'adhoc' / '2026-10-01-a-task.md', slice_ticket('01'))
+        code, out, err = self.run_progress('--unit', 'adhoc')
+        self.assertEqual((code, err), (0, ''), out)
+        report = json.loads(out)
+        self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
+        self.assertEqual((report['schema'], report['unit']), (1, None))
+        self.assertTrue(any('adhoc' in warning for warning in report['warnings']), report['warnings'])
 
 
 class PickTheUnitTest(ProgressCase):
@@ -372,13 +387,15 @@ class PickTheUnitTest(ProgressCase):
 
     def test_a_branch_pattern_with_only_slug_matches_the_unit_key_in_place_of_it(self):
         """AC-14, D-24: the `branch` port reads the profile key `branch_pattern`; bravo has the newer log line, so
-        only the pattern can pick alpha."""
-        write_text(self.home / 'profile.md', '---\nbranch_pattern: work/<slug>\n---\n')
+        only the pattern can pick alpha. A pattern that repeats `<slug>` still has it as its one placeholder."""
         self.put_unit(self.ALPHA, self.OPEN)
         self.put_unit(self.BRAVO, self.OPEN, ['2026-10-02 09:00 build: started'])
-        self.on_branch('work/alpha-unit')
-        report = self.pick()
-        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
+        for pattern, branch in (('work/<slug>', 'work/alpha-unit'), ('<slug>/<slug>', 'alpha-unit/alpha-unit')):
+            with self.subTest(pattern=pattern):
+                write_text(self.home / 'profile.md', f'---\nbranch_pattern: {pattern}\n---\n')
+                self.on_branch(branch)
+                report = self.pick()
+                self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
 
     def test_a_branch_pattern_with_type_or_key_is_not_expanded(self):
         """AC-14, D-24: the current branch is what the pattern would give for alpha if `<type>` and `<key>` were
@@ -486,6 +503,41 @@ class EveryCaseTest(ProgressCase):
         self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
         self.repo.write('.git/HEAD', 'ref: refs/heads/a..b\n')
         self.assert_unit_null(self.run_progress(), 'git branch failed')
+
+    def leave_a_gone_working_folder(self):
+        """Make the working folder one that is then removed (a platform that refuses to remove it skips)."""
+        gone = self.root / 'gone'
+        gone.mkdir()
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(gone)
+        try:
+            gone.rmdir()
+        except OSError:
+            self.skipTest('this system does not let the working folder be removed')
+
+    def test_a_gone_working_folder_with_repo_given_still_picks_the_unit(self):
+        """AC-17, D-16: the branch matches no `Base:`, so the pick reads the `branch` port, whose repo layer is read
+        from the repository root, never from the gone working folder."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.on_branch('feat/other')
+        self.leave_a_gone_working_folder()
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'newest-log'))
+
+    def test_a_gone_working_folder_with_no_repo_gives_unit_null_and_a_warning(self):
+        """AC-17, D-16: with no `--repo` the start is the working folder, which no longer exists."""
+        self.leave_a_gone_working_folder()
+        self.assert_unit_null(run_cli('progress', '--json', '--home', str(self.home)), 'no work unit: ')
+
+    def test_a_dot_anomaly_folder_that_cannot_be_listed_gives_unit_null_and_a_warning(self):
+        """AC-17: the unit would be picked if `.anomaly/` could be listed."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        units = self.repo.root / '.anomaly'
+        units.chmod(0o000)
+        self.addCleanup(units.chmod, 0o755)
+        if os.access(units, os.R_OK):
+            self.skipTest('this system lets the folder be listed although it has no read permission')
+        self.assert_unit_null(self.run_progress(), 'cannot be read')
 
     def test_a_unit_with_no_tickets_folder_still_shows_its_stage_wave_mr_and_cost(self):
         """AC-18: the unit is named with `--unit`."""

@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from . import check, files, ticket
-from .constants import KEY_LINE_CORE, TICKET_ADHOC_DIR, TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
+from .constants import KEY_LINE_CORE, TICKET_STATUS_DONE, TICKET_STATUS_IN_PROGRESS
 from .files import RecordError
 
 AC_FILE = 'stories.md'   # the file that holds the ACs of a unit (ADR-0011)
@@ -38,11 +38,6 @@ START, RUNNING, BLOCKED, WAITING = 'start', 'running', 'blocked', 'waiting'
 def unit_home(folder):
     """The name of the folder that holds the unit folder: `.anomaly` for a unit in the layout."""
     return folder.resolve().parent.name
-
-
-def is_adhoc(folder):
-    """True for the `adhoc` folder (by its name), which holds light-path tickets, not one work unit."""
-    return folder.name == TICKET_ADHOC_DIR.name
 
 
 def tickets_folder(folder):

@@ -1280,7 +1280,7 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
 - The unit is the folder `.anomaly/<name>/` of the main checkout of the repository that holds
   `--repo` (default: the current folder), so a worktree reads the units of the main checkout; in no
   repository it is that folder itself. A `--repo` inside an `.anomaly/` folder starts from the
-  folder that holds it. The automatic pick never picks the `adhoc` folder.
+  folder that holds it. The `adhoc` folder is never a unit, also not with `--unit`.
 - `--unit <name>` names the folder. Without it the unit is picked in this order, and `picked_by`
   says which rule won (`pick_unit`): a unit with a ticket whose `Base:` equals the current branch
   (`branch`); else the unit whose name, put in place of `<slug>` in the `branch` port pattern,
@@ -1292,6 +1292,11 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
   stage; `--unit`, or a branch that matches its name through the `branch` pattern, does.
 - Every case exits 0 with the JSON, and a problem is a text in `warnings`. Only bad arguments
   (a missing `--json`, an unknown option) exit 2, as one `anomaly:` line on stderr.
+- Every string in the JSON is raw text from local files (a ticket title, a reason, a warning, the
+  `mr.md` link). A reader escapes it before it draws it, and opens `mr.link` only when it is an
+  `http://` or `https://` link.
+- The command follows symlinks: a unit folder, a `log.md` or a ticket file that is a symlink is
+  read through it.
 
 ### Fields of schema 1
 
@@ -1319,9 +1324,10 @@ The keys come in this order. `schema` is first, so a reader checks it before it 
   lines of `mr.md`. Each is null when its line is absent or has no value. `mr` itself is null when
   `mr.md` cannot be read; a unit with no `mr.md` gives the object with three nulls.
 - `cost`: `{"weighted_tokens", "merged", "build_minutes"}` of `worklog.read_report`, the numbers
-  behind `worklog report`: the weighted tokens of the measured sessions of the unit, the number of
-  merged tickets, and the minutes of all its `build` lines (a line without both times adds 0). Null
-  when the unit has no work-unit line, or when `work-units.jsonl` or `metrics.jsonl` is not UTF-8.
+  behind `worklog report`: the weighted tokens of the measured sessions of the unit (a float, such
+  as `3000.0`), the number of merged tickets, and the minutes of all its `build` lines (a line
+  without both times adds 0). Null when the unit has no work-unit line, or when `work-units.jsonl`
+  or `metrics.jsonl` is not UTF-8.
 - `warnings`: a list of texts, empty when all is well. Each of these gets one text:
   - a ticket that cannot be loaded or classified, which is left out;
   - a file that cannot be read: `log.md`, `mr.md`, or a ticket or `log.md` that the unit pick reads
@@ -1354,9 +1360,10 @@ A ticket object has these keys, in this order:
 ### No unit
 
 When no unit is found, the object holds only `schema`, `unit` (null) and `warnings`. Each of these
-cases gives a warning that says why: a name with no unit folder, or a `--unit` value that is not one
-plain folder name (`.`, `..`, a path); no `.anomaly/` folder, or one that cannot be listed; no unit
-picked; a `--repo` that is not a folder; a working folder that is gone; a failing git call.
+cases gives a warning that says why: a `--unit` value that names no unit folder (a name with no
+folder, `adhoc`, `.`, `..`, a path other than `.anomaly/<name>`); no `.anomaly/` folder, or one
+that cannot be listed; no unit picked; a `--repo` that is not a folder; a working folder that is
+gone; a failing git call.
 
 ### Changing the schema
 
