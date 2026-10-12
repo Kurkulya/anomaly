@@ -34,10 +34,11 @@ keys, in this order:
               the JSON)
 
 A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
-`schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder, no unit picked, a `--repo` that is not a
-folder and a git call that fails, each with a warning. Every case exits 0; only bad arguments exit 2. The
-work-unit lines are read only through worklog.read_report (ADR-0014). Nothing is written and nothing leaves the
-machine. The JSON is `json.dumps` with its default arguments: one line, ASCII escapes.
+`schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder or one that cannot be listed, no unit
+picked, a `--repo` that is not a folder, a working folder that is gone and a git call that fails, each with a
+warning. Every case exits 0; only bad arguments exit 2. The work-unit lines are read only through
+worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The JSON is `json.dumps` with
+its default arguments: one line, ASCII escapes.
 """
 import json
 import re
@@ -253,12 +254,11 @@ def is_unfinished(folder):
     return bool(entries or warnings)
 
 
-def pick_unit(root, branch, home):
-    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`; folder and picked_by are None
-    when no unit is picked. `branch` is the current branch: '' outside a repository or on a detached head (then no
-    branch match runs). A ticket or log.md that cannot be read is left out of the pick and named in `warnings`, only
+def pick_unit(folders, branch, home):
+    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, out of `folders` (unit_folders);
+    folder and picked_by are None when no unit is picked. `branch` is the current branch: '' outside a repository or
+    on a detached head (then no branch match runs). A ticket or log.md that cannot be read is left out of the pick and named in `warnings`, only
     for the units not picked: build names those of the picked unit itself."""
-    folders = unit_folders(root)
     skipped = {folder: [] for folder in folders}   # per unit, the texts of the files the pick left out
     if branch:
         matches = [folder for folder in folders if has_base(folder, branch, skipped[folder])]
@@ -286,8 +286,13 @@ def unit_null(warnings):
 
 
 def picked_report(root, branch, home):
-    """The report of the unit pick_unit picks; with none picked, `unit` is null and a warning says why."""
-    folder, picked_by, warnings = pick_unit(root, branch, home)
+    """The report of the unit pick_unit picks; with none picked, or a `.anomaly/` that cannot be listed, `unit` is
+    null and a warning says why."""
+    try:
+        folders = unit_folders(root)
+    except READ_ERRORS as error:
+        return unit_null([f'no work unit: {UNITS_DIR.as_posix()}/ in {root} cannot be read: {error}'])
+    folder, picked_by, warnings = pick_unit(folders, branch, home)
     if folder is None:
         if not (root / UNITS_DIR).is_dir():
             return unit_null([f'no work unit: {root} has no {UNITS_DIR.as_posix()}/ folder', *warnings])
@@ -309,11 +314,12 @@ def named_report(root, unit, home):
 
 def located_report(repo_option, unit, home):
     """The report of the unit `--unit` names or the pick finds, in the repository that holds `--repo`; a `--repo`
-    that is not a folder, or a git call that fails, gives `unit` null and a warning (D-16)."""
+    that is not a folder, a working folder that is gone, or a git call that fails, gives `unit` null and a warning
+    (D-16)."""
     if repo_option and not Path(repo_option).is_dir():
         return unit_null([f'--repo is not a folder: {repo_option}'])
-    start = start_folder(Path(repo_option) if repo_option else Path.cwd())
     try:
+        start = start_folder(Path(repo_option) if repo_option else Path.cwd())
         root = gitrepo.shared_root(start)
         repo = None if unit is not None else gitrepo.find_repo(start)
         branch = '' if repo is None else mr.current_branch(repo)
