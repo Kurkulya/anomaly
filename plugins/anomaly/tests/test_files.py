@@ -99,9 +99,10 @@ class LockTest(unittest.TestCase):
             self.lock.write_text('another run', encoding='utf-8')
         self.assertEqual(self.lock.read_text(encoding='utf-8'), 'another run')
 
-    def test_a_permission_error_while_making_the_lock_is_polled_again(self):
+    def test_a_permission_error_with_a_lock_file_in_place_is_polled_again(self):
         import os
         from unittest import mock
+        self.lock.write_text('other', encoding='utf-8')
         real_open = os.open
         calls = []
 
@@ -109,39 +110,35 @@ class LockTest(unittest.TestCase):
             calls.append(args[0])
             if len(calls) == 1:
                 raise PermissionError('lock is being deleted')
+            self.lock.unlink()
             return real_open(*args, **kwargs)
 
         with mock.patch.object(files.os, 'open', side_effect=open_once_denied):
             with files.file_lock(self.lock, 2, 600) as got:
                 self.assertTrue(got)
-        self.assertGreaterEqual(len(calls), 2)
+        self.assertEqual(len(calls), 2)
 
-    def test_a_stale_takeover_leaves_only_the_new_lock_and_then_nothing(self):
-        import os
-        import time
-        self.lock.write_text('dead run', encoding='utf-8')
-        old = time.time() - 1000
-        os.utime(self.lock, (old, old))
-        with files.file_lock(self.lock, 0.2, 600) as got:
-            self.assertTrue(got)
-            self.assertEqual([p.name for p in self.lock.parent.iterdir()], ['metrics.lock'])
-        self.assertEqual(list(self.lock.parent.iterdir()), [])
-
-    def test_a_fresh_lock_met_after_a_stale_reading_is_put_back_and_waited_for(self):
-        import time
+    def test_a_permission_error_with_no_lock_file_is_raised_at_once(self):
         from unittest import mock
-        self.lock.write_text('other', encoding='utf-8')
-        real_time, calls = time.time, []
+        with mock.patch.object(files.os, 'open', side_effect=PermissionError('read-only folder')):
+            with self.assertRaises(PermissionError):
+                with files.file_lock(self.lock, 5, 600):
+                    self.fail('the block must not run')
 
-        def stale_once():
-            calls.append(1)
-            return real_time() + 1000 if len(calls) == 1 else real_time()
+    def test_a_failing_token_write_leaves_no_lock_file_and_raises(self):
+        from unittest import mock
+        with mock.patch.object(files.os, 'write', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                with files.file_lock(self.lock, 0.2, 600):
+                    self.fail('the block must not run')
+        self.assertFalse(self.lock.exists())
 
-        with mock.patch.object(files.time, 'time', side_effect=stale_once):
+    def test_a_lock_that_cannot_be_removed_at_the_end_is_left_and_the_block_exits_cleanly(self):
+        from unittest import mock
+        with mock.patch.object(Path, 'unlink', side_effect=PermissionError('file in use')):
             with files.file_lock(self.lock, 0.2, 600) as got:
-                self.assertFalse(got)
-        self.assertEqual([p.name for p in self.lock.parent.iterdir()], ['metrics.lock'])
-        self.assertEqual(self.lock.read_text(encoding='utf-8'), 'other')
+                self.assertTrue(got)
+        self.assertTrue(self.lock.exists())
 
 
 if __name__ == '__main__':
