@@ -13,7 +13,7 @@ keys, in this order:
   schema      1
   unit        the unit name; `picked_by` is `unit-option` (--unit), `branch` or `newest-log`
   stage       {name, ended} of the unit's work-unit line with the newest `ended` (a tie: the later line in the
-              file); null when no line has one, or `work-units.jsonl` or `metrics.jsonl` cannot be read
+              file); null when no line has one, or `work-units.jsonl` or `metrics.jsonl` is not UTF-8
   wave        the number of `log.md` lines of stage `conduct` whose text starts with `wave `; 0 with no `log.md`
               or one that cannot be read
   counts      {done, failed, open}: numbers from conduct.wave_counts, the counts of `conduct status`
@@ -26,12 +26,12 @@ keys, in this order:
   mr          {link, reviewed, verified}: the `MR:`, `Reviewed:` and `Verified:` values of `mr.md`
               (mr.read_state), each null when absent; null when `mr.md` cannot be read
   cost        {weighted_tokens, merged, build_minutes} of worklog.read_report; null when the unit has no
-              work-unit line, or `work-units.jsonl` or `metrics.jsonl` cannot be read
+              work-unit line, or `work-units.jsonl` or `metrics.jsonl` is not UTF-8
   warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; one text per file
-              that cannot be read (`log.md`, `mr.md`, `work-units.jsonl`, `metrics.jsonl`, or a ticket or `log.md`
-              the pick reads, which the pick then leaves out); when several units match the branch, one text that
-              names the units not picked; an unfilled `--home` placeholder notice comes first (stdout holds only
-              the JSON)
+              that cannot be read (`log.md`, `mr.md`, or a ticket or `log.md` the pick reads, which the pick then
+              leaves out) or a `work-units.jsonl` or `metrics.jsonl` that is not UTF-8 (one that cannot be opened
+              reads as missing); when several units match the branch, one text that names the units not picked; an
+              unfilled `--home` placeholder notice comes first (stdout holds only the JSON)
 
 A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
 `schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder or one that cannot be listed, no unit
@@ -142,7 +142,7 @@ def wave_number(folder, warnings):
 
 def unit_report(home, unit, warnings):
     """The worklog.read_report of the unit, or None when it has no work-unit line (read_report raises NoUnitLines)
-    or a file it reads cannot be read (then a text in `warnings` names the file)."""
+    or a file it reads is not UTF-8 (a text in `warnings` names it; a file it cannot open reads as missing)."""
     try:
         return worklog.read_report(home, unit)
     except worklog.NoUnitLines:
