@@ -316,9 +316,9 @@ def located_report(repo_option, unit, home):
         return unit_null([f'--repo is not a folder: {repo_option}'])
     try:
         start = start_folder(Path(repo_option) if repo_option else Path.cwd())
-        root = gitrepo.shared_root(start)
-        repo = None if unit is not None else gitrepo.find_repo(start)
-        branch = '' if repo is None else mr.current_branch(repo)
+        repo = gitrepo.find_repo(start)
+        root = start if repo is None else gitrepo.main_checkout(repo)   # gitrepo.shared_root, with find_repo run once
+        branch = '' if repo is None or unit is not None else mr.current_branch(repo)
     except (gitrepo.GitError, OSError) as error:
         return unit_null([f'no work unit: {error}'])
     if unit is None:
