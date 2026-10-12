@@ -9,7 +9,8 @@ blocker, `check pre-merge` with a failed rule, `frontier` with no startable or r
 it prints one `anomaly:` line itself) and 5 (no pipeline yet: a plain message, not an error),
 documented in its help. 2 is only the error below, with one `anomaly:` line;
 errors raise paths.PathError, records.RecordError, gitrepo.GitError, glab.CiError or OSError and are printed as
-`anomaly: <message>` with exit 2. A usage error (an unknown command, a missing or bad option) is
+`anomaly: <message>` with exit 2; `progress` turns its read and git errors into JSON warnings with exit 0
+(ADR-0025). A usage error (an unknown command, a missing or bad option) is
 printed the same way: Parser replaces argparse's usage block and its own exit.
 Handlers never read the clock: `args.now` (aware datetime) and `args.today` (its date) are
 set here, and tests pass `now`.
@@ -91,9 +92,9 @@ def main(argv=None, environ=None, now=None):
     args.now = now or datetime.now().astimezone()
     args.today = args.now.date()
     try:
-        notice = paths.home_notice(args.home, environ)
-        if notice:
-            print(notice)
+        args.home_notice = paths.home_notice(args.home, environ)
+        if args.home_notice and not getattr(args, 'home_notice_in_report', False):   # progress puts it in its JSON
+            print(args.home_notice)
         return args.handler(args, environ)
     except (paths.PathError, records.RecordError, gitrepo.GitError, glab.CiError, OSError) as error:
         print(f'anomaly: {error}', file=sys.stderr)

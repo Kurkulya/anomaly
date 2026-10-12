@@ -13,8 +13,9 @@ keys, in this order:
   schema      1
   unit        the unit name; `picked_by` is `unit-option` (--unit), `branch` or `newest-log`
   stage       {name, ended} of the unit's work-unit line with the newest `ended` (a tie: the later line in the
-              file); null when no line has one
+              file); null when no line has one, or `work-units.jsonl` or `metrics.jsonl` is not UTF-8
   wave        the number of `log.md` lines of stage `conduct` whose text starts with `wave `; 0 with no `log.md`
+              or one that cannot be read
   counts      {done, failed, open}: numbers from conduct.wave_counts, the counts of `conduct status`
   next        the startable tickets (`NN-slug`), from conduct.wave_counts
   tickets     one object per ticket, in ticket order: slug, title, status, blocked_by (`NN` list), kind (`done`, or
@@ -23,16 +24,21 @@ keys, in this order:
               timed `build` lines, worklog.minutes_of; null when none is timed), high and fix_rounds (the
               `Metrics:` counts, ticket.metric_counts; null when absent)
   mr          {link, reviewed, verified}: the `MR:`, `Reviewed:` and `Verified:` values of `mr.md`
-              (mr.read_state), each null when absent
+              (mr.read_state), each null when absent; null when `mr.md` cannot be read
   cost        {weighted_tokens, merged, build_minutes} of worklog.read_report; null when the unit has no
-              work-unit line
-  warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; when several units
-              match the branch, one text that names the units not picked
+              work-unit line, or `work-units.jsonl` or `metrics.jsonl` is not UTF-8
+  warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; one text per file
+              that cannot be read (`log.md`, `mr.md`, or a ticket or `log.md` the pick reads, which the pick then
+              leaves out) or a `work-units.jsonl` or `metrics.jsonl` that is not UTF-8 (one that cannot be opened
+              reads as missing); when several units match the branch, one text that names the units not picked; an
+              unfilled `--home` placeholder notice comes first (stdout holds only the JSON)
 
 A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
-`schema`, `unit` (null) and `warnings`. The work-unit lines are read only
-through worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The JSON is
-`json.dumps` with its default arguments: one line, ASCII escapes.
+`schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder or one that cannot be listed, no unit
+picked, a `--repo` that is not a folder, a working folder that is gone and a git call that fails, each with a
+warning. Every case exits 0; only bad arguments exit 2. The work-unit lines are read only through
+worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The JSON is `json.dumps` with
+its default arguments: one line, ASCII escapes.
 """
 import json
 import re
@@ -49,6 +55,7 @@ BRANCH_PORT, SLUG = 'branch', '<slug>'
 PLACEHOLDER = re.compile(r'<[^<>]*>')
 DONE_KIND = 'done'                    # the kind of a done ticket, which has no frontier entry
 WAVE_STAGE, WAVE_TEXT = 'conduct', 'wave '   # a wave line of log.md: `<time> conduct: wave ...`
+READ_ERRORS = (RecordError, OSError)   # a file that cannot be read, or is not UTF-8 (files.read_input)
 
 
 def register(commands, common):
@@ -59,19 +66,20 @@ def register(commands, common):
     command.add_argument('--unit', help='the work-unit name: the folder under .anomaly/ (default: the unit is picked '
                                         'from the current branch, else the newest unfinished one)')
     command.add_argument('--repo', help=gitrepo.REPO_HELP)
-    command.set_defaults(handler=run_progress)
+    command.set_defaults(handler=run_progress, home_notice_in_report=True)   # cli.main does not print the notice
 
 
 def classified(folder):
     """(tickets, entries, warnings): each numbered ticket file loaded with ticket.load and classified alone with
-    frontier.classify; a ticket that fails either is left out and named in a warning."""
-    tickets_dir = frontier.tickets_folder(folder)
+    frontier.classify; a ticket that fails either is left out and named in a warning. A unit with no tickets
+    folder (before slice) has none."""
+    tickets_dir = folder / check.TICKETS_DIR
     tickets, entries, warnings = [], [], []
     for path in frontier.ticket_paths(tickets_dir):
         try:
             parsed = ticket.load(path)[1]
             found, errors = frontier.classify(tickets_dir, [(path, parsed)])
-        except RecordError as error:
+        except READ_ERRORS as error:
             warnings.append(f'{path.name}: {error}')
             continue
         if errors:
@@ -122,17 +130,38 @@ def last_stage(rows):
     return None if newest is None else {'name': newest.get('stage'), 'ended': newest['ended']}
 
 
-def wave_number(folder):
-    """The number of `conduct` lines of the unit's log.md whose text starts with `wave `; 0 with no log.md."""
-    return sum(1 for _, stage, text in log.entries(folder) if stage == WAVE_STAGE and text.startswith(WAVE_TEXT))
+def wave_number(folder, warnings):
+    """The number of `conduct` lines of the unit's log.md whose text starts with `wave `; 0 with no log.md. A
+    log.md that cannot be read gives 0 and a text in `warnings` that names it."""
+    try:
+        return sum(1 for _, stage, text in log.entries(folder) if stage == WAVE_STAGE and text.startswith(WAVE_TEXT))
+    except READ_ERRORS as error:
+        warnings.append(f'{log.FILE_NAME} cannot be read, wave shows 0: {error}')
+        return 0
 
 
-def unit_report(home, unit):
-    """The worklog.read_report of the unit, or None when it has no work-unit line (read_report raises)."""
+def unit_report(home, unit, warnings):
+    """The worklog.read_report of the unit, or None when it has no work-unit line (read_report raises NoUnitLines)
+    or a file it reads is not UTF-8 (a text in `warnings` names it; a file it cannot open reads as missing)."""
     try:
         return worklog.read_report(home, unit)
-    except RecordError:
+    except worklog.NoUnitLines:
         return None
+    except READ_ERRORS as error:
+        warnings.append(f'the work-unit lines cannot be read, stage and cost show null: {error}')
+        return None
+
+
+def mr_gate(folder, warnings):
+    """{link, reviewed, verified}: the `MR:`, `Reviewed:` and `Verified:` values of the unit's mr.md
+    (mr.read_state), each None when absent; None when mr.md cannot be read (then a text in `warnings` names it)."""
+    try:
+        state = mr.read_state(folder / mr.STATE_FILE)
+    except READ_ERRORS as error:
+        warnings.append(f'{mr.STATE_FILE} cannot be read, mr shows null: {error}')
+        return None
+    return {'link': state.get(mr.MR_LABEL), 'reviewed': state.get(mr.REVIEWED_LABEL),
+            'verified': state.get(mr.VERIFIED_LABEL)}
 
 
 def build(folder, home, picked_by):
@@ -140,9 +169,10 @@ def build(folder, home, picked_by):
     unit = folder.name
     tickets, entries, warnings = classified(folder)
     counts = conduct.wave_counts(tickets, entries)
-    report = unit_report(home, unit)
+    report = unit_report(home, unit, warnings)
     by_path = {entry.path: entry for entry in entries}
-    state = mr.read_state(folder / mr.STATE_FILE)
+    wave = wave_number(folder, warnings)
+    gate = mr_gate(folder, warnings)
     cost = None if report is None else {
         'weighted_tokens': report.weighted,
         'merged': report.merged,
@@ -153,12 +183,11 @@ def build(folder, home, picked_by):
         'unit': unit,
         'picked_by': picked_by,
         'stage': None if report is None else last_stage(report.rows),
-        'wave': wave_number(folder),
+        'wave': wave,
         'counts': {'done': counts['done'], 'failed': len(counts['failed']), 'open': len(counts['open'])},
         'next': counts['next'],
         'tickets': [ticket_entry(path, parsed, by_path.get(path), report) for path, parsed in tickets],
-        'mr': {'link': state.get(mr.MR_LABEL), 'reviewed': state.get(mr.REVIEWED_LABEL),
-               'verified': state.get(mr.VERIFIED_LABEL)},
+        'mr': gate,
         'cost': cost,
         'warnings': warnings,
     }
@@ -186,15 +215,29 @@ def unit_folders(root):
     return [path for path in sorted(units.iterdir()) if path.is_dir() and not frontier.is_adhoc(path)]
 
 
-def newest_log_time(folder):
-    """The newest time of the unit's log.md lines, or '' when it has none."""
-    return max((time for time, _, _ in log.entries(folder)), default='')
+def newest_log_time(folder, warnings):
+    """The newest time of the unit's log.md lines, or '' when it has none; a log.md that cannot be read gives ''
+    and a text in `warnings` that names it."""
+    try:
+        return max((time for time, _, _ in log.entries(folder)), default='')
+    except READ_ERRORS as error:
+        warnings.append(f'{folder.name}/{log.FILE_NAME} cannot be read, the unit pick left it out: {error}')
+        return ''
 
 
-def has_base(folder, branch):
-    """True when a ticket of the unit has a `Base:` value equal to `branch`."""
-    return any(ticket.value_of(ticket.split_lines(files.read_input(path)), 'Base') == branch
-               for path in frontier.ticket_paths(folder / check.TICKETS_DIR))
+def has_base(folder, branch, warnings):
+    """True when a ticket of the unit has a `Base:` value equal to `branch`; a ticket that cannot be read gives no
+    match and a text in `warnings` that names it."""
+    for path in frontier.ticket_paths(folder / check.TICKETS_DIR):
+        try:
+            text = files.read_input(path)
+        except READ_ERRORS as error:
+            warnings.append(f'{folder.name}/{check.TICKETS_DIR}/{path.name} cannot be read, the unit pick left it '
+                            f'out: {error}')
+            continue
+        if ticket.value_of(ticket.split_lines(text), 'Base') == branch:
+            return True
+    return False
 
 
 def slug_branch(pattern, unit):
@@ -211,34 +254,49 @@ def is_unfinished(folder):
     return bool(entries or warnings)
 
 
-def pick_unit(root, repo, home):
-    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, or None when no unit is
-    picked. `repo` is the repository of the working folder, None outside one (then no branch match runs)."""
-    folders = unit_folders(root)
-    branch = '' if repo is None else mr.current_branch(repo)
+def pick_unit(folders, branch, home):
+    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, out of `folders` (unit_folders);
+    folder and picked_by are None when no unit is picked. `branch` is the current branch: '' outside a repository or
+    on a detached head (then no branch match runs). A ticket or log.md that cannot be read is left out of the pick
+    and named in `warnings`, only for the units not picked: build names those of the picked unit itself."""
+    skipped = {folder: [] for folder in folders}   # per unit, the texts of the files the pick left out
     if branch:
-        matches = [folder for folder in folders if has_base(folder, branch)]
+        matches = [folder for folder in folders if has_base(folder, branch, skipped[folder])]
         if not matches:
             pattern = ports.port(ports.resolve(home), BRANCH_PORT).value
             matches = [folder for folder in folders if slug_branch(pattern, folder.name) == branch]
         if matches:
-            times = {folder: newest_log_time(folder) for folder in matches}
+            times = {folder: newest_log_time(folder, skipped[folder]) for folder in matches}
             picked = max(matches, key=times.get)   # a tie: the first in name order
+            warnings = [text for folder in folders if folder != picked for text in skipped[folder]]
             others = [folder.name for folder in matches if folder != picked]
-            warnings = [f'{", ".join(others)} also match branch {branch}'] if others else []
+            if others:
+                warnings.append(f'{", ".join(others)} also match branch {branch}')
             return picked, PICKED_BY_BRANCH, warnings
-    times = {folder: time for folder in folders if (time := newest_log_time(folder))}
+    times = {folder: time for folder in folders if (time := newest_log_time(folder, skipped[folder]))}
     newest_first = sorted(times, key=times.get, reverse=True)   # a tie: the first in name order (the sort is stable)
     picked = next((folder for folder in newest_first if is_unfinished(folder)), None)
-    return None if picked is None else (picked, PICKED_BY_NEWEST_LOG, [])
+    warnings = [text for folder in folders if folder != picked for text in skipped[folder]]
+    return picked, None if picked is None else PICKED_BY_NEWEST_LOG, warnings
 
 
-def picked_report(root, repo, home):
-    """The report of the unit pick_unit picks; with none picked, `unit` is null."""
-    picked = pick_unit(root, repo, home)
-    if picked is None:
-        return {'schema': SCHEMA, 'unit': None, 'warnings': []}
-    folder, picked_by, warnings = picked
+def unit_null(warnings):
+    """The object with no unit: only `schema`, `unit` (null) and `warnings`."""
+    return {'schema': SCHEMA, 'unit': None, 'warnings': warnings}
+
+
+def picked_report(root, branch, home):
+    """The report of the unit pick_unit picks; with none picked, or a `.anomaly/` that cannot be listed, `unit` is
+    null and a warning says why."""
+    try:
+        folders = unit_folders(root)
+    except READ_ERRORS as error:
+        return unit_null([f'no work unit: {UNITS_DIR.as_posix()}/ in {root} cannot be read: {error}'])
+    folder, picked_by, warnings = pick_unit(folders, branch, home)
+    if folder is None:
+        if not (root / UNITS_DIR).is_dir():
+            return unit_null([f'no work unit: {root} has no {UNITS_DIR.as_posix()}/ folder', *warnings])
+        return unit_null(['no work unit picked: none matches the current branch and none is unfinished', *warnings])
     report = build(folder, home, picked_by)
     report['warnings'].extend(warnings)
     return report
@@ -248,20 +306,33 @@ def named_report(root, unit, home):
     """The report of the unit that `--unit` names."""
     folder = root / UNITS_DIR / unit
     if not is_folder_name(unit):
-        return {'schema': SCHEMA, 'unit': None,
-                'warnings': [f'no work unit {unit}: not one folder name under {UNITS_DIR.as_posix()}/']}
+        return unit_null([f'no work unit {unit}: not one folder name under {UNITS_DIR.as_posix()}/'])
     if folder.is_dir():
         return build(folder, home, PICKED_BY_OPTION)
-    return {'schema': SCHEMA, 'unit': None, 'warnings': [f'no work unit {unit}: {folder} is not a folder']}
+    return unit_null([f'no work unit {unit}: {folder} is not a folder'])
+
+
+def located_report(repo_option, unit, home):
+    """The report of the unit `--unit` names or the pick finds, in the repository that holds `--repo`; a `--repo`
+    that is not a folder, a working folder that is gone, or a git call that fails, gives `unit` null and a warning
+    (D-16)."""
+    if repo_option and not Path(repo_option).is_dir():
+        return unit_null([f'--repo is not a folder: {repo_option}'])
+    try:
+        start = start_folder(Path(repo_option) if repo_option else Path.cwd())
+        root = gitrepo.shared_root(start)
+        repo = None if unit is not None else gitrepo.find_repo(start)
+        branch = '' if repo is None else mr.current_branch(repo)
+    except (gitrepo.GitError, OSError) as error:
+        return unit_null([f'no work unit: {error}'])
+    if unit is None:
+        return picked_report(root, branch, home)
+    return named_report(root, unit, home)
 
 
 def run_progress(args, environ):
-    start = start_folder(Path(args.repo) if args.repo else Path.cwd())
-    root = gitrepo.shared_root(start)
-    home = paths.resolve_home(args.home, environ)
-    if args.unit is None:
-        report = picked_report(root, gitrepo.find_repo(start), home)
-    else:
-        report = named_report(root, args.unit, home)
+    report = located_report(args.repo, args.unit, paths.resolve_home(args.home, environ))
+    if args.home_notice:   # set by cli.main
+        report['warnings'].insert(0, args.home_notice)
     print(json.dumps(report))
     return 0

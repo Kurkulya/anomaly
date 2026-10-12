@@ -2143,7 +2143,8 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
   no folder gives `"unit": null` and a warning ([ADR-0025](adr/0025-progress-prints-a-versioned-json-report.md)).
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
-line starting with `anomaly:` and exit with status 2.
+line starting with `anomaly:` and exit with status 2. `progress` is the exception for what it
+reads: a file it cannot read, or a git call that fails, becomes a JSON warning with exit 0.
 
 ## Docs scan
 
