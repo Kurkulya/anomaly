@@ -179,14 +179,16 @@ class HookFileTest(unittest.TestCase):
     def setUp(self):
         self.config = json.loads(HOOKS_FILE.read_text(encoding='utf-8'))
 
-    def test_the_nudge_runs_at_startup_only_and_one_bash_pre_tool_use_hook_sits_beside_it(self):
-        """AC-20: the nudge group is unchanged; the second group is the subagent Bash check."""
+    def test_the_nudge_and_the_measure_run_at_startup_only_and_one_bash_pre_tool_use_hook_sits_beside_them(self):
+        """AC-20: the nudge handler is unchanged; the startup group adds the measure run (AC-1, AC-3); the
+        other group is the subagent Bash check. AC-2: no SessionEnd key."""
         groups = self.config['hooks']['SessionStart']
         self.assertEqual(sorted(self.config['hooks']), ['PreToolUse', 'SessionStart'])
+        self.assertIn('measure', self.config['description'])
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]['matcher'], 'startup')
         handlers = groups[0]['hooks']
-        self.assertEqual(len(handlers), 1)
+        self.assertEqual(len(handlers), 2)
         self.assertEqual(handlers[0]['type'], 'command')
         checks = self.config['hooks']['PreToolUse']
         self.assertEqual(len(checks), 1)
@@ -199,6 +201,12 @@ class HookFileTest(unittest.TestCase):
         self.assertEqual(handler['command'], 'python')
         self.assertEqual(handler['args'], ['${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py', 'nudge'])
         self.assertLessEqual(handler['timeout'], 30)
+        self.assertNotIn('async', handler)
+        measure = self.config['hooks']['SessionStart'][0]['hooks'][1]
+        self.assertEqual(measure['type'], 'command')
+        self.assertEqual(measure['command'], 'python')
+        self.assertEqual(measure['args'], ['${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py', 'measure', '--quiet'])
+        self.assertIs(measure['async'], True)
         check = self.config['hooks']['PreToolUse'][0]['hooks'][0]
         self.assertEqual(check['command'], 'python')
         self.assertEqual(check['args'], ['${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py', 'check', 'subagent-bash'])
