@@ -281,7 +281,7 @@ class ProgressTest(ProgressCase):
     def test_a_unit_value_that_is_not_one_plain_folder_name_gives_unit_null_and_a_warning(self):
         """AC-16, review round 1: `--unit ..` would name the folder that holds `.anomaly/`, and `.` or an empty
         value `.anomaly/` itself, outside every unit; each, and a value with a separator, is read as a name with no
-        folder, never as that folder."""
+        folder, never as that folder. The one path that names a unit is `.anomaly/<unit>` (AC-16 Amended)."""
         self.write_files()
         self.unit(self.wave_tickets())
         for value in ('..', '.', '', 'a/b'):
@@ -292,6 +292,9 @@ class ProgressTest(ProgressCase):
                 self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
                 self.assertEqual((report['schema'], report['unit']), (1, None))
                 self.assertTrue(any(value in warning for warning in report['warnings']), report['warnings'])
+        with self.subTest(value=f'.anomaly/{self.UNIT}'):
+            report = self.report(f'.anomaly/{self.UNIT}')
+            self.assertEqual((report['unit'], report['picked_by']), (self.UNIT, 'unit-option'))
 
     def test_unit_adhoc_gives_unit_null_and_a_warning_though_the_folder_exists(self):
         """AC-13 Amended (user, cumulative review): the adhoc folder is never a unit, also not with `--unit`."""
