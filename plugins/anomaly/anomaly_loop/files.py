@@ -85,3 +85,40 @@ def append_text(path, text, *, no_follow=False):
         return
     with open(path, 'ab') as f:
         f.write(text.encode('utf-8'))
+
+
+import time
+from contextlib import contextmanager
+
+LOCK_POLL_SECONDS = 0.05
+
+
+@contextmanager
+def file_lock(path, wait, stale):
+    """Hold the lock file `path` for the block: yields True when this run made it (`O_CREAT|O_EXCL`), False
+    when another run still held it after `wait` seconds (that lock is left in place). A lock whose age (now
+    minus its modification time) is over `stale` seconds is taken over. The lock is removed when the block
+    ends, normally or by an exception. Missing parent folders are made."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + wait
+    held = False
+    while not held:
+        try:
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666))
+            held = True
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime > stale:
+                    path.unlink()
+                    continue
+            except FileNotFoundError:
+                continue
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(LOCK_POLL_SECONDS)
+    try:
+        yield held
+    finally:
+        if held:
+            path.unlink(missing_ok=True)
