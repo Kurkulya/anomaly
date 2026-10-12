@@ -37,6 +37,8 @@ MAX_SHAPES = 15
 MAX_TRIGRAMS = 15
 PROMPT_CHARS = 200
 PROMPT_SOURCE_CHARS = 2000
+LOCK_WAIT = 30    # seconds a run waits for <home>/metrics.lock before it skips
+LOCK_STALE = 600  # a lock older than this many seconds is taken over
 
 COMMAND_NAME = re.compile(r'<command-name>\s*/?([^<\s]+)\s*</command-name>')
 INTERRUPT_PREFIX = '[Request interrupted by user'
@@ -653,7 +655,3 @@ def run_measure(args, environ):
     if message:
         print(message)
     return 0
-
-
-LOCK_WAIT = 30    # seconds a run waits for <home>/metrics.lock before it skips
-LOCK_STALE = 600  # a lock older than this many seconds is taken over

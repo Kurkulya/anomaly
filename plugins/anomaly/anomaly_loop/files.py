@@ -3,7 +3,11 @@ ending translation); and the one reader of a UTF-8 text input (a record file, a 
 import json
 import os
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
+
+LOCK_POLL_SECONDS = 0.05
 
 
 class RecordError(ValueError):
@@ -85,12 +89,6 @@ def append_text(path, text, *, no_follow=False):
         return
     with open(path, 'ab') as f:
         f.write(text.encode('utf-8'))
-
-
-import time
-from contextlib import contextmanager
-
-LOCK_POLL_SECONDS = 0.05
 
 
 @contextmanager
