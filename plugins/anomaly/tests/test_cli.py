@@ -1796,6 +1796,20 @@ class ConductSkillTest(unittest.TestCase):
         self.assertRegex(about, r'(?i)\bparallel\b')
         self.assertRegex(about, r'(?i)\bpicks?\b')
 
+    def test_the_command_list_holds_measure_quiet_and_report_step_13_runs_it_before_conduct_status(self):
+        """Auto-measure ticket 03 (AC-13, D-5): the command list has the `measure --quiet` line with the home and
+        data options, and Report step 13 names it before `conduct status`."""
+        lines = self.text().splitlines()
+        calls = [line for line in lines if line.startswith('python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py"')]
+        measure = [line for line in calls if ' measure --quiet' in line]
+        self.assertEqual(len(measure), 1, 'the command list has no single `measure --quiet` line')
+        self.assertIn("--home '${user_config.home}'", measure[0])
+        self.assertIn('--data "${CLAUDE_PLUGIN_DATA}"', measure[0])
+        step = next(line for line in lines if line.startswith('13. '))
+        self.assertIn('measure --quiet', step, 'Report step 13 does not name `measure --quiet`')
+        self.assertLess(step.index('measure --quiet'), step.index('conduct status'),
+                        'step 13 names `measure --quiet` after `conduct status`')
+
 
 class ModelPickSkillTest(unittest.TestCase):
     """Model-roles ticket 07 (AC-17, AC-18, with their Amended lines): the skill text that adds the `model_pick`
