@@ -1,7 +1,8 @@
 """Tests for `conduct status <work unit folder>` (ticket 05), CLI in-process: the wave report, five lines in the
 order done, failed, open, next, cost (AC-27). The fixture unit is a folder `.anomaly/<unit>/` with tickets, and the
 test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` tests build them (the unit folder's
-name is the work unit name). Lines are checked by label, count and ticket name, never by wording."""
+name is the work unit name). Lines are checked by label, count and ticket name, never by wording; one unit test
+checks `conduct.wave_counts`, the data the lines are built from (D-21)."""
 import re
 import unittest
 
@@ -67,9 +68,9 @@ class ConductStatusTest(test_worklog.ReportCase):
             self.assertNotIn(other, following)
 
     def test_wave_counts_returns_done_failed_open_and_next_as_data(self):
-        """D-21: unit API assumed: `conduct.wave_counts(tickets, entries)` takes what `frontier.read(folder)` returns
-        and returns a dict: `done` the number of done tickets, `failed`, `open` and `next` lists of `NN-slug` stems in
-        ticket order. Alpha is done; bravo runs with no Result line; charlie can start; delta waits for bravo."""
+        """D-21: `conduct.wave_counts(tickets, entries)` takes what `frontier.read(folder)` returns and returns a
+        dict: `done` the number of done tickets, `failed`, `open` and `next` lists of `NN-slug` stems in ticket
+        order. Alpha is done; bravo runs with no Result line; charlie can start; delta waits for bravo."""
         tickets, entries = frontier.read(self.unit(self.wave_tickets()))
         self.assertEqual(conduct.wave_counts(tickets, entries),
                          {'done': 1, 'failed': ['02-bravo'], 'open': ['03-charlie', '04-delta'],
