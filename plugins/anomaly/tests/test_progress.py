@@ -1,14 +1,16 @@
 """Tests for `progress --json [--unit <name>] --repo <checkout>` (tickets 02 to 04), CLI in-process. The fixture is a git
 repository with a unit folder `.anomaly/<unit>/` (tickets, and `mr.md` and `log.md` where a test needs them), and the
 test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` tests build them (the unit folder's
-name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29)."""
+name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29),
+except the one reference check at the end."""
 import json
+import re
 import unittest
 from datetime import date
 
 from anomaly_loop import paths
 from tests import test_worklog
-from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
+from tests.fixtures import PLUGIN, GitFixture, assert_cli_error, run_cli, write_text
 from tests.test_check import slice_ticket
 
 TOP_FIELDS = ['schema', 'unit', 'picked_by', 'stage', 'wave', 'counts', 'next', 'tickets', 'mr', 'cost', 'warnings']
@@ -602,6 +604,28 @@ class EveryCaseTest(ProgressCase):
         for argv in (('progress',), ('progress', '--json', '--no-such-option')):
             with self.subTest(argv=argv):
                 assert_cli_error(self, run_cli(*argv))
+
+
+class ReferenceTest(unittest.TestCase):
+    REFERENCE = PLUGIN.parent.parent / 'docs' / 'reference.md'
+
+    def test_the_reference_progress_section_names_every_field_and_states_the_schema_change_rule(self):
+        """AC-23: the section from `## Progress` to the next `## ` heading has one field line (`- `name`:`) for each
+        field of the two pinned lists and states that changes only add fields and a rename or a removal raises
+        `schema`."""
+        if not self.REFERENCE.is_file():
+            self.skipTest('no docs/reference.md two folders above the plugin: an installed copy, not the repository')
+        text = self.REFERENCE.read_text(encoding='utf-8')
+        start = re.search(r'^## Progress[ \t]*$', text, re.MULTILINE)
+        self.assertIsNotNone(start, 'docs/reference.md has no "## Progress" section')
+        section = text[start.end():].split('\n## ', 1)[0]
+        missing = [name for name in TOP_FIELDS + TICKET_FIELDS
+                   if not re.search(rf'^- `{re.escape(name)}`:', section, re.MULTILINE)]
+        self.assertEqual(missing, [], 'fields the ## Progress section has no "- `name`:" line for')
+        lowered = section.lower()
+        for phrase in ('only add', 'rename', 'remov', 'raises `schema`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
 
 
 if __name__ == '__main__':

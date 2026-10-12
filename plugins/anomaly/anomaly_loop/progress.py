@@ -7,8 +7,8 @@ the working folder; gitrepo.shared_root, so a worktree reads the main checkout's
 inside a `.anomaly/` folder starts from the folder that holds it. With no `--unit` the unit is picked, in this
 order: a unit with a ticket whose `Base:` equals the current branch, else the unit whose key in place of
 `<slug>` in the `branch` port pattern equals it (only when `<slug>` is the pattern's one placeholder), else the
-unfinished unit with the newest `log.md` line; the `adhoc` folder is never a unit. The object is schema 1; its
-keys, in this order:
+unfinished unit with the newest `log.md` line; the automatic pick never picks the `adhoc` folder. The object is
+schema 1; its keys, in this order:
 
   schema      1
   unit        the unit name; `picked_by` is `unit-option` (--unit), `branch` or `newest-log`

@@ -1266,6 +1266,105 @@ cost: weighted tokens 3,000, weighted tokens per merged ticket 1,000, minutes pe
   or names a blocker with no ticket file, is an error. One `anomaly:` line names each such ticket,
   nothing else is printed, and the exit code is 2.
 
+## Progress
+
+`progress --json` prints where one work unit stands as one JSON object on one line, for a UI to
+draw ([ADR-0025](adr/0025-progress-prints-a-versioned-json-report.md)). It reads local files only,
+writes nothing and sends nothing off the machine. The JSON is `json.dumps` with its default
+arguments: one line, with ASCII escapes. `--json` is required; it is the only form.
+
+```
+python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--repo <dir>] [--home <dir>]
+```
+
+- The unit is the folder `.anomaly/<name>/` of the main checkout of the repository that holds
+  `--repo` (default: the current folder), so a worktree reads the units of the main checkout; in no
+  repository it is that folder itself. A `--repo` inside an `.anomaly/` folder starts from the
+  folder that holds it. The automatic pick never picks the `adhoc` folder.
+- `--unit <name>` names the folder. Without it the unit is picked in this order, and `picked_by`
+  says which rule won (`pick_unit`): a unit with a ticket whose `Base:` equals the current branch
+  (`branch`); else the unit whose name, put in place of `<slug>` in the `branch` port pattern,
+  equals the current branch, only when `<slug>` is the one placeholder of that pattern (`branch`);
+  else the unfinished unit with the newest `log.md` line (`newest-log`). A unit with no ticket, or
+  a ticket that is not `done` or cannot be loaded or classified, is unfinished. When several units
+  match the branch, the one with the newest `log.md` line is picked and a warning names the others.
+  The `newest-log` rule never picks a unit with no `log.md` line, such as one at the interview
+  stage; `--unit`, or a branch that matches its name through the `branch` pattern, does.
+- Every case exits 0 with the JSON, and a problem is a text in `warnings`. Only bad arguments
+  (a missing `--json`, an unknown option) exit 2, as one `anomaly:` line on stderr.
+
+### Fields of schema 1
+
+The keys come in this order. `schema` is first, so a reader checks it before it reads the rest.
+
+- `schema`: the number `1`.
+- `unit`: the unit name, the folder name under `.anomaly/`. It is null when no unit is found (see
+  below).
+- `picked_by`: `unit-option` (`--unit`), `branch` or `newest-log`.
+- `stage`: `{"name", "ended"}` of the work-unit line of the unit with the newest `ended` time (a
+  tie: the later line in `work-units.jsonl`). A line whose `ended` is not a time is skipped. Null
+  when no line has an `ended` time, when the unit has no work-unit line, or when `work-units.jsonl`
+  or `metrics.jsonl` is not UTF-8.
+- `wave`: the number of `log.md` lines of the unit with stage `conduct` whose text starts with
+  `wave `. It is 0 when the unit has no `log.md` or when it cannot be read.
+- `counts`: `{"done", "failed", "open"}`, three numbers from `conduct.wave_counts`, the counts of
+  `conduct status` (see Wave report). `failed` keeps that meaning: a ticket that is `in-progress`
+  with no `Result:` line. A ticket that is left out of `tickets` is in no count.
+- `next`: the startable tickets as a list of `NN-slug`, in ticket order, from the same function.
+  Empty when nothing can start.
+- `tickets`: one object per ticket, in ticket order (see below). A ticket that cannot be loaded, or
+  that `frontier` would reject (no `Blocked by:` line, a blocker with no ticket file), is left out
+  and a warning names it. A unit with no `tickets/` folder has an empty list.
+- `mr`: `{"link", "reviewed", "verified"}`, the values of the `MR:`, `Reviewed:` and `Verified:`
+  lines of `mr.md`. Each is null when its line is absent or has no value. `mr` itself is null when
+  `mr.md` cannot be read; a unit with no `mr.md` gives the object with three nulls.
+- `cost`: `{"weighted_tokens", "merged", "build_minutes"}` of `worklog.read_report`, the numbers
+  behind `worklog report`: the weighted tokens of the measured sessions of the unit, the number of
+  merged tickets, and the minutes of all its `build` lines (a line without both times adds 0). Null
+  when the unit has no work-unit line, or when `work-units.jsonl` or `metrics.jsonl` is not UTF-8.
+- `warnings`: a list of texts, empty when all is well. Each of these gets one text:
+  - a ticket that cannot be loaded or classified, which is left out;
+  - a file that cannot be read: `log.md`, `mr.md`, or a ticket or `log.md` that the unit pick reads
+    (the pick leaves it out);
+  - a `work-units.jsonl` or `metrics.jsonl` that is not UTF-8 (one that cannot be opened reads as
+    missing, not as a warning);
+  - several units that match the branch: one text names the units not picked.
+
+  An unfilled `--home` placeholder notice is the first text, because the JSON is all that goes to
+  standard output.
+
+A ticket object has these keys, in this order:
+
+- `slug`: the file name without `.md`, `NN-slug`.
+- `title`: the number-and-title heading of the ticket, else its first heading, else the `slug`.
+- `status`: the word of the `Status:` line; `unknown` when there is no readable line.
+- `blocked_by`: the blocker numbers (`NN`) as a list; empty for `none`.
+- `kind`: `done` for a `done` ticket, else the `frontier` kind of the ticket: `start`, `running`,
+  `blocked` or `waiting`.
+- `reason`: the `frontier` line of the ticket without its `<NN-slug>: ` prefix, for example
+  `blocked by 01 (in-progress)`. Null when `kind` is `done`.
+- `red`: true when the ticket has a `Red:` line with a value, else false.
+- `reviewed`: true when the ticket has a `Reviewed:` line with a value, else false.
+- `verified`: true when the ticket has a `Verified:` line with a value, else false.
+- `build_minutes`: the minutes of the `build` lines of this ticket in `work-units.jsonl` that have
+  both times, added up (`worklog.minutes_of`). Null when none has both, and when `cost` is null.
+- `high`: the `High` count of the `Metrics:` line. Null when the line or the count is absent.
+- `fix_rounds`: the `fix rounds` count of the same line. Null when absent.
+
+### No unit
+
+When no unit is found, the object holds only `schema`, `unit` (null) and `warnings`. Each of these
+cases gives a warning that says why: a name with no unit folder, or a `--unit` value that is not one
+plain folder name (`.`, `..`, a path); no `.anomaly/` folder, or one that cannot be listed; no unit
+picked; a `--repo` that is not a folder; a working folder that is gone; a failing git call.
+
+### Changing the schema
+
+`schema` is `1` and a reader checks it first. A change only adds fields. A rename or a removal of a
+field raises `schema`. The CLI and a UI that reads the object ship on their own schedules, so a UI
+that sees a number it does not know can say so instead of drawing wrong data. A test pins the field
+lists of both objects.
+
 ## MR body
 
 `mr body` writes the body of a merge request to a file, from the files of the work, so the `ship` skill
@@ -2144,7 +2243,8 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2. `progress` is the exception for what it
-reads: a file it cannot read, or a git call that fails, becomes a JSON warning with exit 0.
+reads: a file it cannot read, or a git call that fails, becomes a JSON warning with exit 0 (a
+`work-units.jsonl` or `metrics.jsonl` that cannot be opened reads as missing, with no warning).
 
 ## Docs scan
 
