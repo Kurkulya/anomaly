@@ -1,4 +1,4 @@
-"""Tests for `progress --json [--unit <name>] --repo <checkout>` (tickets 02, 03), CLI in-process. The fixture is a git
+"""Tests for `progress --json [--unit <name>] --repo <checkout>` (tickets 02 to 04), CLI in-process. The fixture is a git
 repository with a unit folder `.anomaly/<unit>/` (tickets, and `mr.md` and `log.md` where a test needs them), and the
 test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` tests build them (the unit folder's
 name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29)."""
@@ -6,8 +6,9 @@ import json
 import unittest
 from datetime import date
 
+from anomaly_loop import paths
 from tests import test_worklog
-from tests.fixtures import GitFixture, run_cli, write_text
+from tests.fixtures import GitFixture, assert_cli_error, run_cli, write_text
 from tests.test_check import slice_ticket
 
 TOP_FIELDS = ['schema', 'unit', 'picked_by', 'stage', 'wave', 'counts', 'next', 'tickets', 'mr', 'cost', 'warnings']
@@ -410,6 +411,190 @@ class PickTheUnitTest(ProgressCase):
         self.put_unit(self.BRAVO, None, ['2026-10-02 09:00 interview: started'])
         report = self.pick()
         self.assertEqual((report['unit'], report['picked_by']), (self.BRAVO, 'newest-log'))
+
+
+class EveryCaseTest(ProgressCase):
+    """Ticket 04, AC-17 to AC-21: every case gives a JSON object and exit 0; only bad arguments exit 2. The unit
+    helpers are the ones of PickTheUnitTest. A file that is not UTF-8 is `b'\\xff\\xfe'`."""
+    ALPHA, BRAVO = PickTheUnitTest.ALPHA, PickTheUnitTest.BRAVO
+    OPEN = PickTheUnitTest.OPEN
+    put_unit = PickTheUnitTest.put_unit
+    on_branch = PickTheUnitTest.on_branch
+    pick = PickTheUnitTest.pick
+    NOT_UTF8 = b'\xff\xfe\n'
+    WAVE_LOG = '2026-10-01 09:00 specify: done\n2026-10-01 10:00 conduct: wave 1: start\n'
+
+    def setUp(self):
+        super().setUp()
+        self.repo.write('.git/info/exclude', '.anomaly/\n')
+
+    def assert_unit_null(self, result):
+        """D-26, D-16: exit 0, one JSON line, exactly `schema`, `unit` (null) and a non-empty `warnings` list."""
+        code, out, err = result
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertEqual(len(out.splitlines()), 1, out)
+        report = json.loads(out)
+        self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
+        self.assertEqual((report['schema'], report['unit']), (1, None))
+        self.assertIsInstance(report['warnings'], list)
+        self.assertTrue(report['warnings'], out)
+
+    def assert_warned_about(self, report, *names):
+        for name in names:
+            self.assertTrue(any(name in warning for warning in report['warnings']), (name, report['warnings']))
+
+    def assert_before_slice(self, report):
+        """AC-18: no tickets and zero counts, yet the stage, wave, MR gate and cost of the fixture files."""
+        self.assertEqual(report['unit'], self.UNIT)
+        self.assertEqual(report['tickets'], [])
+        self.assertEqual(report['counts'], {'done': 0, 'failed': 0, 'open': 0})
+        self.assertEqual(report['next'], [])
+        self.assertEqual(report['stage'], {'name': 'build', 'ended': '2026-10-01 17:03'})
+        self.assertEqual(report['wave'], 1)
+        self.assertEqual(report['mr'], {'link': 'https://example.invalid/group/project/-/merge_requests/7',
+                                        'reviewed': 'abc1234', 'verified': 'def5678'})
+        self.assertEqual(report['cost'], {'weighted_tokens': 3000, 'merged': 3, 'build_minutes': 120})
+
+    def put_before_slice(self):
+        """The fixture unit after specify: a `log.md` with one wave line, an `mr.md`, work-unit lines, no `tickets/`."""
+        self.write_files()
+        write_text(self.folder / 'log.md', self.WAVE_LOG)
+        write_text(self.folder / 'mr.md', MR_TEXT)
+
+    def test_with_no_dot_anomaly_folder_the_object_holds_unit_null_and_a_warning(self):
+        """AC-17: the repository has no `.anomaly/` and no unit is named."""
+        self.assert_unit_null(self.run_progress())
+
+    def test_with_no_unit_picked_the_object_holds_unit_null_and_a_warning(self):
+        """AC-17: `.anomaly/` holds one unit, and all its tickets are done, so none is unfinished."""
+        self.put_unit(self.ALPHA, {'01-first': slice_ticket('01', status='done')}, ['2026-10-01 09:00 ship: merged'])
+        self.assert_unit_null(self.run_progress())
+
+    def test_a_repo_folder_that_does_not_exist_gives_unit_null_and_a_warning(self):
+        """AC-17, D-7 Amended: the missing folder is inside the fixture repository, whose unit would be picked if
+        the walk up to the nearest existing parent were read as the repository."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.assert_unit_null(run_cli('progress', '--json', '--repo', str(self.repo.root / 'missing'),
+                                      '--home', str(self.home)))
+
+    def test_a_failing_git_call_gives_unit_null_and_a_warning(self):
+        """AC-17, D-16 Amended: a `HEAD` that names an invalid branch still lets git find the repository, but
+        `git branch --show-current` fails (a real git failure, no mock); the unit would be picked otherwise."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.repo.write('.git/HEAD', 'ref: refs/heads/a..b\n')
+        self.assert_unit_null(self.run_progress())
+
+    def test_a_unit_with_no_tickets_folder_still_shows_its_stage_wave_mr_and_cost(self):
+        """AC-18: the unit is named with `--unit`."""
+        self.put_before_slice()
+        self.assert_before_slice(self.report())
+
+    def test_the_newest_log_pick_of_a_unit_with_no_tickets_folder_gives_the_same_report(self):
+        """AC-18 Amended: no `--unit`; the unit has a `log.md` line and no `tickets/` folder."""
+        self.put_before_slice()
+        report = self.pick()
+        self.assertEqual(report['picked_by'], 'newest-log')
+        self.assert_before_slice(report)
+
+    def assert_left_out(self, report, shown, *left_out):
+        self.assertEqual([entry['slug'] for entry in report['tickets']], shown)
+        self.assert_warned_about(report, *left_out)
+
+    def test_a_ticket_that_is_not_utf8_is_left_out_and_named_in_a_warning(self):
+        """AC-19."""
+        self.unit({'02-bravo': slice_ticket('02'), '03-charlie': slice_ticket('03')})
+        (self.folder / 'tickets' / '01-alpha.md').write_bytes(self.NOT_UTF8)
+        self.assert_left_out(self.report(), ['02-bravo', '03-charlie'], '01-alpha')
+
+    def test_a_ticket_not_done_with_no_blocked_by_line_is_left_out_and_named_in_a_warning(self):
+        """AC-19."""
+        self.unit({'01-alpha': slice_ticket('01'), '03-charlie': slice_ticket('03'),
+                   '02-bravo': slice_ticket('02').replace('Blocked by: none\n', '')})
+        self.assert_left_out(self.report(), ['01-alpha', '03-charlie'], '02-bravo')
+
+    def test_a_ticket_with_a_blocker_that_has_no_ticket_file_is_left_out_and_named_in_a_warning(self):
+        """AC-19: blocker 09 has no `09-*.md`."""
+        self.unit({'01-alpha': slice_ticket('01'), '02-bravo': slice_ticket('02', blocked='09'),
+                   '03-charlie': slice_ticket('03')})
+        self.assert_left_out(self.report(), ['01-alpha', '03-charlie'], '02-bravo')
+
+    def test_a_ticket_whose_blocker_file_is_not_utf8_is_left_out_and_named_in_a_warning(self):
+        """AC-19: 02 is blocked by 01, whose file is not UTF-8; the independent 03 still shows."""
+        self.unit({'02-bravo': slice_ticket('02', blocked='01'), '03-charlie': slice_ticket('03')})
+        (self.folder / 'tickets' / '01-alpha.md').write_bytes(self.NOT_UTF8)
+        self.assert_left_out(self.report(), ['03-charlie'], '02-bravo')
+
+    def test_the_pick_leaves_out_a_ticket_of_another_unit_that_is_not_utf8_and_names_it(self):
+        """AC-19 Amended: bravo has the broken ticket and no log line; alpha is picked, exit 0."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO)
+        (self.repo.root / '.anomaly' / self.BRAVO / 'tickets' / '02-broken.md').write_bytes(self.NOT_UTF8)
+        self.on_branch('feat/other')
+        report = self.pick()
+        self.assertEqual(report['unit'], self.ALPHA)
+        self.assert_warned_about(report, '02-broken')
+
+    def test_the_pick_leaves_out_a_log_md_of_another_unit_that_is_not_utf8_and_names_it(self):
+        """AC-19 Amended: bravo's `log.md` is not UTF-8, so it has no time; alpha is picked, exit 0."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO, self.OPEN)
+        (self.repo.root / '.anomaly' / self.BRAVO / 'log.md').write_bytes(self.NOT_UTF8)
+        report = self.pick()
+        self.assertEqual(report['unit'], self.ALPHA)
+        self.assertTrue(any(self.BRAVO in warning and 'log.md' in warning for warning in report['warnings']),
+                        report['warnings'])
+
+    def test_an_mr_md_that_is_not_utf8_gives_mr_null_and_a_warning_while_the_rest_shows(self):
+        """AC-20."""
+        self.write_files()
+        self.unit(self.wave_tickets())
+        (self.folder / 'mr.md').write_bytes(self.NOT_UTF8)
+        report = self.report()
+        self.assertIsNone(report['mr'])
+        self.assert_warned_about(report, 'mr.md')
+        self.assertEqual(len(report['tickets']), 4)
+
+    def test_a_log_md_that_is_not_utf8_gives_wave_0_and_a_warning_while_the_rest_shows(self):
+        """AC-20 Amended (ticket 02 review)."""
+        self.write_files()
+        self.unit(self.wave_tickets())
+        (self.folder / 'log.md').write_bytes(self.NOT_UTF8)
+        report = self.report()
+        self.assertEqual(report['wave'], 0)
+        self.assert_warned_about(report, 'log.md')
+        self.assertEqual(len(report['tickets']), 4)
+
+    def test_an_unreadable_work_units_or_metrics_file_gives_stage_and_cost_null_and_a_warning(self):
+        """AC-20 Amended (ticket 02 review): each file in turn is not UTF-8."""
+        for name in ('work-units.jsonl', 'metrics.jsonl'):
+            with self.subTest(file=name):
+                self.write_files()
+                self.unit(self.wave_tickets())
+                (self.home / name).write_bytes(self.NOT_UTF8)
+                report = self.report()
+                self.assertEqual((report['stage'], report['cost']), (None, None))
+                self.assert_warned_about(report, name)
+                self.assertEqual(len(report['tickets']), 4)
+
+    def test_an_unfilled_home_placeholder_is_the_first_warning_and_stdout_holds_only_the_json(self):
+        """AC-20 Amended (wave 4 plan): another warning exists (ticket 02 has a blocker with no file), so the notice
+        is first because of its place, not because it is alone. Nothing goes to stderr."""
+        self.write_files()
+        self.unit({'01-alpha': slice_ticket('01', status='done'), '02-bravo': slice_ticket('02', blocked='09')})
+        option, environ = '${user_config.home}', {paths.HOME_ENV: str(self.home)}
+        code, out, err = run_cli('progress', '--json', '--unit', self.UNIT, '--repo', str(self.repo.root),
+                                 '--home', option, environ=environ)
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertEqual(len(out.splitlines()), 1, out)
+        report = json.loads(out)
+        self.assertGreater(len(report['warnings']), 1, report['warnings'])
+        self.assertEqual(report['warnings'][0], paths.home_notice(option, environ))
+
+    def test_progress_without_json_or_with_an_unknown_option_exits_2_with_one_anomaly_line(self):
+        """AC-21: assert_cli_error holds the exit code 2, the one `anomaly: ` line on stderr and no traceback."""
+        for argv in (('progress',), ('progress', '--json', '--no-such-option')):
+            with self.subTest(argv=argv):
+                assert_cli_error(self, run_cli(*argv))
 
 
 if __name__ == '__main__':
