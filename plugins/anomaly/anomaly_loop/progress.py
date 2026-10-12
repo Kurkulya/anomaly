@@ -1,13 +1,17 @@
 """progress: a work unit's current state as one JSON object, for a UI to draw (ADR-0025).
 
-  progress --json --unit <name> [--repo <checkout>]     print one JSON line, read-only
+  progress --json [--unit <name>] [--repo <checkout>]     print one JSON line, read-only
 
 The unit is the folder `.anomaly/<name>/` of the main checkout of the repository that holds `--repo` (default:
-the working folder; gitrepo.shared_root, so a worktree reads the main checkout's units, ADR-0011). The object is
-schema 1; its keys, in this order:
+the working folder; gitrepo.shared_root, so a worktree reads the main checkout's units, ADR-0011); a `--repo`
+inside a `.anomaly/` folder starts from the folder that holds it. With no `--unit` the unit is picked, in this
+order: a unit with a ticket whose `Base:` equals the current branch, else the unit whose key in place of
+`<slug>` in the `branch` port pattern equals it (only when `<slug>` is the pattern's one placeholder), else the
+unfinished unit with the newest `log.md` line; the `adhoc` folder is never a unit. The object is schema 1; its
+keys, in this order:
 
   schema      1
-  unit        the unit name; `picked_by` is `unit-option`
+  unit        the unit name; `picked_by` is `unit-option` (--unit), `branch` or `newest-log`
   stage       {name, ended} of the unit's work-unit line with the newest `ended` (a tie: the later line in the
               file); null when no line has one
   wave        the number of `log.md` lines of stage `conduct` whose text starts with `wave `; 0 with no `log.md`
@@ -22,7 +26,8 @@ schema 1; its keys, in this order:
               (mr.read_state), each null when absent
   cost        {weighted_tokens, merged, build_minutes} of worklog.read_report; null when the unit has no
               work-unit line
-  warnings    one text per ticket that cannot be loaded or classified; that ticket is left out
+  warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; when several units
+              match the branch, one text that names the units not picked
 
 A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
 `schema`, `unit` (null) and `warnings`. The work-unit lines are read only
@@ -30,15 +35,18 @@ through worklog.read_report (ADR-0014). Nothing is written and nothing leaves th
 `json.dumps` with its default arguments: one line, ASCII escapes.
 """
 import json
+import re
 from pathlib import Path
 
-from . import check, conduct, frontier, gitrepo, log, mr, paths, records, ticket, worklog
+from . import check, conduct, files, frontier, gitrepo, log, mr, paths, ports, records, ticket, worklog
 from .constants import TICKET_ADHOC_DIR, WORKLOG_BUILD_STAGE
 from .files import RecordError
 
 SCHEMA = 1
 UNITS_DIR = TICKET_ADHOC_DIR.parent   # `.anomaly`: the folder that holds the work-unit folders (ADR-0011)
-PICKED_BY_OPTION = 'unit-option'
+PICKED_BY_OPTION, PICKED_BY_BRANCH, PICKED_BY_NEWEST_LOG = 'unit-option', 'branch', 'newest-log'
+BRANCH_PORT, SLUG = 'branch', '<slug>'
+PLACEHOLDER = re.compile(r'<[^<>]*>')
 DONE_KIND = 'done'                    # the kind of a done ticket, which has no frontier entry
 WAVE_STAGE, WAVE_TEXT = 'conduct', 'wave '   # a wave line of log.md: `<time> conduct: wave ...`
 
@@ -48,7 +56,8 @@ def register(commands, common):
                                   help="print a work unit's stage, wave, tickets, MR gate and cost as one JSON "
                                        'object (writes nothing)')
     command.add_argument('--json', action='store_true', required=True, help='print JSON (the only form)')
-    command.add_argument('--unit', required=True, help='the work-unit name: the folder under .anomaly/')
+    command.add_argument('--unit', help='the work-unit name: the folder under .anomaly/ (default: the unit is picked '
+                                        'from the current branch, else the newest unfinished one)')
     command.add_argument('--repo', help=gitrepo.REPO_HELP)
     command.set_defaults(handler=run_progress)
 
@@ -126,8 +135,8 @@ def unit_report(home, unit):
         return None
 
 
-def build(folder, home):
-    """The schema-1 object of the unit folder."""
+def build(folder, home, picked_by):
+    """The schema-1 object of the unit folder, picked in the way `picked_by` names."""
     unit = folder.name
     tickets, entries, warnings = classified(folder)
     counts = conduct.wave_counts(tickets, entries)
@@ -142,7 +151,7 @@ def build(folder, home):
     return {
         'schema': SCHEMA,
         'unit': unit,
-        'picked_by': PICKED_BY_OPTION,
+        'picked_by': picked_by,
         'stage': None if report is None else last_stage(report.rows),
         'wave': wave_number(folder),
         'counts': {'done': counts['done'], 'failed': len(counts['failed']), 'open': len(counts['open'])},
@@ -160,15 +169,98 @@ def is_folder_name(value):
     return value not in ('', '.', '..') and Path(value).name == value
 
 
+def start_folder(folder):
+    """The folder the repository is looked up from: the folder that holds the nearest `.anomaly/` folder above
+    `folder` (git ignores the excluded `.anomaly/`, so gitrepo.find_repo finds no repository inside it), else
+    `folder`."""
+    resolved = folder.resolve()
+    inside = next((parent for parent in (resolved, *resolved.parents) if parent.name == UNITS_DIR.name), None)
+    return folder if inside is None else inside.parent
+
+
+def unit_folders(root):
+    """The work-unit folders of `root/.anomaly`, in name order; `adhoc` holds light-path tickets, not one unit."""
+    units = root / UNITS_DIR
+    if not units.is_dir():
+        return []
+    return [path for path in sorted(units.iterdir()) if path.is_dir() and path.name != TICKET_ADHOC_DIR.name]
+
+
+def newest_log_time(folder):
+    """The newest time of the unit's log.md lines, or '' when it has none."""
+    return max((time for time, _, _ in log.entries(folder)), default='')
+
+
+def has_base(folder, branch):
+    """True when a ticket of the unit has a `Base:` value equal to `branch`."""
+    return any(ticket.value_of(ticket.split_lines(files.read_input(path)), 'Base') == branch
+               for path in frontier.ticket_paths(folder / check.TICKETS_DIR))
+
+
+def slug_branch(pattern, unit):
+    """The branch the `branch` port pattern gives for the unit key; None unless `<slug>` is the pattern's one
+    placeholder (a pattern with `<type>` or `<key>` is not expanded)."""
+    return pattern.replace(SLUG, unit) if PLACEHOLDER.findall(pattern) == [SLUG] else None
+
+
+def is_unfinished(folder):
+    """True when the unit has no ticket, or a ticket not done, or one that cannot be loaded or classified."""
+    if not frontier.ticket_paths(folder / check.TICKETS_DIR):
+        return True
+    _, entries, warnings = classified(folder)
+    return bool(entries or warnings)
+
+
+def pick_unit(root, repo, home):
+    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, or None when no unit is
+    picked. `repo` is the repository of the working folder, None outside one (then no branch match runs)."""
+    folders = unit_folders(root)
+    branch = '' if repo is None else mr.current_branch(repo)
+    if branch:
+        matches = [folder for folder in folders if has_base(folder, branch)]
+        if not matches:
+            pattern = ports.port(ports.resolve(home), BRANCH_PORT).value
+            matches = [folder for folder in folders if slug_branch(pattern, folder.name) == branch]
+        if matches:
+            times = {folder: newest_log_time(folder) for folder in matches}
+            picked = max(matches, key=times.get)   # a tie: the first in name order
+            others = [folder.name for folder in matches if folder != picked]
+            warnings = [f'{", ".join(others)} also match branch {branch}'] if others else []
+            return picked, PICKED_BY_BRANCH, warnings
+    times = {folder: time for folder in folders if (time := newest_log_time(folder))}
+    unfinished = [folder for folder in times if is_unfinished(folder)]
+    return (max(unfinished, key=times.get), PICKED_BY_NEWEST_LOG, []) if unfinished else None
+
+
+def picked_report(root, repo, home):
+    """The report of the unit pick_unit picks; with none picked, `unit` is null."""
+    picked = pick_unit(root, repo, home)
+    if picked is None:
+        return {'schema': SCHEMA, 'unit': None, 'warnings': []}
+    folder, picked_by, warnings = picked
+    report = build(folder, home, picked_by)
+    report['warnings'].extend(warnings)
+    return report
+
+
+def named_report(root, unit, home):
+    """The report of the unit that `--unit` names."""
+    folder = root / UNITS_DIR / unit
+    if not is_folder_name(unit):
+        return {'schema': SCHEMA, 'unit': None,
+                'warnings': [f'no work unit {unit}: not one folder name under {UNITS_DIR.as_posix()}/']}
+    if folder.is_dir():
+        return build(folder, home, PICKED_BY_OPTION)
+    return {'schema': SCHEMA, 'unit': None, 'warnings': [f'no work unit {unit}: {folder} is not a folder']}
+
+
 def run_progress(args, environ):
-    root = gitrepo.shared_root(Path(args.repo) if args.repo else Path.cwd())
-    folder = root / UNITS_DIR / args.unit
-    if not is_folder_name(args.unit):
-        report = {'schema': SCHEMA, 'unit': None,
-                  'warnings': [f'no work unit {args.unit}: not one folder name under {UNITS_DIR.as_posix()}/']}
-    elif folder.is_dir():
-        report = build(folder, paths.resolve_home(args.home, environ))
+    start = start_folder(Path(args.repo) if args.repo else Path.cwd())
+    root = gitrepo.shared_root(start)
+    home = paths.resolve_home(args.home, environ)
+    if args.unit is None:
+        report = picked_report(root, gitrepo.find_repo(start), home)
     else:
-        report = {'schema': SCHEMA, 'unit': None, 'warnings': [f'no work unit {args.unit}: {folder} is not a folder']}
+        report = named_report(root, args.unit, home)
     print(json.dumps(report))
     return 0
