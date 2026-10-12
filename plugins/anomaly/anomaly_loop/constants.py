@@ -23,6 +23,8 @@ EXPERIMENT_CHECK_DAYS = 21           # ... or this many days
 BASELINE_DAYS = 28                   # experiment baseline before the fix
 ACTIVE_GAP_SECONDS = 5 * 60          # a gap longer than this between entries is idle time
 PROMPT_CACHE_DAYS = 30               # prompt excerpts older than this are pruned
+METRICS_LOCK_WAIT_SECONDS = 30       # a measure run waits this long for METRICS_LOCK_FILE before it skips
+METRICS_LOCK_STALE_SECONDS = 600     # a METRICS_LOCK_FILE older than this is taken over
 # Price of one weighted token by model family relative to sonnet (= 1), from the API list prices
 # (platform.claude.com/docs/en/about-claude/pricing.md, read 2026-10-10); a call's family is the word
 # found in its model id. Only haiku has a long-prompt tier: a call whose prompt (input + cache writes
@@ -53,6 +55,7 @@ BUILD_SKILLS = ()   # no default: the profile key build_skills names the skills 
 # ---------- file names: home (durable) ----------
 
 METRICS_FILE = 'metrics.jsonl'
+METRICS_LOCK_FILE = 'metrics.lock'   # held by a measure run while it reads and writes METRICS_FILE (ADR-0026)
 INDEX_FILE = 'INDEX.md'
 ANOMALIES_DIR = 'anomalies'
 IDEAS_DIR = 'ideas'

@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from anomaly_loop import metrics
+from anomaly_loop import constants, metrics
 from tests.fixtures import SID, TICKET_KEY, assistant, result, run_cli, ts, user, write_jsonl
 
 # Secret-looking keywords are assembled at runtime so no fixture looks like a real credential.
@@ -285,7 +285,7 @@ class MeasureLockTest(Base):
         (home / 'metrics.lock').write_text('another run', encoding='utf-8')
         written = (home / 'metrics.jsonl', data / 'measure-state.json', data / 'cache' / 'prompts.jsonl')
         before = [p.read_bytes() for p in written]
-        with mock.patch.object(metrics, 'LOCK_WAIT', 0.2):
+        with mock.patch.object(constants, 'METRICS_LOCK_WAIT_SECONDS', 0.2):
             code, out, err = run_cli(*argv, *extra)
         return code, out, err, before, [p.read_bytes() for p in written]
 

@@ -20,9 +20,9 @@ import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from . import paths, profile
+from . import constants, paths, profile
 from .constants import (ACTIVE_GAP_SECONDS, LONG_PROMPT_FACTORS, LONG_PROMPT_TOKENS, METRICS_FILE,
-                        MODEL_FACTORS, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE, STATE_FILE)
+                        METRICS_LOCK_FILE, MODEL_FACTORS, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE, STATE_FILE)
 from .files import dump, file_lock, load_lines, write_lines
 from .records import number
 
@@ -37,8 +37,6 @@ MAX_SHAPES = 15
 MAX_TRIGRAMS = 15
 PROMPT_CHARS = 200
 PROMPT_SOURCE_CHARS = 2000
-LOCK_WAIT = 30    # seconds a run waits for <home>/metrics.lock before it skips
-LOCK_STALE = 600  # a lock older than this many seconds is taken over
 
 COMMAND_NAME = re.compile(r'<command-name>\s*/?([^<\s]+)\s*</command-name>')
 INTERRUPT_PREFIX = '[Request interrupted by user'
@@ -626,8 +624,8 @@ def run_measure(args, environ):
         raise paths.PathError(f'transcript folder not found: {projects}')
     loaded = profile.load_profile(home)
     out_path = home / METRICS_FILE
-    lock_path = home / 'metrics.lock'
-    with file_lock(lock_path, LOCK_WAIT, LOCK_STALE) as held:
+    lock_path = home / METRICS_LOCK_FILE
+    with file_lock(lock_path, constants.METRICS_LOCK_WAIT_SECONDS, constants.METRICS_LOCK_STALE_SECONDS) as held:
         if held:
             result = scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
                           cache_path=data / PROMPT_CACHE_FILE, full=args.full,

@@ -34,6 +34,7 @@ The script prints a few lines. Pass them on in plain words:
 - the `subagent seconds:` line and the `subagent seconds by model:` line, when the script prints them, as they are
 - the `not measured:` line, when the script prints it, as it is
 - the path of the metrics file
+- on a `measure: skipped, another run holds <path>` line: say the rows were not refreshed, and offer to run it again
 
 If the output has a line that starts with `profile:`, it names the profile keys that are
 missing. Repeat that line once, as it is, and say that the measurement itself was not affected.

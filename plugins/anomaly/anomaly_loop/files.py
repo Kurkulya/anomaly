@@ -95,10 +95,12 @@ def append_text(path, text, *, no_follow=False):
 def file_lock(path, wait, stale):
     """Hold the lock file `path` for the block: yields True when this run made it (`O_CREAT|O_EXCL`, with a
     token of this run written into it), False when another run still held it after `wait` seconds (that
-    lock is left in place). A lock whose age (now minus its modification time) is over `stale` seconds is
-    removed and made again at once, even when `wait` is over (once per call; a later stale lock waits its
-    turn like a held one). A PermissionError while no lock file exists is tried once more after a short
-    pause and then raised (a folder that cannot be written); with a lock file in place, where Windows also
+    lock is left in place). A lock whose age (now minus the lock path's own modification time, by lstat, so
+    a symlink is aged by the link) is over `stale` seconds is removed each time one is found. After the
+    first such removal of a call the lock is made again at once, even when `wait` is over; after a later
+    one the run goes on as for a held lock: it waits one poll before the next try, or gives up when `wait`
+    is over. A PermissionError while no lock file exists is tried once more after a short pause and then
+    raised (a folder that cannot be written); with a lock file in place, where Windows also
     raises it for a file being deleted, it counts as a held lock. The lock is removed when the block ends,
     normally or by an exception, if it still holds this run's token; if it cannot be read or removed it is
     left for the stale rule. Missing parent folders are made."""
@@ -119,7 +121,7 @@ def file_lock(path, wait, stale):
                 continue
             retried = removed = False
             try:
-                if time.time() - path.stat().st_mtime > stale:
+                if time.time() - path.lstat().st_mtime > stale:
                     path.unlink()
                     removed = True
             except (FileNotFoundError, PermissionError):
