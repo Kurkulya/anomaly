@@ -30,7 +30,6 @@ through worklog.read_report (ADR-0014). Nothing is written and nothing leaves th
 `json.dumps` with its default arguments: one line, ASCII escapes.
 """
 import json
-import re
 from pathlib import Path
 
 from . import check, conduct, files, frontier, gitrepo, log, mr, paths, ticket, worklog
@@ -42,7 +41,6 @@ UNITS_DIR = TICKET_ADHOC_DIR.parent   # `.anomaly`: the folder that holds the wo
 PICKED_BY_OPTION = 'unit-option'
 DONE_KIND = 'done'                    # the kind of a done ticket, which has no frontier entry
 WAVE_STAGE, WAVE_TEXT = 'conduct', 'wave '   # a wave line of log.md: `<time> conduct: wave ...`
-LOG_LINE = re.compile(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2} ([^\s:]+): (.*)')   # the log.md line shape (log.py)
 
 
 def register(commands, common):
@@ -119,7 +117,7 @@ def wave_number(folder):
     path = folder / log.FILE_NAME
     if not path.is_file():
         return 0
-    matches = (LOG_LINE.fullmatch(line) for line in files.read_input(path).splitlines())
+    matches = (log.LINE.fullmatch(line) for line in files.read_input(path).splitlines())
     return sum(1 for match in matches
                if match and match.group(1) == WAVE_STAGE and match.group(2).startswith(WAVE_TEXT))
 
