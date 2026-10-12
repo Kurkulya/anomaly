@@ -228,6 +228,11 @@ class UnitReport(NamedTuple):
     unmeasured: list
     weighted: float
 
+    @property
+    def build_minutes(self):
+        """The minutes of all `build` lines of the unit; a line without a start adds none."""
+        return sum(span or 0 for span in self.spans)
+
 
 def read_report(home, unit):
     """The UnitReport of a work unit from `work-units.jsonl` and `metrics.jsonl` in home; a unit with no
@@ -258,7 +263,7 @@ def cost_line(report):
     cost = f'cost: weighted tokens {report.weighted:,.0f}'
     if report.merged:
         cost += (f', weighted tokens per merged ticket {report.weighted / report.merged:,.0f}'
-                 f', minutes per merged ticket {sum(span or 0 for span in report.spans) / report.merged:,.1f}')
+                 f', minutes per merged ticket {report.build_minutes / report.merged:,.1f}')
     return cost
 
 

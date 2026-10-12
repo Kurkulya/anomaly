@@ -145,7 +145,7 @@ def build(folder, home):
     cost = None if report is None else {
         'weighted_tokens': report.weighted,
         'merged': report.merged,
-        'build_minutes': sum(span for span in report.spans if span is not None),
+        'build_minutes': report.build_minutes,
     }
     return {
         'schema': SCHEMA,
