@@ -1,9 +1,10 @@
-"""Tests for `progress --json --unit <name> --repo <checkout>` (ticket 02), CLI in-process. The fixture is a git
+"""Tests for `progress --json [--unit <name>] --repo <checkout>` (tickets 02, 03), CLI in-process. The fixture is a git
 repository with a unit folder `.anomaly/<unit>/` (tickets, and `mr.md` and `log.md` where a test needs them), and the
 test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` tests build them (the unit folder's
 name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29)."""
 import json
 import unittest
+from datetime import date
 
 from tests import test_worklog
 from tests.fixtures import GitFixture, run_cli, write_text
@@ -284,6 +285,131 @@ class ProgressTest(ProgressCase):
                 self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
                 self.assertEqual((report['schema'], report['unit']), (1, None))
                 self.assertTrue(any(value in warning for warning in report['warnings']), report['warnings'])
+
+
+class PickTheUnitTest(ProgressCase):
+    """Ticket 03, AC-12 to AC-15: `progress --json` with no `--unit` picks the unit itself. Units are folders of
+    the fixture repo's `.anomaly/` (git-excluded, ADR-0011); a unit's `log.md` lines set the newest-log order."""
+    ALPHA, BRAVO, CHARLIE = 'alpha-unit', 'bravo-unit', 'charlie-unit'
+    OPEN = {'01-first': slice_ticket('01')}   # a ticket not done
+
+    def setUp(self):
+        super().setUp()
+        self.repo.write('.git/info/exclude', '.anomaly/\n')
+
+    def put_unit(self, name, tickets=None, log=()):
+        """The unit folder `.anomaly/<name>/` with these tickets (stem -> text; none: an empty `tickets/` folder) and
+        these `log.md` lines (`<time> <stage>: <text>`, no log.md without any)."""
+        folder = self.repo.root / '.anomaly' / name
+        (folder / 'tickets').mkdir(parents=True, exist_ok=True)
+        for stem, text in (tickets or {}).items():
+            write_text(folder / 'tickets' / f'{stem}.md', text)
+        if log:
+            write_text(folder / 'log.md', ''.join(f'{line}\n' for line in log))
+
+    def on_branch(self, name):
+        """Make `name` the current branch of the fixture repo (it has no commit yet)."""
+        self.repo.git('symbolic-ref', 'HEAD', f'refs/heads/{name}')
+
+    def based_on(self, branch):
+        return {'01-first': slice_ticket('01', body=f'Base: {branch}\n')}
+
+    def pick(self, folder=None):
+        """The parsed report of a run with no `--unit` from `folder` (default: the fixture repo); a clean run."""
+        code, out, err = run_cli('progress', '--json', '--repo', str(folder or self.repo.root),
+                                 '--home', str(self.home))
+        self.assertEqual((code, err), (0, ''), out)
+        self.assertEqual(len(out.splitlines()), 1, out)
+        return json.loads(out)
+
+    def test_run_from_a_linked_worktree_it_reads_the_units_of_the_main_checkout(self):
+        """AC-12: the unit exists only in the main checkout's `.anomaly/`, and the worktree has none."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.repo.write('README.md', 'x\n')
+        self.repo.commit(['README.md'], 'chore: start', date(2026, 10, 1))
+        linked = self.root / 'linked'
+        self.repo.git('worktree', 'add', '-q', '-b', 'work/linked', str(linked))
+        self.assertFalse((linked / '.anomaly').exists())
+        self.assertEqual(self.pick(linked)['unit'], self.ALPHA)
+
+    def test_run_from_a_folder_inside_dot_anomaly_it_reads_that_dot_anomaly(self):
+        """AC-12, D-7 second Amended line: git ignores `.anomaly/`, so the folder is in no repository for git."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.assertEqual(self.pick(self.repo.root / '.anomaly' / self.ALPHA)['unit'], self.ALPHA)
+
+    def test_a_ticket_base_equal_to_the_current_branch_picks_its_unit_with_picked_by_branch(self):
+        """AC-13, AC-14 `Else`: the branch is bravo's default `feat/<slug>` name and bravo has the newer line (so the
+        slug step and the fallback would both take bravo), yet alpha's `Base:` names the branch and wins."""
+        self.put_unit(self.ALPHA, self.based_on('feat/bravo-unit'), ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO, self.based_on('feat/other'), ['2026-10-02 09:00 build: started'])
+        self.on_branch('feat/bravo-unit')
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
+
+    def test_of_several_matching_units_the_newest_log_line_wins_and_a_warning_names_the_others(self):
+        """AC-13: bravo has the newest line (alpha is first in name order, charlie is in between)."""
+        self.put_unit(self.ALPHA, self.based_on('feat/shared'), ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO, self.based_on('feat/shared'), ['2026-10-03 09:00 build: started'])
+        self.put_unit(self.CHARLIE, self.based_on('feat/shared'), ['2026-10-02 09:00 build: started'])
+        self.on_branch('feat/shared')
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.BRAVO, 'branch'))
+        warned = ' '.join(report['warnings'])
+        self.assertIn(self.ALPHA, warned)
+        self.assertIn(self.CHARLIE, warned)
+
+    def test_of_several_matching_units_with_the_same_newest_time_the_first_in_name_order_wins(self):
+        """AC-13: both newest lines read 10:00, and bravo is written first."""
+        self.put_unit(self.BRAVO, self.based_on('feat/shared'), ['2026-10-02 10:00 build: started'])
+        self.put_unit(self.ALPHA, self.based_on('feat/shared'), ['2026-10-02 10:00 review: done'])
+        self.on_branch('feat/shared')
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
+        self.assertIn(self.BRAVO, ' '.join(report['warnings']))
+
+    def test_a_branch_pattern_with_only_slug_matches_the_unit_key_in_place_of_it(self):
+        """AC-14, D-24: the `branch` port reads the profile key `branch_pattern`; bravo has the newer log line, so
+        only the pattern can pick alpha."""
+        write_text(self.home / 'profile.md', '---\nbranch_pattern: work/<slug>\n---\n')
+        self.put_unit(self.ALPHA, self.OPEN)
+        self.put_unit(self.BRAVO, self.OPEN, ['2026-10-02 09:00 build: started'])
+        self.on_branch('work/alpha-unit')
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
+
+    def test_a_branch_pattern_with_type_or_key_is_not_expanded(self):
+        """AC-14, D-24: the current branch is what the pattern would give for alpha if `<type>` and `<key>` were
+        filled in (`feat`, `no-ticket`), yet no branch pick happens; the newest log line (bravo) decides."""
+        self.put_unit(self.ALPHA, self.OPEN)
+        self.put_unit(self.BRAVO, self.OPEN, ['2026-10-02 09:00 build: started'])
+        for pattern, branch in (('<type>/<slug>', 'feat/alpha-unit'), ('feat/<key>/<slug>', 'feat/no-ticket/alpha-unit')):
+            with self.subTest(pattern=pattern):
+                write_text(self.home / 'profile.md', f'---\nbranch_pattern: {pattern}\n---\n')
+                self.on_branch(branch)
+                report = self.pick()
+                self.assertEqual((report['unit'], report['picked_by']), (self.BRAVO, 'newest-log'))
+
+    def test_the_fallback_picks_the_unfinished_unit_with_the_newest_log_line_and_skips_the_others(self):
+        """AC-15, D-25: bravo is the newest unfinished unit with a log line. Newer than it are the `adhoc` folder
+        and a unit whose tickets are all done; a unit with no `log.md` and one whose `log.md` holds no line of the
+        `<time> <stage>: <text>` shape have no time."""
+        done = {'01-first': slice_ticket('01', status='done')}
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO, self.OPEN, ['2026-10-02 09:00 build: started', '2026-10-02 11:30 review: round 1'])
+        self.put_unit('adhoc', self.OPEN, ['2026-10-05 09:00 build: started'])
+        self.put_unit('finished-unit', done, ['2026-10-04 09:00 ship: merged'])
+        self.put_unit('no-log-unit', self.OPEN)
+        self.put_unit('no-line-unit', self.OPEN)
+        write_text(self.repo.root / '.anomaly' / 'no-line-unit' / 'log.md', 'notes with no time\n')
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.BRAVO, 'newest-log'))
+
+    def test_the_fallback_counts_a_unit_with_no_tickets_as_unfinished(self):
+        """AC-15: the empty unit has the newest line and no ticket at all."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO, None, ['2026-10-02 09:00 interview: started'])
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.BRAVO, 'newest-log'))
 
 
 if __name__ == '__main__':
