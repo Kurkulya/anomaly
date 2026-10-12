@@ -271,16 +271,19 @@ class ProgressTest(ProgressCase):
         self.assertTrue(any('no-such-unit' in warning for warning in report['warnings']), report['warnings'])
 
     def test_a_unit_value_that_is_not_one_plain_folder_name_gives_unit_null_and_a_warning(self):
-        """AC-16, review round 1: `--unit ..` would name the folder that holds `.anomaly/`, outside every unit; it
-        is read as a name with no folder, never as that folder."""
+        """AC-16, review round 1: `--unit ..` would name the folder that holds `.anomaly/`, and `.` or an empty
+        value `.anomaly/` itself, outside every unit; each, and a value with a separator, is read as a name with no
+        folder, never as that folder."""
         self.write_files()
         self.unit(self.wave_tickets())
-        code, out, err = self.run_progress('--unit', '..')
-        self.assertEqual((code, err), (0, ''), out)
-        report = json.loads(out)
-        self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
-        self.assertEqual((report['schema'], report['unit']), (1, None))
-        self.assertTrue(any('..' in warning for warning in report['warnings']), report['warnings'])
+        for value in ('..', '.', '', 'a/b'):
+            with self.subTest(value=value):
+                code, out, err = self.run_progress('--unit', value)
+                self.assertEqual((code, err), (0, ''), out)
+                report = json.loads(out)
+                self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
+                self.assertEqual((report['schema'], report['unit']), (1, None))
+                self.assertTrue(any(value in warning for warning in report['warnings']), report['warnings'])
 
 
 if __name__ == '__main__':
