@@ -30,7 +30,8 @@ keys, in this order:
   warnings    one text per ticket that cannot be loaded or classified; that ticket is left out; one text per file
               that cannot be read (`log.md`, `mr.md`, `work-units.jsonl`, `metrics.jsonl`, or a ticket or `log.md`
               the pick reads, which the pick then leaves out); when several units match the branch, one text that
-              names the units not picked
+              names the units not picked; an unfilled `--home` placeholder notice comes first (stdout holds only
+              the JSON)
 
 A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
 `schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder, no unit picked, a `--repo` that is not a
@@ -64,7 +65,7 @@ def register(commands, common):
     command.add_argument('--unit', help='the work-unit name: the folder under .anomaly/ (default: the unit is picked '
                                         'from the current branch, else the newest unfinished one)')
     command.add_argument('--repo', help=gitrepo.REPO_HELP)
-    command.set_defaults(handler=run_progress)
+    command.set_defaults(handler=run_progress, home_notice_in_report=True)   # cli.main does not print the notice
 
 
 def classified(folder):
@@ -322,5 +323,8 @@ def located_report(repo_option, unit, home):
 
 def run_progress(args, environ):
     report = located_report(args.repo, args.unit, paths.resolve_home(args.home, environ))
+    notice = paths.home_notice(args.home, environ)
+    if notice:
+        report['warnings'].insert(0, notice)
     print(json.dumps(report))
     return 0
