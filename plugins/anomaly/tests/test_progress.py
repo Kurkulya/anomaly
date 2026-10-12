@@ -373,13 +373,15 @@ class PickTheUnitTest(ProgressCase):
 
     def test_a_branch_pattern_with_only_slug_matches_the_unit_key_in_place_of_it(self):
         """AC-14, D-24: the `branch` port reads the profile key `branch_pattern`; bravo has the newer log line, so
-        only the pattern can pick alpha."""
-        write_text(self.home / 'profile.md', '---\nbranch_pattern: work/<slug>\n---\n')
+        only the pattern can pick alpha. A pattern that repeats `<slug>` still has it as its one placeholder."""
         self.put_unit(self.ALPHA, self.OPEN)
         self.put_unit(self.BRAVO, self.OPEN, ['2026-10-02 09:00 build: started'])
-        self.on_branch('work/alpha-unit')
-        report = self.pick()
-        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
+        for pattern, branch in (('work/<slug>', 'work/alpha-unit'), ('<slug>/<slug>', 'alpha-unit/alpha-unit')):
+            with self.subTest(pattern=pattern):
+                write_text(self.home / 'profile.md', f'---\nbranch_pattern: {pattern}\n---\n')
+                self.on_branch(branch)
+                report = self.pick()
+                self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
 
     def test_a_branch_pattern_with_type_or_key_is_not_expanded(self):
         """AC-14, D-24: the current branch is what the pattern would give for alpha if `<type>` and `<key>` were
