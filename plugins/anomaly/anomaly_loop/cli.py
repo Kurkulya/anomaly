@@ -14,7 +14,8 @@ errors raise paths.PathError, records.RecordError, gitrepo.GitError, glab.CiErro
 warning. A usage error (an unknown command, a missing or bad option) is
 printed the same way: Parser replaces argparse's usage block and its own exit.
 Handlers never read the clock: `args.now` (aware datetime) and `args.today` (its date) are
-set here, and tests pass `now`.
+set here, and tests pass `now`. A command's `quiet` option also hides the `home:` placeholder notice that main prints before the handler,
+and `home_notice_in_report` moves it into the command's own report.
 """
 import argparse
 import os
@@ -94,7 +95,8 @@ def main(argv=None, environ=None, now=None):
     args.today = args.now.date()
     try:
         args.home_notice = paths.home_notice(args.home, environ)
-        if args.home_notice and not getattr(args, 'home_notice_in_report', False):   # progress puts it in its JSON
+        hidden = getattr(args, 'quiet', False) or getattr(args, 'home_notice_in_report', False)   # progress puts it in its JSON
+        if args.home_notice and not hidden:
             print(args.home_notice)
         return args.handler(args, environ)
     except (paths.PathError, records.RecordError, gitrepo.GitError, glab.CiError, OSError) as error:

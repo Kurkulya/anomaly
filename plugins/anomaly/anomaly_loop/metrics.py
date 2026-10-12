@@ -20,10 +20,10 @@ import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from . import paths, profile
+from . import constants, paths, profile
 from .constants import (ACTIVE_GAP_SECONDS, LONG_PROMPT_FACTORS, LONG_PROMPT_TOKENS, METRICS_FILE,
-                        MODEL_FACTORS, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE, STATE_FILE)
-from .files import dump, load_lines, write_lines
+                        METRICS_LOCK_FILE, MODEL_FACTORS, PROMPT_CACHE_DAYS, PROMPT_CACHE_FILE, STATE_FILE)
+from .files import dump, file_lock, load_lines, write_lines
 from .records import number
 
 # Relative price ratios per token kind (input = 1); only the ratios matter here.
@@ -603,6 +603,9 @@ def register(commands, common):
     measure.add_argument('--full', action='store_true', help='re-read every session, not only changed ones')
     measure.add_argument('--projects', help='transcript root (default: env ANOMALY_PROJECTS, '
                                             f'then {paths.DEFAULT_PROJECTS})')
+    measure.add_argument('--quiet', action='store_true',
+                         help='print nothing on success (no summary, warning or home notice); '
+                              'errors still go to stderr')
     measure.set_defaults(handler=run_measure)
 
 
@@ -621,9 +624,18 @@ def run_measure(args, environ):
         raise paths.PathError(f'transcript folder not found: {projects}')
     loaded = profile.load_profile(home)
     out_path = home / METRICS_FILE
-    result = scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
-                  cache_path=data / PROMPT_CACHE_FILE, full=args.full,
-                  now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
+    lock_path = home / METRICS_LOCK_FILE
+    with file_lock(lock_path, constants.METRICS_LOCK_WAIT_SECONDS, constants.METRICS_LOCK_STALE_SECONDS) as held:
+        if held:
+            result = scan(projects=projects, out_path=out_path, state_path=data / STATE_FILE,
+                          cache_path=data / PROMPT_CACHE_FILE, full=args.full,
+                          now=args.now, ticket_key=profile.ticket_key_pattern(loaded))
+    if not held:
+        if not args.quiet:
+            print(f'measure: skipped, another run holds {lock_path}')
+        return 0
+    if args.quiet:
+        return 0
     totals = summarize_rows(load_lines(out_path))
     print(f"metrics: processed {result['processed']}, skipped {result['skipped']}, rows {result['rows']}")
     print(f"range: {day(totals['first_ts'])} to {day(totals['last_ts'])}")

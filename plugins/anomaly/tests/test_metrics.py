@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from anomaly_loop import metrics
+from anomaly_loop import constants, metrics
 from tests.fixtures import SID, TICKET_KEY, assistant, result, run_cli, ts, user, write_jsonl
 
 # Secret-looking keywords are assembled at runtime so no fixture looks like a real credential.
@@ -224,6 +224,81 @@ class MeasureLineTest(Base):
         self.session([assistant(ts(0), 'm1'), assistant(ts(1), 'm2', model='<synthetic>')])
         self.subagent('agent-a1', [assistant(ts(2), 's1')], {'agentType': 'Explore', 'model': 'sonnet'})
         self.assertEqual(self.measure(), [])
+
+
+class MeasureQuietTest(Base):
+    """`measure --quiet`: no output on success, errors still on stderr with exit 2, and a plain run keeps
+    printing what it printed before."""
+
+    def measure(self, *extra, home='home', data='data', projects=None, environ=None):
+        """Run `measure`; `home` is a folder name under the temp root, or a literal `${…}` placeholder."""
+        home = home if home.startswith('$') else str(self.root / home)
+        return run_cli('measure', '--home', home, '--data', str(self.root / data),
+                       '--projects', str(projects or self.projects), *extra, environ=environ)
+
+    def test_a_quiet_run_prints_nothing_and_writes_the_rows_of_a_plain_run(self):
+        self.session([assistant(ts(0), 'm1'), assistant(ts(1), 'm2')])
+        self.subagent('agent-a1', [assistant(ts(2), 's1')], {'agentType': 'Explore', 'model': 'sonnet'})
+        code, out, err = self.measure('--quiet', home='quiet-home', data='quiet-data')
+        self.assertEqual((code, out, err), (0, '', ''))
+        self.measure(home='plain-home', data='plain-data')
+        quiet_rows = (self.root / 'quiet-home' / 'metrics.jsonl').read_bytes()
+        self.assertTrue(quiet_rows)
+        self.assertEqual(quiet_rows, (self.root / 'plain-home' / 'metrics.jsonl').read_bytes())
+
+    def test_an_unfilled_home_placeholder_notice_is_hidden_by_quiet_and_kept_by_a_plain_run(self):
+        self.session([assistant(ts(0), 'm1')])
+        environ = {'CLAUDE_PLUGIN_OPTION_HOME': str(self.root / 'home')}
+        notice = f"home: placeholder unfilled, using {self.root / 'home'}"
+        _, plain_out, _ = self.measure(home='${user_config.home}', environ=environ)
+        self.assertIn(notice, plain_out.splitlines())
+        code, quiet_out, quiet_err = self.measure('--quiet', home='${user_config.home}', environ=environ)
+        self.assertEqual((code, quiet_out, quiet_err), (0, '', ''))
+
+    def test_a_quiet_run_with_a_missing_transcript_folder_still_reports_it_on_stderr(self):
+        missing = self.root / 'no-such-projects'
+        code, out, err = self.measure('--quiet', projects=missing)
+        self.assertEqual((code, out, err), (2, '', f'anomaly: transcript folder not found: {missing}\n'))
+
+    def test_a_plain_run_prints_its_summary_lines_in_the_same_order_as_before(self):
+        self.session([assistant(ts(0), 'm1')])
+        _, out, _ = self.measure()
+        prefixes = ('metrics:', 'range:', 'weighted tokens:', 'file:')
+        seen = [next(p for p in prefixes if line.startswith(p))
+                for line in out.splitlines() if line.startswith(prefixes)]
+        self.assertEqual(seen, list(prefixes))
+
+
+class MeasureLockTest(Base):
+    """`measure` while another run holds a fresh `<home>/metrics.lock`: it waits, gives up with exit 0 and
+    changes none of the three files it writes. The wait is patched small."""
+
+    def held_run(self, *extra):
+        """Fill the three files with one session, add a second session a normal run would take in, make
+        a fresh lock, run `measure`; returns (exit code, stdout, stderr, the three files before, after)."""
+        from unittest import mock
+        home, data = self.root / 'home', self.root / 'data'
+        self.session([assistant(ts(0), 'm1')])
+        argv = ('measure', '--home', str(home), '--data', str(data), '--projects', str(self.projects))
+        self.assertEqual(run_cli(*argv)[0], 0)
+        self.session([assistant(ts(5), 'm2')], sid='22222222-aaaa-bbbb-cccc-000000000002')
+        (home / 'metrics.lock').write_text('another run', encoding='utf-8')
+        written = (home / 'metrics.jsonl', data / 'measure-state.json', data / 'cache' / 'prompts.jsonl')
+        before = [p.read_bytes() for p in written]
+        with mock.patch.object(constants, 'METRICS_LOCK_WAIT_SECONDS', 0.2):
+            code, out, err = run_cli(*argv, *extra)
+        return code, out, err, before, [p.read_bytes() for p in written]
+
+    def test_a_plain_run_that_finds_the_lock_held_skips_with_a_line_and_changes_no_file(self):
+        code, out, err, before, after = self.held_run()
+        skip = f"measure: skipped, another run holds {self.root / 'home' / 'metrics.lock'}"
+        self.assertEqual((code, out.splitlines(), err), (0, [skip], ''))
+        self.assertEqual(after, before)
+
+    def test_a_quiet_run_that_finds_the_lock_held_prints_nothing_and_exits_0(self):
+        code, out, err, before, after = self.held_run('--quiet')
+        self.assertEqual((code, out, err), (0, '', ''))
+        self.assertEqual(after, before)
 
 
 class SummarizeRowsTest(unittest.TestCase):

@@ -25,6 +25,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ticket amend <file> --after <A
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" log add <unit> --stage conduct '<event>'
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" ci watch <tip> --max-min 30 --home '${user_config.home}' --repo <wt>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" worklog add --feature <key> --stage conduct --session ${CLAUDE_SESSION_ID} --docs <unit> --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
+python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" measure --quiet --home '${user_config.home}' --data "${CLAUDE_PLUGIN_DATA}"
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" conduct status <unit> --home '${user_config.home}'
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr reviewed <unit> <tip> --repo <wt>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --repo <wt>
@@ -53,7 +54,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py" mr verified <unit> <tip> --rep
 ## Report
 
 12. `log add`: `merge <NN-slug>` and `stop <why>`, one line each; no cost numbers. [AC-28]
-13. `conduct status`; on its exit 2 "no lines for work unit" only: `worklog add`, then it again. [N6, AC-32] Print its five lines. With an MR, one more line: `MR size: <n> changed lines`, n = insertions + deletions of `git -C <wt> diff --shortstat <base>...HEAD`, never a question; without one, nothing about size. [N2, N3, AC-29]
+13. `measure --quiet`, once; print nothing about it; a nonzero exit neither stops the run nor prints a line. Then `conduct status`; on its exit 2 "no lines for work unit" only: `worklog add`, then it again. [N6, AC-32] Print its five lines. With an MR, one more line: `MR size: <n> changed lines`, n = insertions + deletions of `git -C <wt> diff --shortstat <base>...HEAD`, never a question; without one, nothing about size. [N2, N3, AC-29]
 
 ## Go on or stop
 

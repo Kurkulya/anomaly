@@ -3,7 +3,11 @@ ending translation); and the one reader of a UTF-8 text input (a record file, a 
 import json
 import os
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
+
+LOCK_POLL_SECONDS = 0.05
 
 
 class RecordError(ValueError):
@@ -85,3 +89,68 @@ def append_text(path, text, *, no_follow=False):
         return
     with open(path, 'ab') as f:
         f.write(text.encode('utf-8'))
+
+
+@contextmanager
+def file_lock(path, wait, stale):
+    """Hold the lock file `path` for the block: yields True when this run made it (`O_CREAT|O_EXCL`, with a
+    token of this run written into it), False when another run still held it after `wait` seconds (that
+    lock is left in place). A lock whose age (now minus the lock path's own modification time, by lstat, so
+    a symlink is aged by the link) is over `stale` seconds is removed each time one is found. After the
+    first such removal of a call the lock is made again at once, even when `wait` is over; after a later
+    one the run goes on as for a held lock: it waits one poll before the next try, or gives up when `wait`
+    is over. A PermissionError while no lock file exists is tried once more after a short pause and then
+    raised (a folder that cannot be written); with a lock file in place, where Windows also
+    raises it for a file being deleted, it counts as a held lock. The lock is removed when the block ends,
+    normally or by an exception, if it still holds this run's token; if it cannot be read or removed it is
+    left for the stale rule. Missing parent folders are made."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    token = f'{os.getpid()}-{os.urandom(8).hex()}'
+    deadline = time.monotonic() + wait
+    held = retried = took_over = False
+    while not held:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+        except (FileExistsError, PermissionError) as error:
+            if isinstance(error, PermissionError) and not path.exists():
+                if retried:
+                    raise
+                retried = True
+                time.sleep(LOCK_POLL_SECONDS)
+                continue
+            retried = removed = False
+            try:
+                if time.time() - path.lstat().st_mtime > stale:
+                    path.unlink()
+                    removed = True
+            except (FileNotFoundError, PermissionError):
+                pass
+            if removed and not took_over:
+                took_over = True
+                continue
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(LOCK_POLL_SECONDS)
+        else:
+            try:
+                try:
+                    os.write(fd, token.encode('utf-8'))
+                finally:
+                    os.close(fd)
+            except BaseException:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                raise
+            held = True
+    try:
+        yield held
+    finally:
+        if held:
+            try:
+                if path.read_text(encoding='utf-8') == token:
+                    path.unlink()
+            except (OSError, ValueError):
+                pass

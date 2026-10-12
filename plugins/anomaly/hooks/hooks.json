@@ -1,5 +1,5 @@
 {
-  "description": "Once a week, in the first session, tell the user when the anomaly backlog needs them; deny shell file writes in subagents",
+  "description": "Once a week, in the first session, tell the user when the anomaly backlog needs them; run measure in the background at session start; deny shell file writes in subagents",
   "hooks": {
     "SessionStart": [
       {
@@ -10,6 +10,12 @@
             "command": "python",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py", "nudge"],
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/anomaly.py", "measure", "--quiet"],
+            "async": true
           }
         ]
       }
