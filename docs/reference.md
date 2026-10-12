@@ -1292,6 +1292,11 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
   stage; `--unit`, or a branch that matches its name through the `branch` pattern, does.
 - Every case exits 0 with the JSON, and a problem is a text in `warnings`. Only bad arguments
   (a missing `--json`, an unknown option) exit 2, as one `anomaly:` line on stderr.
+- Every string in the JSON is raw text from local files (a ticket title, a reason, a warning, the
+  `mr.md` link). A reader escapes it before it draws it, and opens `mr.link` only when it is an
+  `http://` or `https://` link.
+- The command follows symlinks: a unit folder, a `log.md` or a ticket file that is a symlink is
+  read through it.
 
 ### Fields of schema 1
 
