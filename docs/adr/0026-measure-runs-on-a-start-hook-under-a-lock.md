@@ -31,7 +31,7 @@ A start hook costs no model tokens and no wait, because it is async and quiet. T
 
 ## Accepted risks
 
-- [ ] After a killed run (`claude -p` exit), other runs skip `measure` for up to 10 min. Owner: VK · Revisit: 2027-01-12.
+- [ ] After a killed run (`claude -p` exit), other runs skip `measure` for up to 10 min; during those 10 min conduct step 13 waits 30 s before it skips. Owner: VK · Revisit: 2027-01-12.
 - [ ] A `--full` run longer than 10 min can lose its lock to a second run. Owner: VK · Revisit: 2027-01-12.
 - [ ] Two runs that both find the same stale lock (left by a killed run) can both take it over and write together; each removes only a lock that still holds its own token. Owner: VK · Revisit: 2027-01-12.
 - [ ] A passing error (on Windows, the rename onto `metrics.jsonl` fails while another process has it open) makes a hook run exit 2 unseen, maybe leaving a `<name>.tmp`; that hook run writes nothing that time, and the next run catches up. Owner: VK · Revisit: 2027-01-12.
