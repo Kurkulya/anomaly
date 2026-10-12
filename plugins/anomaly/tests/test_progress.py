@@ -290,6 +290,17 @@ class ProgressTest(ProgressCase):
                 self.assertEqual((report['schema'], report['unit']), (1, None))
                 self.assertTrue(any(value in warning for warning in report['warnings']), report['warnings'])
 
+    def test_unit_adhoc_gives_unit_null_and_a_warning_though_the_folder_exists(self):
+        """AC-13 Amended (user, cumulative review): the adhoc folder is never a unit, also not with `--unit`."""
+        self.write_files()
+        write_text(self.repo.root / '.anomaly' / 'adhoc' / '2026-10-01-a-task.md', slice_ticket('01'))
+        code, out, err = self.run_progress('--unit', 'adhoc')
+        self.assertEqual((code, err), (0, ''), out)
+        report = json.loads(out)
+        self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
+        self.assertEqual((report['schema'], report['unit']), (1, None))
+        self.assertTrue(any('adhoc' in warning for warning in report['warnings']), report['warnings'])
+
 
 class PickTheUnitTest(ProgressCase):
     """Ticket 03, AC-12 to AC-15: `progress --json` with no `--unit` picks the unit itself. Units are folders of

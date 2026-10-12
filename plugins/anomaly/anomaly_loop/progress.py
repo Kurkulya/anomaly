@@ -7,8 +7,8 @@ the working folder; gitrepo.shared_root, so a worktree reads the main checkout's
 inside a `.anomaly/` folder starts from the folder that holds it. With no `--unit` the unit is picked, in this
 order: a unit with a ticket whose `Base:` equals the current branch, else the unit whose key in place of
 `<slug>` in the `branch` port pattern equals it (only when `<slug>` is the pattern's one placeholder), else the
-unfinished unit with the newest `log.md` line; the automatic pick never picks the `adhoc` folder. The object is
-schema 1; its keys, in this order:
+unfinished unit with the newest `log.md` line; the `adhoc` folder is never a unit, also not with `--unit`. The
+object is schema 1; its keys, in this order:
 
   schema      1
   unit        the unit name; `picked_by` is `unit-option` (--unit), `branch` or `newest-log`
@@ -33,12 +33,12 @@ schema 1; its keys, in this order:
               reads as missing); when several units match the branch, one text that names the units not picked; an
               unfilled `--home` placeholder notice comes first (stdout holds only the JSON)
 
-A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
-`schema`, `unit` (null) and `warnings`; so do no `.anomaly/` folder or one that cannot be listed, no unit
-picked, a `--repo` that is not a folder, a working folder that is gone and a git call that fails, each with a
-warning. Every case exits 0; only bad arguments exit 2. The work-unit lines are read only through
-worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The JSON is `json.dumps` with
-its default arguments: one line, ASCII escapes.
+A `--unit` value that check.unit_folders gives no folder for (a name with no unit folder, `adhoc`, `.`, `..`, a
+path other than `.anomaly/<name>`) prints only `schema`, `unit` (null) and `warnings`; so do no `.anomaly/`
+folder or one that cannot be listed, no unit picked, a `--repo` that is not a folder, a working folder that is
+gone and a git call that fails, each with a warning. Every case exits 0; only bad arguments exit 2. The work-unit
+lines are read only through worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The
+JSON is `json.dumps` with its default arguments: one line, ASCII escapes.
 """
 import json
 import re
@@ -193,11 +193,6 @@ def build(folder, home, picked_by):
     }
 
 
-def is_folder_name(value):
-    """True for one plain folder name: not empty, `.` or `..`, and no path separator or absolute path."""
-    return value not in ('', '.', '..') and Path(value).name == value
-
-
 def start_folder(folder):
     """The folder the repository is looked up from: the folder that holds the nearest `.anomaly/` folder above
     `folder` (git ignores the excluded `.anomaly/`, so gitrepo.find_repo finds no repository inside it), else
@@ -304,13 +299,13 @@ def picked_report(root, branch, home):
 
 
 def named_report(root, unit, home):
-    """The report of the unit that `--unit` names."""
-    folder = root / UNITS_DIR / unit
-    if not is_folder_name(unit):
-        return unit_null([f'no work unit {unit}: not one folder name under {UNITS_DIR.as_posix()}/'])
-    if folder.is_dir():
-        return build(folder, home, PICKED_BY_OPTION)
-    return unit_null([f'no work unit {unit}: {folder} is not a folder'])
+    """The report of the unit that `--unit` names, the folder check.unit_folders gives for it; a name it gives none
+    for (no such folder, `adhoc`, `..`, an absolute path) gives `unit` null and a warning."""
+    folders = check.unit_folders(root, unit)
+    if not folders:
+        return unit_null([f'no work unit {unit}: no work-unit folder of that name in {root / UNITS_DIR} '
+                          f'({TICKET_ADHOC_DIR.name} is not a unit)'])
+    return build(folders[0], home, PICKED_BY_OPTION)
 
 
 def located_report(repo_option, unit, home):

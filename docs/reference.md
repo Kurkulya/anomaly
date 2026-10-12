@@ -1280,7 +1280,7 @@ python plugins/anomaly/scripts/anomaly.py progress  --json [--unit <name>] [--re
 - The unit is the folder `.anomaly/<name>/` of the main checkout of the repository that holds
   `--repo` (default: the current folder), so a worktree reads the units of the main checkout; in no
   repository it is that folder itself. A `--repo` inside an `.anomaly/` folder starts from the
-  folder that holds it. The automatic pick never picks the `adhoc` folder.
+  folder that holds it. The `adhoc` folder is never a unit, also not with `--unit`.
 - `--unit <name>` names the folder. Without it the unit is picked in this order, and `picked_by`
   says which rule won (`pick_unit`): a unit with a ticket whose `Base:` equals the current branch
   (`branch`); else the unit whose name, put in place of `<slug>` in the `branch` port pattern,
@@ -1354,9 +1354,10 @@ A ticket object has these keys, in this order:
 ### No unit
 
 When no unit is found, the object holds only `schema`, `unit` (null) and `warnings`. Each of these
-cases gives a warning that says why: a name with no unit folder, or a `--unit` value that is not one
-plain folder name (`.`, `..`, a path); no `.anomaly/` folder, or one that cannot be listed; no unit
-picked; a `--repo` that is not a folder; a working folder that is gone; a failing git call.
+cases gives a warning that says why: a `--unit` value that names no unit folder (a name with no
+folder, `adhoc`, `.`, `..`, a path other than `.anomaly/<name>`); no `.anomaly/` folder, or one
+that cannot be listed; no unit picked; a `--repo` that is not a folder; a working folder that is
+gone; a failing git call.
 
 ### Changing the schema
 
