@@ -2086,6 +2086,7 @@ python plugins/anomaly/scripts/anomaly.py docs      scan <range> [--repo <dir>] 
 python plugins/anomaly/scripts/anomaly.py pkg-facts <ecosystem>:<name>|<name>... [--json] [--repo <dir>]
 python plugins/anomaly/scripts/anomaly.py terms-grep --terms '<words>' <url>... [--context <n>] [--word]
 python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> --home <dir> [--comment <number> | --create] [--user-config <dir>] [--plugin-root <dir>]
+python plugins/anomaly/scripts/anomaly.py progress  --json --unit <name> [--repo <dir>] [--home <dir>]
 ```
 
 - `measure` scans transcripts into `metrics.jsonl` (see measure).
@@ -2135,6 +2136,11 @@ python plugins/anomaly/scripts/anomaly.py upstream  defect|tuning <signature> --
   the search link, or with `upstream_tool: gh` searches, adds a +1 or creates the issue. `tuning`
   is refused unless the result is `keep` or `unproven` and the anomaly is still `fixed`. A plugin
   checkout, or no target repository, exits 1; see Upstream reports.
+- `progress` prints one work unit (`--unit`, a folder under `.anomaly/` of the main checkout) as one
+  JSON line for a UI to draw: its last ended stage, wave, counts, next tickets, tickets, MR gate
+  and cost, with `"schema": 1` first. It reads local files only and writes nothing; a name with no
+  folder gives `"unit": null` and a warning
+  ([ADR-0025](adr/0025-progress-prints-a-versioned-json-report.md)).
 
 Errors, including a usage error such as an unknown command or a missing option, print as one
 line starting with `anomaly:` and exit with status 2.
