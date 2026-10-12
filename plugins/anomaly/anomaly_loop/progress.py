@@ -32,8 +32,8 @@ through worklog.read_report (ADR-0014). Nothing is written and nothing leaves th
 import json
 from pathlib import Path
 
-from . import check, conduct, files, frontier, gitrepo, log, mr, paths, ticket, worklog
-from .constants import TICKET_ADHOC_DIR, TICKET_STATUS_DONE, WORKLOG_BUILD_STAGE
+from . import check, conduct, files, frontier, gitrepo, log, mr, paths, records, ticket, worklog
+from .constants import TICKET_ADHOC_DIR, WORKLOG_BUILD_STAGE
 from .files import RecordError
 
 SCHEMA = 1
@@ -104,10 +104,11 @@ def ticket_entry(path, parsed, entry, report):
 
 def last_stage(rows):
     """{name, ended} of the work-unit line with the newest `ended` (the text sorts in time order), the later line
-    winning a tie; None when no line has one."""
+    winning a tie; a line whose `ended` is not such a time (records.is_ticket_time) is skipped; None when no line
+    has one."""
     newest = None
     for row in rows:
-        if row.get('ended') and (newest is None or row['ended'] >= newest['ended']):
+        if records.is_ticket_time(row.get('ended')) and (newest is None or row['ended'] >= newest['ended']):
             newest = row
     return None if newest is None else {'name': newest.get('stage'), 'ended': newest['ended']}
 
