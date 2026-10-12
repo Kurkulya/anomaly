@@ -211,11 +211,11 @@ def is_unfinished(folder):
     return bool(entries or warnings)
 
 
-def pick_unit(root, repo, home):
+def pick_unit(root, branch, home):
     """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, or None when no unit is
-    picked. `repo` is the repository of the working folder, None outside one (then no branch match runs)."""
+    picked. `branch` is the current branch: '' outside a repository or on a detached head (then no branch match
+    runs)."""
     folders = unit_folders(root)
-    branch = '' if repo is None else mr.current_branch(repo)
     if branch:
         matches = [folder for folder in folders if has_base(folder, branch)]
         if not matches:
@@ -233,11 +233,16 @@ def pick_unit(root, repo, home):
     return None if picked is None else (picked, PICKED_BY_NEWEST_LOG, [])
 
 
-def picked_report(root, repo, home):
+def unit_null(warnings):
+    """The object with no unit: only `schema`, `unit` (null) and `warnings`."""
+    return {'schema': SCHEMA, 'unit': None, 'warnings': warnings}
+
+
+def picked_report(root, branch, home):
     """The report of the unit pick_unit picks; with none picked, `unit` is null."""
-    picked = pick_unit(root, repo, home)
+    picked = pick_unit(root, branch, home)
     if picked is None:
-        return {'schema': SCHEMA, 'unit': None, 'warnings': []}
+        return unit_null([])
     folder, picked_by, warnings = picked
     report = build(folder, home, picked_by)
     report['warnings'].extend(warnings)
@@ -248,11 +253,10 @@ def named_report(root, unit, home):
     """The report of the unit that `--unit` names."""
     folder = root / UNITS_DIR / unit
     if not is_folder_name(unit):
-        return {'schema': SCHEMA, 'unit': None,
-                'warnings': [f'no work unit {unit}: not one folder name under {UNITS_DIR.as_posix()}/']}
+        return unit_null([f'no work unit {unit}: not one folder name under {UNITS_DIR.as_posix()}/'])
     if folder.is_dir():
         return build(folder, home, PICKED_BY_OPTION)
-    return {'schema': SCHEMA, 'unit': None, 'warnings': [f'no work unit {unit}: {folder} is not a folder']}
+    return unit_null([f'no work unit {unit}: {folder} is not a folder'])
 
 
 def run_progress(args, environ):
@@ -260,7 +264,8 @@ def run_progress(args, environ):
     root = gitrepo.shared_root(start)
     home = paths.resolve_home(args.home, environ)
     if args.unit is None:
-        report = picked_report(root, gitrepo.find_repo(start), home)
+        repo = gitrepo.find_repo(start)
+        report = picked_report(root, '' if repo is None else mr.current_branch(repo), home)
     else:
         report = named_report(root, args.unit, home)
     print(json.dumps(report))
