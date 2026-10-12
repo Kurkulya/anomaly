@@ -228,8 +228,9 @@ def pick_unit(root, repo, home):
             warnings = [f'{", ".join(others)} also match branch {branch}'] if others else []
             return picked, PICKED_BY_BRANCH, warnings
     times = {folder: time for folder in folders if (time := newest_log_time(folder))}
-    unfinished = [folder for folder in times if is_unfinished(folder)]
-    return (max(unfinished, key=times.get), PICKED_BY_NEWEST_LOG, []) if unfinished else None
+    newest_first = sorted(times, key=times.get, reverse=True)   # a tie: the first in name order (the sort is stable)
+    picked = next((folder for folder in newest_first if is_unfinished(folder)), None)
+    return None if picked is None else (picked, PICKED_BY_NEWEST_LOG, [])
 
 
 def picked_report(root, repo, home):
