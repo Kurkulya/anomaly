@@ -1,6 +1,6 @@
 # ADR-0001: Durable data lives in a `home` folder outside the plugin
 
-Status: Accepted · Date: 2026-10-04 · Owner: VK · Revisit-by: 2026-11-15 · Amended 2026-10-07: third accepted risk, Revisit trigger and Sources line (dogfood-fixes 04, VK)
+Status: Accepted; partly superseded by ADR-0026 (the throwaway metrics.lock lives in home) · Date: 2026-10-04 · Owner: VK · Revisit-by: 2026-11-15 · Amended 2026-10-07: third accepted risk, Revisit trigger and Sources line (dogfood-fixes 04, VK)
 
 ## Context
 
