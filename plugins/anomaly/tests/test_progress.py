@@ -555,14 +555,20 @@ class EveryCaseTest(ProgressCase):
         self.assertEqual(len(report['tickets']), 4)
 
     def test_a_log_md_that_is_not_utf8_gives_wave_0_and_a_warning_while_the_rest_shows(self):
-        """AC-20 Amended (ticket 02 review)."""
+        """AC-20 Amended (ticket 02 review): with `--unit`, and with no `--unit` through a branch pick, which reads
+        the same log.md; either way exactly one warning names it."""
         self.write_files()
-        self.unit(self.wave_tickets())
+        tickets = self.wave_tickets()
+        tickets['01-alpha'] = slice_ticket('01', status='done', body='Base: feat/track\n')
+        self.unit(tickets)
+        self.on_branch('feat/track')
         (self.folder / 'log.md').write_bytes(self.NOT_UTF8)
-        report = self.report()
-        self.assertEqual(report['wave'], 0)
-        self.assert_warned_about(report, 'log.md')
-        self.assertEqual(len(report['tickets']), 4)
+        for picked_by, report in (('unit-option', self.report()), ('branch', self.pick())):
+            with self.subTest(picked_by=picked_by):
+                self.assertEqual(report['picked_by'], picked_by)
+                self.assertEqual(report['wave'], 0)
+                self.assertEqual(len([text for text in report['warnings'] if 'log.md' in text]), 1, report['warnings'])
+                self.assertEqual(len(report['tickets']), 4)
 
     def test_an_unreadable_work_units_or_metrics_file_gives_stage_and_cost_null_and_a_warning(self):
         """AC-20 Amended (ticket 02 review): each file in turn is not UTF-8."""

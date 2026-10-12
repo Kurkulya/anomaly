@@ -256,24 +256,27 @@ def is_unfinished(folder):
 def pick_unit(root, branch, home):
     """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`; folder and picked_by are None
     when no unit is picked. `branch` is the current branch: '' outside a repository or on a detached head (then no
-    branch match runs). A ticket or log.md that cannot be read is left out of the pick and named in `warnings`."""
+    branch match runs). A ticket or log.md that cannot be read is left out of the pick and named in `warnings`, only
+    for the units not picked: build names those of the picked unit itself."""
     folders = unit_folders(root)
-    warnings = []
+    skipped = {folder: [] for folder in folders}   # per unit, the texts of the files the pick left out
     if branch:
-        matches = [folder for folder in folders if has_base(folder, branch, warnings)]
+        matches = [folder for folder in folders if has_base(folder, branch, skipped[folder])]
         if not matches:
             pattern = ports.port(ports.resolve(home), BRANCH_PORT).value
             matches = [folder for folder in folders if slug_branch(pattern, folder.name) == branch]
         if matches:
-            times = {folder: newest_log_time(folder, warnings) for folder in matches}
+            times = {folder: newest_log_time(folder, skipped[folder]) for folder in matches}
             picked = max(matches, key=times.get)   # a tie: the first in name order
+            warnings = [text for folder in folders if folder != picked for text in skipped[folder]]
             others = [folder.name for folder in matches if folder != picked]
             if others:
                 warnings.append(f'{", ".join(others)} also match branch {branch}')
             return picked, PICKED_BY_BRANCH, warnings
-    times = {folder: time for folder in folders if (time := newest_log_time(folder, warnings))}
+    times = {folder: time for folder in folders if (time := newest_log_time(folder, skipped[folder]))}
     newest_first = sorted(times, key=times.get, reverse=True)   # a tie: the first in name order (the sort is stable)
     picked = next((folder for folder in newest_first if is_unfinished(folder)), None)
+    warnings = [text for folder in folders if folder != picked for text in skipped[folder]]
     return picked, None if picked is None else PICKED_BY_NEWEST_LOG, warnings
 
 
