@@ -269,6 +269,38 @@ class MeasureQuietTest(Base):
         self.assertEqual(seen, list(prefixes))
 
 
+class MeasureLockTest(Base):
+    """`measure` while another run holds a fresh `<home>/metrics.lock`: it waits, gives up with exit 0 and
+    changes none of the three files it writes. The wait is patched small."""
+
+    def held_run(self, *extra):
+        """Fill the three files with one session, add a second session a normal run would take in, make
+        a fresh lock, run `measure`; returns (exit code, stdout, stderr, the three files before, after)."""
+        from unittest import mock
+        home, data = self.root / 'home', self.root / 'data'
+        self.session([assistant(ts(0), 'm1')])
+        argv = ('measure', '--home', str(home), '--data', str(data), '--projects', str(self.projects))
+        self.assertEqual(run_cli(*argv)[0], 0)
+        self.session([assistant(ts(5), 'm2')], sid='22222222-aaaa-bbbb-cccc-000000000002')
+        (home / 'metrics.lock').write_text('another run', encoding='utf-8')
+        written = (home / 'metrics.jsonl', data / 'measure-state.json', data / 'cache' / 'prompts.jsonl')
+        before = [p.read_bytes() for p in written]
+        with mock.patch.object(metrics, 'LOCK_WAIT', 0.2):
+            code, out, err = run_cli(*argv, *extra)
+        return code, out, err, before, [p.read_bytes() for p in written]
+
+    def test_a_plain_run_that_finds_the_lock_held_skips_with_a_line_and_changes_no_file(self):
+        code, out, err, before, after = self.held_run()
+        skip = f"measure: skipped, another run holds {self.root / 'home' / 'metrics.lock'}"
+        self.assertEqual((code, out.splitlines(), err), (0, [skip], ''))
+        self.assertEqual(after, before)
+
+    def test_a_quiet_run_that_finds_the_lock_held_prints_nothing_and_exits_0(self):
+        code, out, err, before, after = self.held_run('--quiet')
+        self.assertEqual((code, out, err), (0, '', ''))
+        self.assertEqual(after, before)
+
+
 class SummarizeRowsTest(unittest.TestCase):
     def test_a_row_without_the_skipped_fields_adds_0_to_the_sums(self):
         older = {}   # a row written before the fields existed lacks them
