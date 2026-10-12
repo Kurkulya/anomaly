@@ -24,7 +24,8 @@ schema 1; its keys, in this order:
               work-unit line
   warnings    one text per ticket that cannot be loaded or classified; that ticket is left out
 
-A name with no unit folder prints only `schema`, `unit` (null) and `warnings`. The work-unit lines are read only
+A name with no unit folder, or a value that is not one plain folder name (`.`, `..`, a path), prints only
+`schema`, `unit` (null) and `warnings`. The work-unit lines are read only
 through worklog.read_report (ADR-0014). Nothing is written and nothing leaves the machine. The JSON is
 `json.dumps` with its default arguments: one line, ASCII escapes.
 """
@@ -162,10 +163,18 @@ def build(folder, home):
     }
 
 
+def is_folder_name(value):
+    """True for one plain folder name: not empty, `.` or `..`, and no path separator or absolute path."""
+    return value not in ('', '.', '..') and Path(value).name == value
+
+
 def run_progress(args, environ):
     root = gitrepo.shared_root(Path(args.repo) if args.repo else Path.cwd())
     folder = root / UNITS_DIR / args.unit
-    if folder.is_dir():
+    if not is_folder_name(args.unit):
+        report = {'schema': SCHEMA, 'unit': None,
+                  'warnings': [f'no work unit {args.unit}: not one folder name under {UNITS_DIR.as_posix()}/']}
+    elif folder.is_dir():
         report = build(folder, paths.resolve_home(args.home, environ))
     else:
         report = {'schema': SCHEMA, 'unit': None, 'warnings': [f'no work unit {args.unit}: {folder} is not a folder']}

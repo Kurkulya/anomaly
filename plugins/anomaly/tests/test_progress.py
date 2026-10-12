@@ -258,16 +258,29 @@ class ProgressTest(ProgressCase):
         self.assertEqual((report['unit'], report['picked_by']), (self.UNIT, 'unit-option'))
 
     def test_a_unit_name_with_no_folder_gives_unit_null_and_a_warning_that_names_it(self):
-        """AC-16, D-26: the object holds only `schema`, `unit` and `warnings`; one warning names the missing unit.
-        The exit code is not pinned here (ticket 04 owns it), only that the output is the JSON object."""
+        """AC-16, D-26: the object holds only `schema`, `unit` and `warnings`; one warning names the missing unit;
+        exit 0."""
         self.write_files()
         self.unit(self.wave_tickets())
         code, out, err = self.run_progress('--unit', 'no-such-unit')
+        self.assertEqual(code, 0, (out, err))
         self.assertTrue(out.strip(), (code, err))
         report = json.loads(out)
         self.assertEqual(list(report), ['schema', 'unit', 'warnings'], (code, out, err))
         self.assertEqual((report['schema'], report['unit']), (1, None))
         self.assertTrue(any('no-such-unit' in warning for warning in report['warnings']), report['warnings'])
+
+    def test_a_unit_value_that_is_not_one_plain_folder_name_gives_unit_null_and_a_warning(self):
+        """AC-16, review round 1: `--unit ..` would name the folder that holds `.anomaly/`, outside every unit; it
+        is read as a name with no folder, never as that folder."""
+        self.write_files()
+        self.unit(self.wave_tickets())
+        code, out, err = self.run_progress('--unit', '..')
+        self.assertEqual((code, err), (0, ''), out)
+        report = json.loads(out)
+        self.assertEqual(list(report), ['schema', 'unit', 'warnings'], out)
+        self.assertEqual((report['schema'], report['unit']), (1, None))
+        self.assertTrue(any('..' in warning for warning in report['warnings']), report['warnings'])
 
 
 if __name__ == '__main__':
