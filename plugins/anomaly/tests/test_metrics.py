@@ -226,6 +226,49 @@ class MeasureLineTest(Base):
         self.assertEqual(self.measure(), [])
 
 
+class MeasureQuietTest(Base):
+    """`measure --quiet`: no output on success, errors still on stderr with exit 2, and a plain run keeps
+    printing what it printed before."""
+
+    def measure(self, *extra, home='home', data='data', projects=None, environ=None):
+        """Run `measure`; `home` is a folder name under the temp root, or a literal `${…}` placeholder."""
+        home = home if home.startswith('$') else str(self.root / home)
+        return run_cli('measure', '--home', home, '--data', str(self.root / data),
+                       '--projects', str(projects or self.projects), *extra, environ=environ)
+
+    def test_a_quiet_run_prints_nothing_and_writes_the_rows_of_a_plain_run(self):
+        self.session([assistant(ts(0), 'm1'), assistant(ts(1), 'm2')])
+        self.subagent('agent-a1', [assistant(ts(2), 's1')], {'agentType': 'Explore', 'model': 'sonnet'})
+        code, out, err = self.measure('--quiet', home='quiet-home', data='quiet-data')
+        self.assertEqual((code, out, err), (0, '', ''))
+        self.measure(home='plain-home', data='plain-data')
+        quiet_rows = (self.root / 'quiet-home' / 'metrics.jsonl').read_bytes()
+        self.assertTrue(quiet_rows)
+        self.assertEqual(quiet_rows, (self.root / 'plain-home' / 'metrics.jsonl').read_bytes())
+
+    def test_an_unfilled_home_placeholder_notice_is_hidden_by_quiet_and_kept_by_a_plain_run(self):
+        self.session([assistant(ts(0), 'm1')])
+        environ = {'CLAUDE_PLUGIN_OPTION_HOME': str(self.root / 'home')}
+        notice = f"home: placeholder unfilled, using {self.root / 'home'}"
+        _, plain_out, _ = self.measure(home='${user_config.home}', environ=environ)
+        self.assertIn(notice, plain_out.splitlines())
+        code, quiet_out, quiet_err = self.measure('--quiet', home='${user_config.home}', environ=environ)
+        self.assertEqual((code, quiet_out, quiet_err), (0, '', ''))
+
+    def test_a_quiet_run_with_a_missing_transcript_folder_still_reports_it_on_stderr(self):
+        missing = self.root / 'no-such-projects'
+        code, out, err = self.measure('--quiet', projects=missing)
+        self.assertEqual((code, out, err), (2, '', f'anomaly: transcript folder not found: {missing}\n'))
+
+    def test_a_plain_run_prints_its_summary_lines_in_the_same_order_as_before(self):
+        self.session([assistant(ts(0), 'm1')])
+        _, out, _ = self.measure()
+        prefixes = ('metrics:', 'range:', 'weighted tokens:', 'file:')
+        seen = [next(p for p in prefixes if line.startswith(p))
+                for line in out.splitlines() if line.startswith(prefixes)]
+        self.assertEqual(seen, list(prefixes))
+
+
 class SummarizeRowsTest(unittest.TestCase):
     def test_a_row_without_the_skipped_fields_adds_0_to_the_sums(self):
         older = {}   # a row written before the fields existed lacks them
