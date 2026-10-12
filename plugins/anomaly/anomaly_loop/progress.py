@@ -49,6 +49,7 @@ BRANCH_PORT, SLUG = 'branch', '<slug>'
 PLACEHOLDER = re.compile(r'<[^<>]*>')
 DONE_KIND = 'done'                    # the kind of a done ticket, which has no frontier entry
 WAVE_STAGE, WAVE_TEXT = 'conduct', 'wave '   # a wave line of log.md: `<time> conduct: wave ...`
+READ_ERRORS = (RecordError, OSError)   # a file that cannot be read, or is not UTF-8 (files.read_input)
 
 
 def register(commands, common):
@@ -72,7 +73,7 @@ def classified(folder):
         try:
             parsed = ticket.load(path)[1]
             found, errors = frontier.classify(tickets_dir, [(path, parsed)])
-        except RecordError as error:
+        except READ_ERRORS as error:
             warnings.append(f'{path.name}: {error}')
             continue
         if errors:
@@ -187,15 +188,29 @@ def unit_folders(root):
     return [path for path in sorted(units.iterdir()) if path.is_dir() and not frontier.is_adhoc(path)]
 
 
-def newest_log_time(folder):
-    """The newest time of the unit's log.md lines, or '' when it has none."""
-    return max((time for time, _, _ in log.entries(folder)), default='')
+def newest_log_time(folder, warnings):
+    """The newest time of the unit's log.md lines, or '' when it has none; a log.md that cannot be read gives ''
+    and a text in `warnings` that names it."""
+    try:
+        return max((time for time, _, _ in log.entries(folder)), default='')
+    except READ_ERRORS as error:
+        warnings.append(f'{folder.name}/{log.FILE_NAME} cannot be read, the unit pick left it out: {error}')
+        return ''
 
 
-def has_base(folder, branch):
-    """True when a ticket of the unit has a `Base:` value equal to `branch`."""
-    return any(ticket.value_of(ticket.split_lines(files.read_input(path)), 'Base') == branch
-               for path in frontier.ticket_paths(folder / check.TICKETS_DIR))
+def has_base(folder, branch, warnings):
+    """True when a ticket of the unit has a `Base:` value equal to `branch`; a ticket that cannot be read gives no
+    match and a text in `warnings` that names it."""
+    for path in frontier.ticket_paths(folder / check.TICKETS_DIR):
+        try:
+            text = files.read_input(path)
+        except READ_ERRORS as error:
+            warnings.append(f'{folder.name}/{check.TICKETS_DIR}/{path.name} cannot be read, the unit pick left it '
+                            f'out: {error}')
+            continue
+        if ticket.value_of(ticket.split_lines(text), 'Base') == branch:
+            return True
+    return False
 
 
 def slug_branch(pattern, unit):
@@ -213,25 +228,27 @@ def is_unfinished(folder):
 
 
 def pick_unit(root, branch, home):
-    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, or None when no unit is
-    picked. `branch` is the current branch: '' outside a repository or on a detached head (then no branch match
-    runs)."""
+    """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`; folder and picked_by are None
+    when no unit is picked. `branch` is the current branch: '' outside a repository or on a detached head (then no
+    branch match runs). A ticket or log.md that cannot be read is left out of the pick and named in `warnings`."""
     folders = unit_folders(root)
+    warnings = []
     if branch:
-        matches = [folder for folder in folders if has_base(folder, branch)]
+        matches = [folder for folder in folders if has_base(folder, branch, warnings)]
         if not matches:
             pattern = ports.port(ports.resolve(home), BRANCH_PORT).value
             matches = [folder for folder in folders if slug_branch(pattern, folder.name) == branch]
         if matches:
-            times = {folder: newest_log_time(folder) for folder in matches}
+            times = {folder: newest_log_time(folder, warnings) for folder in matches}
             picked = max(matches, key=times.get)   # a tie: the first in name order
             others = [folder.name for folder in matches if folder != picked]
-            warnings = [f'{", ".join(others)} also match branch {branch}'] if others else []
+            if others:
+                warnings.append(f'{", ".join(others)} also match branch {branch}')
             return picked, PICKED_BY_BRANCH, warnings
-    times = {folder: time for folder in folders if (time := newest_log_time(folder))}
+    times = {folder: time for folder in folders if (time := newest_log_time(folder, warnings))}
     newest_first = sorted(times, key=times.get, reverse=True)   # a tie: the first in name order (the sort is stable)
     picked = next((folder for folder in newest_first if is_unfinished(folder)), None)
-    return None if picked is None else (picked, PICKED_BY_NEWEST_LOG, [])
+    return picked, None if picked is None else PICKED_BY_NEWEST_LOG, warnings
 
 
 def unit_null(warnings):
@@ -241,12 +258,11 @@ def unit_null(warnings):
 
 def picked_report(root, branch, home):
     """The report of the unit pick_unit picks; with none picked, `unit` is null and a warning says why."""
-    picked = pick_unit(root, branch, home)
-    if picked is None:
+    folder, picked_by, warnings = pick_unit(root, branch, home)
+    if folder is None:
         if not (root / UNITS_DIR).is_dir():
-            return unit_null([f'no work unit: {root} has no {UNITS_DIR.as_posix()}/ folder'])
-        return unit_null(['no work unit picked: none matches the current branch and none is unfinished'])
-    folder, picked_by, warnings = picked
+            return unit_null([f'no work unit: {root} has no {UNITS_DIR.as_posix()}/ folder', *warnings])
+        return unit_null(['no work unit picked: none matches the current branch and none is unfinished', *warnings])
     report = build(folder, home, picked_by)
     report['warnings'].extend(warnings)
     return report
