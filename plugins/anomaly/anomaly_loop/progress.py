@@ -332,8 +332,7 @@ def located_report(repo_option, unit, home):
 
 def run_progress(args, environ):
     report = located_report(args.repo, args.unit, paths.resolve_home(args.home, environ))
-    notice = paths.home_notice(args.home, environ)
-    if notice:
-        report['warnings'].insert(0, notice)
+    if args.home_notice:   # set by cli.main
+        report['warnings'].insert(0, args.home_notice)
     print(json.dumps(report))
     return 0
