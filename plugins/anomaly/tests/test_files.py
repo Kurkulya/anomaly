@@ -1,5 +1,6 @@
 """The exact-text reader and writer of files.py: no byte order mark removal on request, no line
 ending translation, whole-file replacement."""
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -195,6 +196,19 @@ class LockTest(unittest.TestCase):
             with files.file_lock(self.lock, 0.2, 600) as got:
                 self.assertTrue(got)
         self.assertTrue(self.lock.exists())
+
+    @unittest.skipUnless(os.utime in os.supports_follow_symlinks, 'no utime on a symlink itself here')
+    def test_a_dangling_symlink_lock_older_than_the_stale_age_is_taken_over(self):
+        import time
+        try:
+            os.symlink(self.lock.with_name('gone'), self.lock)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f'cannot make a symlink here: {error}')
+        old = time.time() - 1000
+        os.utime(self.lock, (old, old), follow_symlinks=False)
+        with files.file_lock(self.lock, 0, 600) as got:
+            self.assertTrue(got)
+            self.assertFalse(self.lock.is_symlink())
 
 
 if __name__ == '__main__':

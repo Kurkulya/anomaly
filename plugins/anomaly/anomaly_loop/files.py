@@ -119,7 +119,7 @@ def file_lock(path, wait, stale):
                 continue
             retried = removed = False
             try:
-                if time.time() - path.stat().st_mtime > stale:
+                if time.time() - path.lstat().st_mtime > stale:
                     path.unlink()
                     removed = True
             except (FileNotFoundError, PermissionError):
