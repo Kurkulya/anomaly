@@ -338,10 +338,11 @@ class PickTheUnitTest(ProgressCase):
         self.assertEqual(self.pick(self.repo.root / '.anomaly' / self.ALPHA)['unit'], self.ALPHA)
 
     def test_a_ticket_base_equal_to_the_current_branch_picks_its_unit_with_picked_by_branch(self):
-        """AC-13: the newer unit with another `Base:` (which the fallback would take) loses to the branch match."""
-        self.put_unit(self.ALPHA, self.based_on('feat/alpha-unit'), ['2026-10-01 09:00 build: started'])
-        self.put_unit(self.BRAVO, self.based_on('feat/bravo-unit'), ['2026-10-02 09:00 build: started'])
-        self.on_branch('feat/alpha-unit')
+        """AC-13, AC-14 `Else`: the branch is bravo's default `feat/<slug>` name and bravo has the newer line (so the
+        slug step and the fallback would both take bravo), yet alpha's `Base:` names the branch and wins."""
+        self.put_unit(self.ALPHA, self.based_on('feat/bravo-unit'), ['2026-10-01 09:00 build: started'])
+        self.put_unit(self.BRAVO, self.based_on('feat/other'), ['2026-10-02 09:00 build: started'])
+        self.on_branch('feat/bravo-unit')
         report = self.pick()
         self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'branch'))
 
