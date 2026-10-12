@@ -303,8 +303,8 @@ def named_report(root, unit, home):
     for (no such folder, `adhoc`, `..`, an absolute path) gives `unit` null and a warning."""
     folders = check.unit_folders(root, unit)
     if not folders:
-        return unit_null([f'no work unit {unit}: no work-unit folder of that name in {root / UNITS_DIR} '
-                          f'({TICKET_ADHOC_DIR.name} is not a unit)'])
+        why = f' ({TICKET_ADHOC_DIR.name} is not a unit)' if check.is_adhoc(Path(unit)) else ''
+        return unit_null([f'no work unit {unit}: no work-unit folder of that name in {root / UNITS_DIR}{why}'])
     return build(folders[0], home, PICKED_BY_OPTION)
 
 

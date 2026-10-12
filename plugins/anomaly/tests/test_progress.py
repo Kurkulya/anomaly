@@ -277,6 +277,7 @@ class ProgressTest(ProgressCase):
         self.assertEqual(list(report), ['schema', 'unit', 'warnings'], (code, out, err))
         self.assertEqual((report['schema'], report['unit']), (1, None))
         self.assertTrue(any('no-such-unit' in warning for warning in report['warnings']), report['warnings'])
+        self.assertFalse(any('adhoc' in warning for warning in report['warnings']), report['warnings'])
 
     def test_a_unit_value_that_is_not_one_plain_folder_name_gives_unit_null_and_a_warning(self):
         """AC-16, review round 1: `--unit ..` would name the folder that holds `.anomaly/`, and `.` or an empty
