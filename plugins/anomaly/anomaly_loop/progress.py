@@ -60,9 +60,7 @@ def classified(folder):
     frontier.classify; a ticket that fails either is left out and named in a warning."""
     tickets_dir = frontier.tickets_folder(folder)
     tickets, entries, warnings = [], [], []
-    for path in sorted(tickets_dir.glob('*.md')):
-        if not check.TICKET_NUMBER.match(path.name):
-            continue
+    for path in frontier.ticket_paths(tickets_dir):
         try:
             parsed = ticket.load(path)[1]
             found, errors = frontier.classify(tickets_dir, [(path, parsed)])

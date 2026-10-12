@@ -48,11 +48,15 @@ def tickets_folder(folder):
     return found
 
 
+def ticket_paths(folder):
+    """The numbered ticket files (`NN-*.md`) in the folder, in ticket order."""
+    return [path for path in sorted(folder.glob('*.md')) if check.TICKET_NUMBER.match(path.name)]
+
+
 def load_tickets(folder, key_line=KEY_LINE_CORE):
     """[(path, Ticket)] of the numbered ticket files in the folder, in ticket order; the key of each is read
     from the `key_line` line."""
-    return [(path, ticket.load(path, key_line)[1]) for path in sorted(folder.glob('*.md'))
-            if check.TICKET_NUMBER.match(path.name)]
+    return [(path, ticket.load(path, key_line)[1]) for path in ticket_paths(folder)]
 
 
 def blocked_text(parsed, unfinished):
