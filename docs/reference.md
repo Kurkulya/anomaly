@@ -1275,7 +1275,8 @@ cost: weighted tokens 3,000, weighted tokens per merged ticket 1,000, minutes pe
   `worklog report`, so it is one here too. Its merged tickets come from the `build` lines of the
   work log, not from `Status:`, so `done` and the merged tickets of the cost line can differ.
 - When `--home` is an unfilled placeholder, the CLI prints one `home:` notice line before the five
-  lines (the same notice every command prints; `measure --quiet` hides it). Read the lines by
+  lines (the same notice every command prints, except `measure --quiet`, which hides it, and
+  `progress`, which puts it in its `warnings`). Read the lines by
   their label, not by position.
 - The rule for tickets is `frontier`'s: a ticket that is not `done` and has no `Blocked by:` line,
   or names a blocker with no ticket file, is an error. One `anomaly:` line names each such ticket,

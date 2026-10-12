@@ -14,7 +14,8 @@ errors raise paths.PathError, records.RecordError, gitrepo.GitError, glab.CiErro
 warning. A usage error (an unknown command, a missing or bad option) is
 printed the same way: Parser replaces argparse's usage block and its own exit.
 Handlers never read the clock: `args.now` (aware datetime) and `args.today` (its date) are
-set here, and tests pass `now`. A command's `quiet` option also hides the `home:` placeholder notice that main prints before the handler.
+set here, and tests pass `now`. A command's `quiet` option also hides the `home:` placeholder notice that main prints before the handler,
+and `home_notice_in_report` moves it into the command's own report.
 """
 import argparse
 import os
