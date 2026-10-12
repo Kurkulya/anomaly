@@ -10,7 +10,8 @@ it prints one `anomaly:` line itself) and 5 (no pipeline yet: a plain message, n
 documented in its help. 2 is only the error below, with one `anomaly:` line;
 errors raise paths.PathError, records.RecordError, gitrepo.GitError, glab.CiError or OSError and are printed as
 `anomaly: <message>` with exit 2; `progress` turns its read and git errors into JSON warnings with exit 0
-(ADR-0025). A usage error (an unknown command, a missing or bad option) is
+(ADR-0025), except that a `work-units.jsonl` or `metrics.jsonl` that cannot be opened reads as missing, with no
+warning. A usage error (an unknown command, a missing or bad option) is
 printed the same way: Parser replaces argparse's usage block and its own exit.
 Handlers never read the clock: `args.now` (aware datetime) and `args.today` (its date) are
 set here, and tests pass `now`.
