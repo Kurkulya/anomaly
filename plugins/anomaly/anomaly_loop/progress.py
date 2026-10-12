@@ -254,16 +254,17 @@ def is_unfinished(folder):
     return bool(entries or warnings)
 
 
-def pick_unit(folders, branch, home):
+def pick_unit(folders, branch, home, root):
     """(folder, picked_by, warnings) of the unit `progress` reports with no `--unit`, out of `folders` (unit_folders);
     folder and picked_by are None when no unit is picked. `branch` is the current branch: '' outside a repository or
-    on a detached head (then no branch match runs). A ticket or log.md that cannot be read is left out of the pick
-    and named in `warnings`, only for the units not picked: build names those of the picked unit itself."""
+    on a detached head (then no branch match runs); `root` is the folder the `branch` port reads the repo layer of. A
+    ticket or log.md that cannot be read is left out of the pick and named in `warnings`, only for the units not
+    picked: build names those of the picked unit itself."""
     skipped = {folder: [] for folder in folders}   # per unit, the texts of the files the pick left out
     if branch:
         matches = [folder for folder in folders if has_base(folder, branch, skipped[folder])]
         if not matches:
-            pattern = ports.port(ports.resolve(home), BRANCH_PORT).value
+            pattern = ports.port(ports.resolve(home, root), BRANCH_PORT).value
             matches = [folder for folder in folders if slug_branch(pattern, folder.name) == branch]
         if matches:
             times = {folder: newest_log_time(folder, skipped[folder]) for folder in matches}
@@ -292,7 +293,7 @@ def picked_report(root, branch, home):
         folders = unit_folders(root)
     except READ_ERRORS as error:
         return unit_null([f'no work unit: {UNITS_DIR.as_posix()}/ in {root} cannot be read: {error}'])
-    folder, picked_by, warnings = pick_unit(folders, branch, home)
+    folder, picked_by, warnings = pick_unit(folders, branch, home, root)
     if folder is None:
         if not (root / UNITS_DIR).is_dir():
             return unit_null([f'no work unit: {root} has no {UNITS_DIR.as_posix()}/ folder', *warnings])

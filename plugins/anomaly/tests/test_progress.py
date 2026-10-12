@@ -4,6 +4,7 @@ test home holds `work-units.jsonl` and `metrics.jsonl` as the `worklog report` t
 name is the work unit name). One layer: every test runs the command and reads the one JSON line it prints (D-29),
 except the one reference check at the end."""
 import json
+import os
 import re
 import unittest
 from datetime import date
@@ -486,6 +487,26 @@ class EveryCaseTest(ProgressCase):
         self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
         self.repo.write('.git/HEAD', 'ref: refs/heads/a..b\n')
         self.assert_unit_null(self.run_progress(), 'git branch failed')
+
+    def leave_a_gone_working_folder(self):
+        """Make the working folder one that is then removed (a platform that refuses to remove it skips)."""
+        gone = self.root / 'gone'
+        gone.mkdir()
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(gone)
+        try:
+            gone.rmdir()
+        except OSError:
+            self.skipTest('this system does not let the working folder be removed')
+
+    def test_a_gone_working_folder_with_repo_given_still_picks_the_unit(self):
+        """AC-17, D-16: the branch matches no `Base:`, so the pick reads the `branch` port, whose repo layer is read
+        from the repository root, never from the gone working folder."""
+        self.put_unit(self.ALPHA, self.OPEN, ['2026-10-01 09:00 build: started'])
+        self.on_branch('feat/other')
+        self.leave_a_gone_working_folder()
+        report = self.pick()
+        self.assertEqual((report['unit'], report['picked_by']), (self.ALPHA, 'newest-log'))
 
     def test_a_unit_with_no_tickets_folder_still_shows_its_stage_wave_mr_and_cost(self):
         """AC-18: the unit is named with `--unit`."""
