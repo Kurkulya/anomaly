@@ -207,7 +207,7 @@ def unit_folders(root):
     units = root / UNITS_DIR
     if not units.is_dir():
         return []
-    return [path for path in sorted(units.iterdir()) if path.is_dir() and not frontier.is_adhoc(path)]
+    return [path for path in sorted(units.iterdir()) if path.is_dir() and not check.is_adhoc(path)]
 
 
 def newest_log_time(folder, warnings):

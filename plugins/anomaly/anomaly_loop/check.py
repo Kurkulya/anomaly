@@ -162,6 +162,11 @@ def relative_parts(name):
     return () if '..' in path.parts or anchored else path.parts
 
 
+def is_adhoc(folder):
+    """True for the `adhoc` folder (by its name), which holds light-path tickets, not one work unit."""
+    return folder.name == TICKET_ADHOC_DIR.name
+
+
 def unit_folders(root, name):
     """The existing unit folders `name` names: a bare name under `<root>/.anomaly/`, or the path
     `.anomaly/<name>`. `.anomaly/adhoc/` only stores adhoc tickets and is no unit. A name the file system
@@ -174,7 +179,7 @@ def unit_folders(root, name):
     else:
         return []
     try:
-        return [] if parts[-1] == TICKET_ADHOC_DIR.name else [path for path in candidates if path.is_dir()]
+        return [] if is_adhoc(Path(name)) else [path for path in candidates if path.is_dir()]
     except OSError:
         return []
 
