@@ -163,6 +163,24 @@ class LockTest(unittest.TestCase):
                 self.assertTrue(got)
         self.assertEqual(len(calls), 4)
 
+    def test_only_the_first_stale_lock_is_taken_over_at_once_and_the_wait_still_ends(self):
+        import time
+        from unittest import mock
+        real_time, calls = time.time, []
+
+        def always_a_new_stale_lock(*args, **kwargs):
+            calls.append(args[0])
+            if len(calls) > 1000:
+                raise AssertionError('the wait does not end')
+            self.lock.write_text('another run', encoding='utf-8')
+            raise FileExistsError(args[0])
+
+        with mock.patch.object(files.os, 'open', side_effect=always_a_new_stale_lock):
+            with mock.patch.object(files.time, 'time', side_effect=lambda: real_time() + 1000):
+                with files.file_lock(self.lock, 0.2, 600) as got:
+                    self.assertFalse(got)
+        self.assertLess(len(calls), 20)
+
     def test_a_failing_token_write_leaves_no_lock_file_and_raises(self):
         from unittest import mock
         with mock.patch.object(files.os, 'write', side_effect=OSError('disk full')):
